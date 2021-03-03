@@ -7,7 +7,7 @@ bhyved:	$(OBJS)
 	cc -o $@ $(OBJS)
 
 clean:
-	rm -f bhyved $(OBJS)
+	rm -f bhyved $(OBJS) *.core
 
 bhyved.o: bhyved.c vars.h tap.h
 conf.o: conf.c vars.h conf.h
