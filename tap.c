@@ -22,7 +22,7 @@ getifflags(int s, const char *ifname)
 	return ((my_ifr.ifr_flags & 0xffff) | (my_ifr.ifr_flagshigh << 16));
 }
 
-static void
+static int
 setifflags(int s, const char *name, int value)
 {
 	struct ifreq my_ifr;
@@ -38,8 +38,7 @@ setifflags(int s, const char *name, int value)
 	(void) strlcpy(my_ifr.ifr_name, name, sizeof(my_ifr.ifr_name));
 	my_ifr.ifr_flags = flags & 0xffff;
 	my_ifr.ifr_flagshigh = flags >> 16;
-	if (ioctl(s, SIOCSIFFLAGS, (caddr_t)&my_ifr) < 0)
-		return;
+	return (ioctl(s, SIOCSIFFLAGS, (caddr_t)&my_ifr));
 }
 
 int
@@ -64,7 +63,7 @@ add_to_bridge(int s, char *bridge, char *tap)
 int
 activate_tap(int s, char *name)
 {
-	setifflags(s, name, IFF_UP);
+	return setifflags(s, name, IFF_UP);
 }
 
 int
