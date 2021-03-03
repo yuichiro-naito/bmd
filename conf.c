@@ -53,7 +53,7 @@ add_disk_conf(struct vm_conf *conf, char *type, char *path)
 {
 	struct disk_conf *t;
 	if (conf == NULL) return 0;
-	
+
 	t = malloc(sizeof(struct disk_conf));
 	if (t == NULL)
 		return -1;
@@ -70,7 +70,7 @@ add_iso_conf(struct vm_conf *conf, char *type, char *path)
 {
 	struct iso_conf *t;
 	if (conf == NULL) return 0;
-	
+
 	t = malloc(sizeof(struct iso_conf));
 	if (t == NULL)
 		return -1;
@@ -87,7 +87,7 @@ add_net_conf(struct vm_conf *conf, char *type, char *bridge)
 {
 	struct net_conf *t;
 	if (conf == NULL) return 0;
-	
+
 	t = malloc(sizeof(struct net_conf));
 	if (t == NULL)
 		return -1;
@@ -152,4 +152,3 @@ create_vm_conf(char *name)
 
 	return ret;
 }
-

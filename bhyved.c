@@ -46,7 +46,7 @@ bhyve_load(struct vm_conf *conf)
 		fprintf(stderr, "wait error (%s)\n", strerror(errno));
 		exit(1);
 	}
-	
+
 	return 0;
 }
 
@@ -274,4 +274,3 @@ main(int argc, char *argv[])
 	free_vm_conf(conf);
 	return 0;
 }
-

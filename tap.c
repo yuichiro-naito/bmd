@@ -103,4 +103,3 @@ destroy_tap(int s, char *name)
 			fprintf(stderr, "SIOCIFDESTROY\n");
 	return 0;
 }
-
