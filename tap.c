@@ -62,6 +62,12 @@ add_to_bridge(int s, char *bridge, char *tap)
 }
 
 int
+activate_tap(int s, char *name)
+{
+	setifflags(s, name, IFF_UP);
+}
+
+int
 create_tap(int s, char **name)
 {
 	struct ifreq ifr;
@@ -81,8 +87,6 @@ create_tap(int s, char **name)
 		}
 		return -1;
 	}
-
-	setifflags(s, ifr.ifr_name, IFF_UP);
 
 	*name = strdup(ifr.ifr_name);
 	return 0;

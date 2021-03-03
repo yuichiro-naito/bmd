@@ -72,6 +72,21 @@ remove_taps(struct vm_conf *conf)
 }
 
 int
+activate_taps(struct vm_conf *conf)
+{
+	int s;
+	struct net_conf *nc;
+
+	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+	if (s < 0)
+		return -1;
+	STAILQ_FOREACH(nc, &conf->nets, next)
+		activate_tap(s, nc->tap);
+	close(s);
+	return 0;
+}
+
+int
 assign_taps(struct vm_conf *conf)
 {
 	int s;
@@ -81,7 +96,7 @@ assign_taps(struct vm_conf *conf)
 	if (s < 0)
 		return -1;
 
-	STAILQ_FOREACH(nc, &conf->nets, next) {
+	STAILQ_FOREACH(nc, &conf->nets, next)
 		if (create_tap(s, &nc->tap) < 0 ||
 		    add_to_bridge(s, nc->bridge, nc->tap) < 0) {
 			fprintf(stderr, "failed to create tap\n");
@@ -89,7 +104,6 @@ assign_taps(struct vm_conf *conf)
 			close(s);
 			return -1;
 		}
-	}
 
 	close(s);
 	return 0;
@@ -102,7 +116,7 @@ exec_bhyve(struct vm_conf *conf)
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	pid_t pid;
-	int i, pcid, status;
+	int i, pcid;
 	char **args;
 
 	args = malloc(sizeof(char*) *
@@ -111,9 +125,6 @@ exec_bhyve(struct vm_conf *conf)
 		       + conf->nisoes * 2
 		       + conf->nnets * 2));
 	if (args == NULL)
-		return -1;
-
-	if (assign_taps(conf) < 0)
 		return -1;
 
 	i = 0;
@@ -154,6 +165,8 @@ exec_bhyve(struct vm_conf *conf)
 		free(args[6]);
 		free(args[8]);
 		free(args[10]);
+		free(args);
+		conf->pid = pid;
 	} else if (pid == 0) {
 		execv(args[0],args);
 		fprintf(stderr, "can not exec %s\n", args[0]);
@@ -163,12 +176,6 @@ exec_bhyve(struct vm_conf *conf)
 		exit(1);
 	}
 
-	if (waitpid(pid, &status, 0) < 0) {
-		fprintf(stderr, "wait error (%s)\n", strerror(errno));
-		exit(1);
-	}
-
-	remove_taps(conf);
 	return 0;
 }
 
@@ -230,12 +237,40 @@ struct vm_conf *dummy_conf()
 }
 
 int
+do_bhyve(struct vm_conf *conf)
+{
+	int status;
+
+	if (assign_taps(conf) < 0)
+		return -1;
+reload:
+	if (activate_taps(conf) < 0 ||
+	    bhyve_load(conf) < 0 ||
+	    exec_bhyve(conf) < 0)
+		goto err;
+
+	if (waitpid(conf->pid, &status, 0) < 0) {
+		fprintf(stderr, "wait error (%s)\n", strerror(errno));
+		exit(1);
+	}
+
+	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
+	    goto reload;
+
+	remove_taps(conf);
+	destroy_vm(conf);
+	return 0;
+err:
+	remove_taps(conf);
+	destroy_vm(conf);
+	return -1;
+}
+
+int
 main(int argc, char *argv[])
 {
 	struct vm_conf *conf = dummy_conf();
-	bhyve_load(conf);
-	exec_bhyve(conf);
-	destroy_vm(conf);
+	do_bhyve(conf);
 	free_vm_conf(conf);
 	return 0;
 }
