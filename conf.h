@@ -8,6 +8,7 @@ void free_vm_conf(struct vm_conf *vc);
 int add_disk_conf(struct vm_conf *conf, char *type, char *path);
 int add_iso_conf(struct vm_conf *conf, char *type, char *path);
 int add_net_conf(struct vm_conf *conf, char *type, char *bridge);
+int set_name(struct vm_conf *conf, char *name);
 void set_memory_size(struct vm_conf *conf, int memory);
 void set_ncpu(struct vm_conf *conf, int ncpu);
 int assign_nmdm(struct vm_conf *conf);

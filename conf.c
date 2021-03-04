@@ -100,6 +100,22 @@ add_net_conf(struct vm_conf *conf, char *type, char *bridge)
 	return 0;
 }
 
+int
+set_name(struct vm_conf *conf, char *name)
+{
+	char *new;
+
+	if (conf == NULL)
+		return 0;
+
+	if ((new = strdup(name)) == NULL)
+		return -1;
+
+	free(conf->name);
+	conf->name = new;
+	return 0;
+}
+
 void
 set_memory_size(struct vm_conf *conf, int memory)
 {
