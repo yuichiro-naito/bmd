@@ -116,11 +116,18 @@ set_name(struct vm_conf *conf, char *name)
 	return 0;
 }
 
-void
-set_memory_size(struct vm_conf *conf, int memory)
+int
+set_memory_size(struct vm_conf *conf, char *memory)
 {
-	if (conf == NULL) return;
-	conf->memory = memory;
+	char *new;
+
+	if (conf == NULL) return 0;
+	if ((new = strdup(memory)) == NULL)
+		return -1;
+
+	free(conf->memory);
+	conf->memory = new;
+	return 0;
 }
 
 void

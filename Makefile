@@ -1,4 +1,4 @@
-OBJS= bhyved.o tap.o conf.o
+OBJS= bhyved.o tap.o conf.o parser.o
 CFLAGS+=-Wall
 
 .PHONY: clean
@@ -12,3 +12,4 @@ clean:
 bhyved.o: bhyved.c vars.h tap.h
 conf.o: conf.c vars.h conf.h
 tap.o: tap.c tap.h
+parser.o: parser.c vars.h

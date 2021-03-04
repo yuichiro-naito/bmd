@@ -1,6 +1,7 @@
 #ifndef _VARS_H_
 #define _VARS_H_
 
+#include <sys/types.h>
 #include <sys/queue.h>
 
 struct disk_conf {
@@ -25,9 +26,9 @@ struct net_conf {
 struct vm_conf {
 	SLIST_ENTRY(vm_conf) next;
 	pid_t pid;
-	unsigned int memory;
 	unsigned int ncpu;
 	unsigned int nmdm;
+	char *memory;
 	char *name;
 	char *console;
 	int ndisks;

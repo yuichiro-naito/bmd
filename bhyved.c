@@ -10,6 +10,7 @@
 #include "vars.h"
 #include "tap.h"
 #include "conf.h"
+#include "parser.h"
 
 SLIST_HEAD(, vm_conf) vm_list = SLIST_HEAD_INITIALIZER();
 
@@ -24,7 +25,7 @@ bhyve_load(struct vm_conf *conf)
 	args[1] = "-c";
 	args[2] = conf->console;
 	args[3] = "-m";
-	asprintf(&args[4], "%dM", conf->memory);
+	args[4] = conf->memory;
 	args[5] = "-d";
 	args[6] = STAILQ_FIRST(&conf->disks)->path;
 	args[7] = conf->name;
@@ -32,7 +33,6 @@ bhyve_load(struct vm_conf *conf)
 
 	pid = fork();
 	if (pid > 0) {
-		free(args[4]);
 	} else if (pid == 0) {
 		execv(args[0],args);
 		fprintf(stderr, "can not exec %s\n", args[0]);
@@ -136,7 +136,7 @@ exec_bhyve(struct vm_conf *conf)
 	args[i++] = "-c";
 	asprintf(&args[i++], "%d", conf->ncpu);
 	args[i++] = "-m";
-	asprintf(&args[i++], "%dM", conf->memory);
+	args[i++] = conf->memory;
 	args[i++] = "-l";
 	asprintf(&args[i++], "com1,%s", conf->console);
 	args[i++] = "-s";
@@ -163,7 +163,6 @@ exec_bhyve(struct vm_conf *conf)
 	pid = fork();
 	if (pid > 0) {
 		free(args[6]);
-		free(args[8]);
 		free(args[10]);
 		free(args);
 		conf->pid = pid;
@@ -222,7 +221,7 @@ struct vm_conf *dummy_conf()
 	}
 
 	set_ncpu(conf, 2);
-	set_memory_size(conf, 2048);
+	set_memory_size(conf, "2048m");
 	add_disk_conf(conf,
 		      "virtio-blk",
 		      "/dev/zvol/zpool/images/freebsd");
@@ -269,8 +268,12 @@ err:
 int
 main(int argc, char *argv[])
 {
+#if 0
 	struct vm_conf *conf = dummy_conf();
 	do_bhyve(conf);
 	free_vm_conf(conf);
+#else
+	parse_file("./freebsd");
+#endif
 	return 0;
 }
