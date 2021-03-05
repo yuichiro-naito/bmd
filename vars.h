@@ -26,8 +26,8 @@ struct net_conf {
 struct vm_conf {
 	SLIST_ENTRY(vm_conf) next;
 	pid_t pid;
-	unsigned int ncpu;
 	unsigned int nmdm;
+	char *ncpu;
 	char *memory;
 	char *name;
 	char *console;

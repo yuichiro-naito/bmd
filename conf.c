@@ -130,11 +130,19 @@ set_memory_size(struct vm_conf *conf, char *memory)
 	return 0;
 }
 
-void
+int
 set_ncpu(struct vm_conf *conf, int ncpu)
 {
-	if (conf == NULL) return;
-	conf->ncpu = ncpu;
+	char *new;
+
+	if (conf == NULL) return 0;
+
+	if ((asprintf(&new, "%d", ncpu)) < 0)
+		return -1;
+
+	free(conf->ncpu);
+	conf->ncpu = new;
+	return 0;
 }
 
 int

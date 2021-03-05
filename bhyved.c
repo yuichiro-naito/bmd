@@ -134,7 +134,7 @@ exec_bhyve(struct vm_conf *conf)
 	args[i++] = "-u";
 	args[i++] = "-w";
 	args[i++] = "-c";
-	asprintf(&args[i++], "%d", conf->ncpu);
+	args[i++] = conf->ncpu;
 	args[i++] = "-m";
 	args[i++] = conf->memory;
 	args[i++] = "-l";
@@ -162,7 +162,6 @@ exec_bhyve(struct vm_conf *conf)
 
 	pid = fork();
 	if (pid > 0) {
-		free(args[6]);
 		free(args[10]);
 		free(args);
 		conf->pid = pid;
