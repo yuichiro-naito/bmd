@@ -23,14 +23,25 @@ struct net_conf {
 	char *tap;
 };
 
+enum BOOT {
+	NO,
+	YES,
+	DELAYED,
+	ONESHOT,
+	INSTALL
+};
+
 struct vm_conf {
 	SLIST_ENTRY(vm_conf) next;
 	pid_t pid;
 	unsigned int nmdm;
+	int boot_delay;
 	char *ncpu;
 	char *memory;
 	char *name;
 	char *console;
+	enum BOOT boot;
+	char *loadcmd;
 	int ndisks;
 	int nisoes;
 	int nnets;

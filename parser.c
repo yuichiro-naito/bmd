@@ -187,6 +187,35 @@ parse_net(struct vm_conf *conf, char *val)
 	return add_net_conf(conf, val, c+1);
 }
 
+static int
+parse_loadcmd(struct vm_conf *conf, char *val)
+{
+	set_loadcmd(conf, val);
+	return 0;
+}
+
+static int
+parse_boot(struct vm_conf *conf, char *val)
+{
+	enum BOOT b;
+
+	if (strcasecmp(val, "yes") == 0 ||
+	    strcasecmp(val, "true") == 0)
+		b = YES;
+	else if (strcasecmp(val, "delay") == 0 ||
+		 strcasecmp(val, "delayed") == 0)
+		b = DELAYED;
+	else if (strcasecmp(val, "oneshot") == 0)
+		b = ONESHOT;
+	else if (strcasecmp(val, "install") == 0)
+		b = INSTALL;
+	else
+		b = NO;
+
+	set_boot(conf, b);
+	return 0;
+}
+
 static pfunc
 get_parser(char *name)
 {
@@ -202,6 +231,10 @@ get_parser(char *name)
 		return &parse_iso;
 	if (strcasecmp(name, "network") == 0)
 		return &parse_net;
+	if (strcasecmp(name, "loadcmd") == 0)
+		return &parse_loadcmd;
+	if (strcasecmp(name, "boot") == 0)
+		return &parse_boot;
 
 
 	return NULL;
@@ -220,7 +253,6 @@ parse(struct vm_conf *conf, FILE *fp)
 			free(key);
 			continue;
 		}
-		printf("key: %s\n",key);
 
 		if (get_token(fp, &val) == 1) {
 			free(key);
@@ -245,7 +277,7 @@ parse(struct vm_conf *conf, FILE *fp)
 				free(val);
 				break;
 			}
-			printf("val: %s\n", val);
+
 			if ((*parser)(conf, val) < 0) {
 				fprintf(stderr, "invalid value %s\n", val);
 				free(val);
