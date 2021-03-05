@@ -13,7 +13,8 @@
 #include "conf.h"
 #include "parser.h"
 
-SLIST_HEAD(, vm_conf) vm_list = SLIST_HEAD_INITIALIZER();
+SLIST_HEAD(, vm_conf) vm_conf_list = SLIST_HEAD_INITIALIZER();
+SLIST_HEAD(, vm) vm_list = SLIST_HEAD_INITIALIZER();
 
 char *config_directory = "./bhyved.d";
 
@@ -41,15 +42,43 @@ load_config_files()
 		free(path);
 		if (conf == NULL)
 			continue;
-		SLIST_INSERT_HEAD(&vm_list, conf, next);
+		SLIST_INSERT_HEAD(&vm_conf_list, conf, next);
 	}
 
 	closedir(d);
 
-	SLIST_FOREACH(conf, &vm_list, next) {
+	SLIST_FOREACH(conf, &vm_conf_list, next) {
 		dump_vm_conf(conf);
 	}
 
+	return 0;
+}
+
+int
+start_virtual_machines()
+{
+	struct vm_conf *conf;
+	struct vm *vm;
+
+	SLIST_FOREACH(conf, &vm_conf_list, next) {
+		vm = malloc(sizeof(struct vm));
+		vm->conf = conf;
+		vm->state = STOP;
+		vm->pid = -1;
+		SLIST_INSERT_HEAD(&vm_list, vm, next);
+	}
+	return 0;
+}
+
+int
+event_loop()
+{
+	return 0;
+}
+
+int
+stop_virtual_machines()
+{
 	return 0;
 }
 
@@ -312,7 +341,12 @@ main(int argc, char *argv[])
 	do_bhyve(conf);
 	free_vm_conf(conf);
 #endif
-	load_config_files();
+	if (load_config_files() < 0 ||
+	    start_virtual_machines())
+		return 1;
 
+	event_loop();
+
+	stop_virtual_machines();
 	return 0;
 }

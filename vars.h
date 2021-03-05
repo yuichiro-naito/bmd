@@ -50,4 +50,18 @@ struct vm_conf {
 	STAILQ_HEAD(, net_conf) nets;
 };
 
+enum STATE {
+	STOP,
+	LOAD,
+	RUN,
+	TERMINATE
+};
+
+struct vm {
+	SLIST_ENTRY(vm) next;
+	struct vm_conf *conf;
+	pid_t pid;
+	enum STATE state;
+};
+
 #endif
