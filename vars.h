@@ -39,7 +39,7 @@ struct vm_conf {
 	char *ncpu;
 	char *memory;
 	char *name;
-	char *console;
+	char *comport;
 	enum BOOT boot;
 	char *loadcmd;
 	int ndisks;

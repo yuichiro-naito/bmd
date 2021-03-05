@@ -216,6 +216,13 @@ parse_boot(struct vm_conf *conf, char *val)
 	return 0;
 }
 
+static int
+parse_comport(struct vm_conf *conf, char *val)
+{
+	set_comport(conf, val);
+	return 0;
+}
+
 static pfunc
 get_parser(char *name)
 {
@@ -235,6 +242,8 @@ get_parser(char *name)
 		return &parse_loadcmd;
 	if (strcasecmp(name, "boot") == 0)
 		return &parse_boot;
+	if (strcasecmp(name, "comport") == 0)
+		return &parse_comport;
 
 
 	return NULL;

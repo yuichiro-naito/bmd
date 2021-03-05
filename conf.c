@@ -38,7 +38,10 @@ free_vm_conf(struct vm_conf *vc)
 
 	if (vc == NULL) return;
 	free(vc->name);
-	free(vc->console);
+	free(vc->ncpu);
+	free(vc->memory);
+	free(vc->comport);
+	free(vc->loadcmd);
 	STAILQ_FOREACH(dc, &vc->disks, next)
 		free_disk_conf(dc);
 	STAILQ_FOREACH(ic, &vc->isoes, next)
@@ -100,50 +103,45 @@ add_net_conf(struct vm_conf *conf, char *type, char *bridge)
 	return 0;
 }
 
-int
-set_name(struct vm_conf *conf, char *name)
+static int
+set_string(char **var, char *value)
 {
 	char *new;
 
-	if (conf == NULL)
-		return 0;
-
-	if ((new = strdup(name)) == NULL)
+	if ((new = strdup(value)) == NULL)
 		return -1;
 
-	free(conf->name);
-	conf->name = new;
+	free(*var);
+	*var = new;
 	return 0;
+}
+
+int
+set_name(struct vm_conf *conf, char *name)
+{
+	if (conf == NULL) return 0;
+	return set_string(&conf->name, name);
 }
 
 int
 set_loadcmd(struct vm_conf *conf, char *cmd)
 {
-	char *new;
-
-	if (conf == NULL)
-		return 0;
-
-	if ((new = strdup(cmd)) == NULL)
-		return -1;
-
-	free(conf->loadcmd);
-	conf->loadcmd = new;
-	return 0;
+	if (conf == NULL) return 0;
+	return set_string(&conf->loadcmd, cmd);
 }
 
 int
 set_memory_size(struct vm_conf *conf, char *memory)
 {
-	char *new;
-
 	if (conf == NULL) return 0;
-	if ((new = strdup(memory)) == NULL)
-		return -1;
+	return set_string(&conf->memory, memory);
+}
 
-	free(conf->memory);
-	conf->memory = new;
-	return 0;
+int
+set_comport(struct vm_conf *conf, char *com)
+{
+	if (conf == NULL) return 0;
+	return set_string(&conf->comport, com);
 }
 
 int
@@ -169,9 +167,9 @@ assign_nmdm(struct vm_conf *conf)
 	if (conf == NULL) return 0;
 	conf->nmdm = max++;
 
-	free(conf->console);
-	asprintf(&conf->console, "/dev/nmdm%uB", conf->nmdm);
-	if (conf->console == NULL)
+	free(conf->comport);
+	asprintf(&conf->comport, "/dev/nmdm%uB", conf->nmdm);
+	if (conf->comport == NULL)
 		return -1;
 
 	return 0;
@@ -194,7 +192,7 @@ create_vm_conf(char *name)
 	ret = malloc(sizeof(struct vm_conf));
 	if (ret == NULL) return NULL;
 	ret->name = strdup(name);
-	ret->console = strdup("stdio");
+	ret->comport = strdup("stdio");
 	ret->nmdm = -1;
 	ret->ncpu = 0;
 	ret->memory = 0;
@@ -222,7 +220,7 @@ dump_vm_conf(struct vm_conf *conf)
 	printf("name: %s\n", conf->name);
 	printf("ncpu: %s\n", conf->ncpu);
 	printf("memory: %s\n", conf->memory);
-	printf("console: %s\n", conf->console);
+	printf("comport: %s\n", conf->comport);
 	printf("boot: %s\n", btype[conf->boot]);
 	printf("loadcmd: %s\n", conf->loadcmd);
 	printf("disk:");

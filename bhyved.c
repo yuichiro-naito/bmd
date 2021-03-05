@@ -62,7 +62,7 @@ bhyve_load(struct vm_conf *conf)
 
 	args[0] = "/usr/sbin/bhyveload";
 	args[1] = "-c";
-	args[2] = conf->console;
+	args[2] = conf->comport;
 	args[3] = "-m";
 	args[4] = conf->memory;
 	args[5] = "-d";
@@ -177,7 +177,7 @@ exec_bhyve(struct vm_conf *conf)
 	args[i++] = "-m";
 	args[i++] = conf->memory;
 	args[i++] = "-l";
-	asprintf(&args[i++], "com1,%s", conf->console);
+	asprintf(&args[i++], "com1,%s", conf->comport);
 	args[i++] = "-s";
 	args[i++] = "0,hostbridge";
 	args[i++] = "-s";
