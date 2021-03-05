@@ -261,14 +261,14 @@ parse(struct vm_conf *conf, FILE *fp)
 		if (val[0] != '=') {
 			fprintf(stderr, "value not found for %s\n", key);
 			free(key);
-			break;
+			goto bad;
 		}
 
 		parser = get_parser(key);
 		if (parser == NULL) {
 			fprintf(stderr, "unknown key %s\n", key);
 			free(key);
-			break;
+			goto bad;
 		}
 		while (1) {
 			if (get_token(fp, &val) == 1)
@@ -281,19 +281,23 @@ parse(struct vm_conf *conf, FILE *fp)
 			if ((*parser)(conf, val) < 0) {
 				fprintf(stderr, "invalid value %s\n", val);
 				free(val);
-				goto end;
+				free(key);
+				goto bad;
 			}
 			free(val);
 		}
 		free(key);
 	}
-end:
+
 	return 0;
+bad:
+	return -1;
 }
 
 struct vm_conf *
 parse_file(char *name)
 {
+	int ret;
 	struct vm_conf *c;
 	char *bname;
 
@@ -307,8 +311,12 @@ parse_file(char *name)
 	if (c == NULL)
 		return NULL;
 
-	parse(c, fp);
+	ret = parse(c, fp);
 
 	fclose(fp);
+	if (ret < 0) {
+		free_vm_conf(c);
+		return NULL;
+	}
 	return c;
 }
