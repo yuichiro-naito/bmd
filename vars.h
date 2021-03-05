@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <sys/event.h>
 
 struct disk_conf {
 	STAILQ_ENTRY(disk_conf) next;
@@ -33,7 +34,6 @@ enum BOOT {
 
 struct vm_conf {
 	SLIST_ENTRY(vm_conf) next;
-	pid_t pid;
 	unsigned int nmdm;
 	int boot_delay;
 	char *ncpu;
@@ -62,6 +62,7 @@ struct vm {
 	struct vm_conf *conf;
 	pid_t pid;
 	enum STATE state;
+	struct kevent kevent;
 };
 
 #endif

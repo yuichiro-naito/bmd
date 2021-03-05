@@ -2,6 +2,7 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,78 +17,14 @@
 SLIST_HEAD(, vm_conf) vm_conf_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, vm) vm_list = SLIST_HEAD_INITIALIZER();
 
-char *config_directory = "./bhyved.d";
+char *config_directory = "./conf.d";
+int kq;
 
-int
-load_config_files()
-{
-	char *path;
-	DIR *d;
-	struct dirent *ent;
-	struct vm_conf *conf;
-
-	d = opendir(config_directory);
-	if (d == NULL) {
-		fprintf(stderr,"can not open %s\n", config_directory);
-		return -1;
-	}
-
-	while ((ent = readdir(d)) != NULL) {
-		if (ent->d_namlen > 0 &&
-		    ent->d_name[0] == '.')
-			continue;
-		if (asprintf(&path, "%s/%s", config_directory, ent->d_name) < 0)
-			continue;
-		conf = parse_file(path);
-		free(path);
-		if (conf == NULL)
-			continue;
-		SLIST_INSERT_HEAD(&vm_conf_list, conf, next);
-	}
-
-	closedir(d);
-
-	SLIST_FOREACH(conf, &vm_conf_list, next) {
-		dump_vm_conf(conf);
-	}
-
-	return 0;
-}
-
-int
-start_virtual_machines()
-{
-	struct vm_conf *conf;
-	struct vm *vm;
-
-	SLIST_FOREACH(conf, &vm_conf_list, next) {
-		vm = malloc(sizeof(struct vm));
-		vm->conf = conf;
-		vm->state = STOP;
-		vm->pid = -1;
-		SLIST_INSERT_HEAD(&vm_list, vm, next);
-	}
-	return 0;
-}
-
-int
-event_loop()
-{
-	return 0;
-}
-
-int
-stop_virtual_machines()
-{
-	return 0;
-}
-
-int
+pid_t
 bhyve_load(struct vm_conf *conf)
 {
 	pid_t pid;
 	char *args[9];
-	int status;
 
 	args[0] = "/usr/sbin/bhyveload";
 	args[1] = "-c";
@@ -107,15 +44,10 @@ bhyve_load(struct vm_conf *conf)
 		exit(1);
 	} else {
 		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
-		exit(1);
+		return -1;
 	}
 
-	if (waitpid(pid, &status, 0) < 0) {
-		fprintf(stderr, "wait error (%s)\n", strerror(errno));
-		exit(1);
-	}
-
-	return 0;
+	return pid;
 }
 
 int
@@ -178,8 +110,9 @@ assign_taps(struct vm_conf *conf)
 }
 
 int
-exec_bhyve(struct vm_conf *conf)
+exec_bhyve(struct vm *vm)
 {
+	struct vm_conf *conf = vm->conf;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
@@ -232,7 +165,6 @@ exec_bhyve(struct vm_conf *conf)
 	if (pid > 0) {
 		free(args[10]);
 		free(args);
-		conf->pid = pid;
 	} else if (pid == 0) {
 		execv(args[0],args);
 		fprintf(stderr, "can not exec %s\n", args[0]);
@@ -241,6 +173,12 @@ exec_bhyve(struct vm_conf *conf)
 		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
 		exit(1);
 	}
+
+	vm->pid = pid;
+	vm->state = RUN;
+	EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+	       NOTE_EXIT, 0, vm);
+	kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
 
 	return 0;
 }
@@ -277,31 +215,7 @@ destroy_vm(struct vm_conf *conf)
 	return 0;
 }
 
-struct vm_conf *dummy_conf()
-{
-	struct vm_conf *conf;
-
-	conf = create_vm_conf("freebsd");
-	if (conf == NULL) {
-		fprintf(stderr, "can not create vm_conf\n");
-		return NULL;
-	}
-
-	set_ncpu(conf, 2);
-	set_memory_size(conf, "2048m");
-	add_disk_conf(conf,
-		      "virtio-blk",
-		      "/dev/zvol/zpool/images/freebsd");
-	add_iso_conf(conf,
-		     "ahci-cd",
-		     "/zpool/iso/FreeBSD-13.0-BETA2-amd64-disc1.iso");
-	add_net_conf(conf,
-		     "virtio-net",
-		     "bridge0");
-
-	return conf;
-}
-
+#if 0
 int
 do_bhyve(struct vm_conf *conf)
 {
@@ -331,10 +245,169 @@ err:
 	destroy_vm(conf);
 	return -1;
 }
+#endif
+
+int
+load_config_files()
+{
+	char *path;
+	DIR *d;
+	struct dirent *ent;
+	struct vm_conf *conf;
+
+	d = opendir(config_directory);
+	if (d == NULL) {
+		fprintf(stderr,"can not open %s\n", config_directory);
+		return -1;
+	}
+
+	while ((ent = readdir(d)) != NULL) {
+		if (ent->d_namlen > 0 &&
+		    ent->d_name[0] == '.')
+			continue;
+		if (asprintf(&path, "%s/%s", config_directory, ent->d_name) < 0)
+			continue;
+		conf = parse_file(path);
+		free(path);
+		if (conf == NULL)
+			continue;
+		SLIST_INSERT_HEAD(&vm_conf_list, conf, next);
+	}
+
+	closedir(d);
+
+	SLIST_FOREACH(conf, &vm_conf_list, next) {
+		dump_vm_conf(conf);
+	}
+
+	return 0;
+}
+
+int
+start_vm(struct vm *vm)
+{
+	pid_t pid;
+	struct vm_conf *conf = vm->conf;
+
+	if (activate_taps(conf) < 0)
+		return -1;
+
+	pid = bhyve_load(conf);
+	if (pid < 0) {
+		remove_taps(conf);
+		return -1;
+	}
+	vm->pid = pid;
+	vm->state = LOAD;
+
+	EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+	       NOTE_EXIT, 0, vm);
+	kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+
+	return 0;
+}
+
+int
+start_virtual_machines()
+{
+	struct vm_conf *conf;
+	struct vm *vm;
+	struct kevent sigev[3];
+
+	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[1], SIGINT,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[2], SIGHUP,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	if (kevent(kq, sigev, 3, NULL, 0, NULL) < 0)
+		return -1;
+
+	SLIST_FOREACH(conf, &vm_conf_list, next) {
+		vm = malloc(sizeof(struct vm));
+		vm->conf = conf;
+		vm->state = STOP;
+		vm->pid = -1;
+		if (assign_taps(conf) < 0 ||
+		    start_vm(vm) < 0) {
+			free(vm);
+			continue;
+		}
+		SLIST_INSERT_HEAD(&vm_list, vm, next);
+	}
+
+	return 0;
+}
+
+int
+event_loop()
+{
+	struct kevent ev;
+	struct vm *vm;
+	int status;
+
+wait:
+	if (kevent(kq, NULL, 0, &ev, 1, NULL) < 0) {
+		if (errno == EINTR) goto wait;
+		return -1;
+	}
+
+	switch (ev.filter) {
+	case EVFILT_PROC:
+		vm = ev.udata;
+		vm->kevent.flags = EV_DELETE;
+		kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+		if (waitpid(vm->pid, &status, 0) < 0) {
+			fprintf(stderr, "wait error (%s)\n",
+				strerror(errno));
+		}
+		switch (vm->state) {
+		case STOP:
+			break;
+		case LOAD:
+			exec_bhyve(vm);
+			break;
+		case RUN:
+			if (WIFEXITED(status) && (WEXITSTATUS(status) == 0)) {
+				start_vm(vm);
+				break;
+			}
+			remove_taps(vm->conf);
+			destroy_vm(vm->conf);
+			vm->state=TERMINATE;
+			break;
+		case TERMINATE:
+			break;
+		}
+		break;
+	case EVFILT_SIGNAL:
+		switch (ev.ident) {
+		case SIGTERM:
+		case SIGINT:
+			return 0;
+		case SIGHUP:
+			// do_reload();
+			goto wait;
+		}
+		break;
+	default:
+		// unknown event
+		return -1;
+	}
+
+	goto wait;
+
+	return 0;
+}
+
+int
+stop_virtual_machines()
+{
+	return 0;
+}
 
 int
 main(int argc, char *argv[])
 {
+	kq = kqueue();
+
 #if 0
 	struct vm_conf *conf = parse_file("./freebsd");
 	dump_vm_conf(conf);
@@ -348,5 +421,6 @@ main(int argc, char *argv[])
 	event_loop();
 
 	stop_virtual_machines();
+	close(kq);
 	return 0;
 }

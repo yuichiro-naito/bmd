@@ -196,7 +196,6 @@ create_vm_conf(char *name)
 	ret->nmdm = -1;
 	ret->ncpu = 0;
 	ret->memory = 0;
-	ret->pid = 0;
 	ret->ndisks = 0;
 	ret->nisoes = 0;
 	ret->nnets = 0;
