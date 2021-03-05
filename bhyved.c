@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 
 #include "vars.h"
 #include "tap.h"
@@ -13,6 +14,44 @@
 #include "parser.h"
 
 SLIST_HEAD(, vm_conf) vm_list = SLIST_HEAD_INITIALIZER();
+
+char *config_directory = "./bhyved.d";
+
+int
+load_config_files()
+{
+	char *path;
+	DIR *d;
+	struct dirent *ent;
+	struct vm_conf *conf;
+
+	d = opendir(config_directory);
+	if (d == NULL) {
+		fprintf(stderr,"can not open %s\n", config_directory);
+		return -1;
+	}
+
+	while ((ent = readdir(d)) != NULL) {
+		if (ent->d_namlen > 0 &&
+		    ent->d_name[0] == '.')
+			continue;
+		if (asprintf(&path, "%s/%s", config_directory, ent->d_name) < 0)
+			continue;
+		conf = parse_file(path);
+		free(path);
+		if (conf == NULL)
+			continue;
+		SLIST_INSERT_HEAD(&vm_list, conf, next);
+	}
+
+	closedir(d);
+
+	SLIST_FOREACH(conf, &vm_list, next) {
+		dump_vm_conf(conf);
+	}
+
+	return 0;
+}
 
 int
 bhyve_load(struct vm_conf *conf)
@@ -268,11 +307,12 @@ int
 main(int argc, char *argv[])
 {
 #if 0
-	struct vm_conf *conf = dummy_conf();
+	struct vm_conf *conf = parse_file("./freebsd");
+	dump_vm_conf(conf);
 	do_bhyve(conf);
 	free_vm_conf(conf);
-#else
-	parse_file("./freebsd");
 #endif
+	load_config_files();
+
 	return 0;
 }
