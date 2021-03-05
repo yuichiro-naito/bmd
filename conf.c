@@ -117,6 +117,22 @@ set_name(struct vm_conf *conf, char *name)
 }
 
 int
+set_loadcmd(struct vm_conf *conf, char *cmd)
+{
+	char *new;
+
+	if (conf == NULL)
+		return 0;
+
+	if ((new = strdup(cmd)) == NULL)
+		return -1;
+
+	free(conf->loadcmd);
+	conf->loadcmd = new;
+	return 0;
+}
+
+int
 set_memory_size(struct vm_conf *conf, char *memory)
 {
 	char *new;
@@ -161,6 +177,15 @@ assign_nmdm(struct vm_conf *conf)
 	return 0;
 }
 
+int
+set_boot(struct vm_conf *conf, enum BOOT boot)
+{
+	if (conf == NULL) return 0;
+
+	conf->boot = boot;
+	return 0;
+}
+
 struct vm_conf *
 create_vm_conf(char *name)
 {
@@ -182,4 +207,34 @@ create_vm_conf(char *name)
 	STAILQ_INIT(&ret->nets);
 
 	return ret;
+}
+
+int
+dump_vm_conf(struct vm_conf *conf)
+{
+	struct disk_conf *dc;
+	struct iso_conf *ic;
+	struct net_conf *nc;
+	static char *btype[] = {
+		"no", "yes", "delayed", "oneshot", "install"
+	};
+
+	printf("name: %s\n", conf->name);
+	printf("ncpu: %s\n", conf->ncpu);
+	printf("memory: %s\n", conf->memory);
+	printf("console: %s\n", conf->console);
+	printf("boot: %s\n", btype[conf->boot]);
+	printf("loadcmd: %s\n", conf->loadcmd);
+	printf("disk:");
+	STAILQ_FOREACH(dc, &conf->disks, next)
+		printf(" %s,%s", dc->type, dc->path);
+	printf("\niso:");
+	STAILQ_FOREACH(ic, &conf->isoes, next)
+		printf(" %s,%s", ic->type, ic->path);
+	printf("\nnet:");
+	STAILQ_FOREACH(nc, &conf->nets, next)
+		printf(" %s,%s", nc->type, nc->bridge);
+	printf("\n");
+
+	return 0;
 }

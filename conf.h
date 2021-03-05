@@ -14,6 +14,9 @@ int set_name(struct vm_conf *conf, char *name);
 int set_memory_size(struct vm_conf *conf, char *memory);
 int set_ncpu(struct vm_conf *conf, int ncpu);
 int assign_nmdm(struct vm_conf *conf);
+int set_loadcmd(struct vm_conf *conf, char *cmd);
+int set_boot(struct vm_conf *conf, enum BOOT boot);
 
 struct vm_conf *create_vm_conf(char *name);
+int dump_vm_conf(struct vm_conf *conf);
 #endif
