@@ -325,11 +325,12 @@ start_virtual_machines()
 		vm->conf = conf;
 		vm->state = STOP;
 		vm->pid = -1;
-		if (assign_taps(conf) < 0 ||
-		    start_vm(vm) < 0) {
-			free(vm);
-			continue;
-		}
+		if (conf->boot != NO)
+			if (assign_taps(conf) < 0 ||
+			    start_vm(vm) < 0) {
+				free(vm);
+				continue;
+			}
 		SLIST_INSERT_HEAD(&vm_list, vm, next);
 	}
 
