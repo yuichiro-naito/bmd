@@ -29,7 +29,8 @@ enum BOOT {
 	YES,
 	DELAYED,
 	ONESHOT,
-	INSTALL
+	INSTALL,
+	ALWAYS
 };
 
 struct vm_conf {

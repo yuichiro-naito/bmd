@@ -209,6 +209,8 @@ parse_boot(struct vm_conf *conf, char *val)
 		b = ONESHOT;
 	else if (strcasecmp(val, "install") == 0)
 		b = INSTALL;
+	else if (strcasecmp(val, "always") == 0)
+		b = ALWAYS;
 	else
 		b = NO;
 
