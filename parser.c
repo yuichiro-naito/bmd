@@ -23,7 +23,13 @@ get_token(FILE *fp, char **token)
 	f = 0;
 	while ((c = fgetc(fp)) != EOF) {
 		if (c == '#') {
-			while (fgetc(fp) != '\n');
+			if (f == 1)
+				fputc(c, t);
+			else {
+				while (fgetc(fp) != '\n');
+				fputc('\n', t);
+				break;
+			}
 		} else if (c == '=' || c == '\n') {
 			if (f == 1) {
 				f = 0;
@@ -31,11 +37,6 @@ get_token(FILE *fp, char **token)
 				break;
 			} else {
 				fputc(c, t);
-				break;
-			}
-		} else if (c == ',') {
-			if (f == 1) {
-				f = 0;
 				break;
 			}
 		} else if (c == '\\') {
@@ -57,12 +58,8 @@ get_token(FILE *fp, char **token)
 				fputc(c, t);
 			}
 		} else if (isspace(c)) {
-			if (f == 0)
-				continue;
-			else {
-				f = 0;
+			if (f == 1)
 				break;
-			}
 		} else {
 			f = 1;
 			fputc(c, t);
