@@ -41,6 +41,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->ncpu);
 	free(vc->memory);
 	free(vc->comport);
+	free(vc->loader);
 	free(vc->loadcmd);
 	STAILQ_FOREACH(dc, &vc->disks, next)
 		free_disk_conf(dc);
@@ -131,6 +132,13 @@ set_loadcmd(struct vm_conf *conf, char *cmd)
 }
 
 int
+set_loader(struct vm_conf *conf, char *loader)
+{
+	if (conf == NULL) return 0;
+	return set_string(&conf->loader, loader);
+}
+
+int
 set_memory_size(struct vm_conf *conf, char *memory)
 {
 	if (conf == NULL) return 0;
@@ -189,7 +197,7 @@ create_vm_conf(char *name)
 {
 	struct vm_conf *ret;
 
-	ret = malloc(sizeof(struct vm_conf));
+	ret = calloc(1, sizeof(struct vm_conf));
 	if (ret == NULL) return NULL;
 	ret->name = strdup(name);
 	ret->comport = strdup("stdio");
@@ -221,6 +229,7 @@ dump_vm_conf(struct vm_conf *conf)
 	printf("memory: %s\n", conf->memory);
 	printf("comport: %s\n", conf->comport);
 	printf("boot: %s\n", btype[conf->boot]);
+	printf("loader: %s\n", conf->loader);
 	printf("loadcmd: %s\n", conf->loadcmd);
 	printf("disk:");
 	STAILQ_FOREACH(dc, &conf->disks, next)

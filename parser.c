@@ -30,6 +30,14 @@ get_token(FILE *fp, char **token)
 				fputc('\n', t);
 				break;
 			}
+		} else if (c == '"') {
+			if (f == 0)
+				continue;
+			c = fgetc(fp);
+			ungetc(c, fp);
+			if (isspace(c))
+				continue;
+			fputc('"', t);
 		} else if (c == '=' || c == '\n') {
 			if (f == 1) {
 				f = 0;
@@ -192,6 +200,18 @@ parse_loadcmd(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_loader(struct vm_conf *conf, char *val)
+{
+	if (strcasecmp(val, "uefi") != 0 &&
+	    strcasecmp(val, "bhyveload") != 0 &&
+	    strcasecmp(val, "grub") != 0)
+		return -1;
+
+	set_loader(conf, val);
+	return 0;
+}
+
+static int
 parse_boot(struct vm_conf *conf, char *val)
 {
 	enum BOOT b;
@@ -225,26 +245,42 @@ parse_comport(struct vm_conf *conf, char *val)
 static pfunc
 get_parser(char *name)
 {
-	if (strcasecmp(name, "name") == 0)
-		return &parse_name;
-	if (strcasecmp(name, "ncpu") == 0)
-		return &parse_ncpu;
-	if (strcasecmp(name, "memory") == 0)
-		return &parse_memory;
-	if (strcasecmp(name, "disk") == 0)
-		return &parse_disk;
-	if (strcasecmp(name, "iso") == 0)
-		return &parse_iso;
-	if (strcasecmp(name, "network") == 0)
-		return &parse_net;
-	if (strcasecmp(name, "loadcmd") == 0)
-		return &parse_loadcmd;
-	if (strcasecmp(name, "boot") == 0)
-		return &parse_boot;
-	if (strcasecmp(name, "comport") == 0)
-		return &parse_comport;
-
-
+	switch (name[0]) {
+	case 'b':
+		if (strcasecmp(name, "boot") == 0)
+			return &parse_boot;
+		break;
+	case 'c':
+		if (strcasecmp(name, "comport") == 0)
+			return &parse_comport;
+		break;
+	case 'd':
+		if (strcasecmp(name, "disk") == 0)
+			return &parse_disk;
+		break;
+	case 'l':
+		if (strcasecmp(name, "loader") == 0)
+			return &parse_loader;
+		if (strcasecmp(name, "loadcmd") == 0)
+			return &parse_loadcmd;
+		break;
+	case 'n':
+		if (strcasecmp(name, "name") == 0)
+			return &parse_name;
+		if (strcasecmp(name, "ncpu") == 0)
+			return &parse_ncpu;
+		if (strcasecmp(name, "network") == 0)
+			return &parse_net;
+		break;
+	case 'm':
+		if (strcasecmp(name, "memory") == 0)
+			return &parse_memory;
+		break;
+	case 'i':
+		if (strcasecmp(name, "iso") == 0)
+			return &parse_iso;
+		break;
+	}
 	return NULL;
 }
 

@@ -42,6 +42,7 @@ struct vm_conf {
 	char *name;
 	char *comport;
 	enum BOOT boot;
+	char *loader;
 	char *loadcmd;
 	int ndisks;
 	int nisoes;
