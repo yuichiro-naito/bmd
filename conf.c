@@ -217,6 +217,7 @@ create_vm_conf(char *name)
 int
 dump_vm_conf(struct vm_conf *conf)
 {
+	int i;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
@@ -231,16 +232,15 @@ dump_vm_conf(struct vm_conf *conf)
 	printf("boot: %s\n", btype[conf->boot]);
 	printf("loader: %s\n", conf->loader);
 	printf("loadcmd: %s\n", conf->loadcmd);
-	printf("disk:");
+	i = 0;
 	STAILQ_FOREACH(dc, &conf->disks, next)
-		printf(" %s,%s", dc->type, dc->path);
-	printf("\niso:");
+		printf("disk%d: %s,%s\n", i++, dc->type, dc->path);
+	i = 0;
 	STAILQ_FOREACH(ic, &conf->isoes, next)
-		printf(" %s,%s", ic->type, ic->path);
-	printf("\nnet:");
+		printf("iso%d: %s,%s\n", i++, ic->type, ic->path);
+	i = 0;
 	STAILQ_FOREACH(nc, &conf->nets, next)
-		printf(" %s,%s", nc->type, nc->bridge);
-	printf("\n");
+		printf("net%d: %s,%s\n", i++, nc->type, nc->bridge);
 
 	return 0;
 }
