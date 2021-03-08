@@ -27,35 +27,35 @@ get_token(FILE *fp, char **token)
 
 	f = BEGIN;
 	while ((c = fgetc(fp)) != EOF) {
-		if (c == '#') {
-			if (f == TOKEN)
+		switch (c) {
+		case '#':
+			if (f == TOKEN || f == QUOTE) {
 				fputc(c, t);
-			else {
-				while (fgetc(fp) != '\n');
-				fputc('\n', t);
-				break;
+				continue;
 			}
-		} else if (c == '"') {
+			while (fgetc(fp) != '\n');
+			fputc('\n', t);
+			goto loop_end;
+		case '"':
 			if (f == QUOTE) {
 				f = BEGIN;
-				break;
-			} else {
+				goto loop_end;
+			} else if (f == TOKEN)
+				fputc(c, t);
+			else
 				f = QUOTE;
-				continue;
-			}
-		} else if (c == '=' || c == '\n') {
+			break;
+		case '=':
+		case '\n':
 			if (f == QUOTE) {
 				fputc(c, t);
 				continue;
-			} else if (f == TOKEN) {
-				f = BEGIN;
+			} else if (f == TOKEN)
 				ungetc(c, fp);
-				break;
-			} else {
+			else
 				fputc(c, t);
-				break;
-			}
-		} else if (c == '\\') {
+			goto loop_end;
+		case '\\':
 			c = fgetc(fp);
 			switch (c) {
 			case 't':
@@ -75,19 +75,27 @@ get_token(FILE *fp, char **token)
 			default:
 				fputc(c, t);
 			}
-		} else if (isspace(c)) {
+			break;
+		case ' ':
+		case '\t':
+		case '\r':
+		case '\v':
+		case '\f':
 			if (f == QUOTE) {
 				fputc(c, t);
 				continue;
 			}
 			if (f == TOKEN)
-				break;
-		} else {
+				goto loop_end;
+			break;
+		default:
 			if (f == BEGIN)
 				f = TOKEN;
 			fputc(c, t);
 		}
 	}
+
+loop_end:
 
 	if (ftell(t) == 0) {
 		fclose(t);
