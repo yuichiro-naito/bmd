@@ -10,7 +10,12 @@
 static int
 get_token(FILE *fp, char **token)
 {
-	int c, f;
+	int c;
+	enum PSTATE {
+		BEGIN,
+		TOKEN,
+		QUOTE
+	} f;
 	FILE *t;
 	char *buf;
 	size_t len;
@@ -20,10 +25,10 @@ get_token(FILE *fp, char **token)
 
 	t = open_memstream(&buf, &len);
 
-	f = 0;
+	f = BEGIN;
 	while ((c = fgetc(fp)) != EOF) {
 		if (c == '#') {
-			if (f == 1)
+			if (f == TOKEN)
 				fputc(c, t);
 			else {
 				while (fgetc(fp) != '\n');
@@ -31,16 +36,19 @@ get_token(FILE *fp, char **token)
 				break;
 			}
 		} else if (c == '"') {
-			if (f == 0)
+			if (f == QUOTE) {
+				f = BEGIN;
+				break;
+			} else {
+				f = QUOTE;
 				continue;
-			c = fgetc(fp);
-			ungetc(c, fp);
-			if (isspace(c))
-				continue;
-			fputc('"', t);
+			}
 		} else if (c == '=' || c == '\n') {
-			if (f == 1) {
-				f = 0;
+			if (f == QUOTE) {
+				fputc(c, t);
+				continue;
+			} else if (f == TOKEN) {
+				f = BEGIN;
 				ungetc(c, fp);
 				break;
 			} else {
@@ -61,15 +69,22 @@ get_token(FILE *fp, char **token)
 				break;
 			case '\r':
 			case '\n':
+				if (f == QUOTE)
+					fputc(c, t);
 				continue;
 			default:
 				fputc(c, t);
 			}
 		} else if (isspace(c)) {
-			if (f == 1)
+			if (f == QUOTE) {
+				fputc(c, t);
+				continue;
+			}
+			if (f == TOKEN)
 				break;
 		} else {
-			f = 1;
+			if (f == BEGIN)
+				f = TOKEN;
 			fputc(c, t);
 		}
 	}
