@@ -29,35 +29,47 @@ get_token(FILE *fp, char **token)
 	while ((c = fgetc(fp)) != EOF) {
 		switch (c) {
 		case '#':
-			if (f == TOKEN || f == QUOTE) {
+			switch (f) {
+			case TOKEN:
+			case QUOTE:
 				fputc(c, t);
 				continue;
+			default:
+				while (fgetc(fp) != '\n');
+				fputc('\n', t);
+				goto loop_end;
 			}
-			while (fgetc(fp) != '\n');
-			fputc('\n', t);
-			goto loop_end;
 		case '"':
-			if (f == QUOTE) {
+			switch (f) {
+			case QUOTE:
 				f = BEGIN;
 				goto loop_end;
-			} else if (f == TOKEN)
+			case TOKEN:
 				fputc(c, t);
-			else
+				continue;
+			default:
 				f = QUOTE;
+			}
 			break;
 		case '=':
 		case '\n':
-			if (f == QUOTE) {
+			switch (f) {
+			case QUOTE:
 				fputc(c, t);
 				continue;
-			} else if (f == TOKEN)
+			case TOKEN:
 				ungetc(c, fp);
-			else
+				break;
+			default:
 				fputc(c, t);
+			}
 			goto loop_end;
 		case '\\':
 			c = fgetc(fp);
 			switch (c) {
+			case 'f':
+				fputc('\f', t);
+				break;
 			case 't':
 				fputc('\t', t);
 				break;
@@ -66,6 +78,9 @@ get_token(FILE *fp, char **token)
 				break;
 			case 'r':
 				fputc('\r', t);
+				break;
+			case 'v':
+				fputc('\v', t);
 				break;
 			case '\r':
 			case '\n':
@@ -81,12 +96,15 @@ get_token(FILE *fp, char **token)
 		case '\r':
 		case '\v':
 		case '\f':
-			if (f == QUOTE) {
+			switch(f) {
+			case QUOTE:
 				fputc(c, t);
 				continue;
-			}
-			if (f == TOKEN)
+			case TOKEN:
 				goto loop_end;
+			default:
+				break;
+			}
 			break;
 		default:
 			if (f == BEGIN)
