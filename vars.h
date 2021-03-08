@@ -65,6 +65,8 @@ struct vm {
 	pid_t pid;
 	enum STATE state;
 	struct kevent kevent;
+	char *mapfile;
+	int infd;
 };
 
 #endif

@@ -20,6 +20,109 @@ SLIST_HEAD(, vm) vm_list = SLIST_HEAD_INITIALIZER();
 char *config_directory = "./conf.d";
 int kq;
 
+int
+write_mapfile(struct vm *vm)
+{
+	int fd, i;
+	char *fn;
+	FILE *fp;
+	struct disk_conf *dc;
+	struct iso_conf *ic;
+	struct vm_conf *conf;
+
+	if (asprintf(&fn, "/tmp/bhyved.%s.%d.XXXXXX",
+		     vm->conf->name, getpid()) < 0)
+		return -1;
+
+	fd = mkstemp(fn);
+	if (fd < 0) {
+		fprintf(stderr,"can't create mapfile\n");
+		free(fn);
+		return -1;
+	}
+
+	vm->mapfile = fn;
+
+	fp = fdopen(fd, "w+");
+	if (fp == NULL) {
+		fprintf(stderr,"can't fdopen mapfile\n");
+		unlink(fn);
+		vm->mapfile = NULL;
+		free(fn);
+		return -1;
+	}
+
+	conf = vm->conf;
+
+	i = 0;
+	STAILQ_FOREACH(dc, &conf->disks, next)
+		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
+			goto err;
+
+	i = 0;
+	STAILQ_FOREACH(ic, &conf->isoes, next)
+		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
+			goto err;
+
+	fclose(fp);
+	return 0;
+err:
+	fprintf(stderr,"can't write mapfile\n");
+	vm->mapfile = NULL;
+	unlink(fn);
+	free(fn);
+	return -1;
+
+}
+
+pid_t
+grub_load(struct vm *vm)
+{
+	int ifd[2];
+	pid_t pid;
+	char *args[9];
+	struct vm_conf *conf = vm->conf;
+	int len;
+	char *cmd;
+
+	if (pipe(ifd) < 0)
+		return -1;
+
+	if ((len = asprintf(&cmd, "%s\nboot\n", conf->loadcmd)) < 0) {
+		close(ifd[0]);
+		close(ifd[1]);
+		return -1;
+	}
+
+	args[0] = "/usr/local/sbin/grub-bhyve";
+	args[1] = "-r";
+	args[2] = "hdd0,msdos1";
+	args[3] = "-M";
+	args[4] = conf->memory;
+	args[5] = "-m";
+	args[6] = vm->mapfile;
+	args[7] = conf->name;
+	args[8] = NULL;
+
+	pid = fork();
+	if (pid > 0) {
+		close(ifd[1]);
+		vm->infd = ifd[0];
+		write(ifd[0], cmd, len+1);
+	} else if (pid == 0) {
+		close(ifd[0]);
+		dup2(ifd[1], 0);
+		execv(args[0],args);
+		fprintf(stderr, "can not exec %s\n", args[0]);
+		exit(1);
+	} else {
+		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
+		return -1;
+	}
+
+	return pid;
+}
+
 pid_t
 bhyve_load(struct vm_conf *conf)
 {
@@ -292,7 +395,17 @@ start_vm(struct vm *vm)
 	if (activate_taps(conf) < 0)
 		return -1;
 
-	pid = bhyve_load(conf);
+	if (strcasecmp(conf->loader, "bhyveload") == 0)
+		pid = bhyve_load(conf);
+	else if (strcasecmp(conf->loader, "grub") == 0) {
+		if (write_mapfile(vm) < 0 ||
+		    (pid = grub_load(vm)) < 0)
+			pid = -1;
+	} else {
+		pid = -1;
+		fprintf(stderr, "unknown loader\n");
+	}
+
 	if (pid < 0) {
 		remove_taps(conf);
 		return -1;
@@ -325,6 +438,8 @@ start_virtual_machines()
 		vm->conf = conf;
 		vm->state = STOP;
 		vm->pid = -1;
+		vm->mapfile = NULL;
+		vm->infd = -1;
 		if (conf->boot != NO)
 			if (assign_taps(conf) < 0 ||
 			    start_vm(vm) < 0) {
@@ -363,6 +478,10 @@ wait:
 		case STOP:
 			break;
 		case LOAD:
+			if (vm->infd != -1) {
+				close(vm->infd);
+				vm->infd = -1;
+			}
 			exec_bhyve(vm);
 			break;
 		case RUN:
@@ -372,6 +491,7 @@ wait:
 			}
 			remove_taps(vm->conf);
 			destroy_vm(vm->conf);
+			if (vm->mapfile) unlink(vm->mapfile);
 			vm->state=TERMINATE;
 			break;
 		case TERMINATE:
