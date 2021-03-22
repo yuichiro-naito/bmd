@@ -369,38 +369,6 @@ destroy_vm(struct vm_conf *conf)
 	return 0;
 }
 
-#if 0
-int
-do_bhyve(struct vm_conf *conf)
-{
-	int status;
-
-	if (assign_taps(conf) < 0)
-		return -1;
-reload:
-	if (activate_taps(conf) < 0 ||
-	    bhyve_load(conf) < 0 ||
-	    exec_bhyve(conf) < 0)
-		goto err;
-
-	if (waitpid(conf->pid, &status, 0) < 0) {
-		fprintf(stderr, "wait error (%s)\n", strerror(errno));
-		exit(1);
-	}
-
-	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
-	    goto reload;
-
-	remove_taps(conf);
-	destroy_vm(conf);
-	return 0;
-err:
-	remove_taps(conf);
-	destroy_vm(conf);
-	return -1;
-}
-#endif
-
 int
 load_config_files()
 {
@@ -590,12 +558,6 @@ main(int argc, char *argv[])
 {
 	kq = kqueue();
 
-#if 0
-	struct vm_conf *conf = parse_file("./freebsd");
-	dump_vm_conf(conf);
-	do_bhyve(conf);
-	free_vm_conf(conf);
-#endif
 	if (load_config_files() < 0 ||
 	    start_virtual_machines())
 		return 1;
