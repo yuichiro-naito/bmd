@@ -212,6 +212,18 @@ assign_taps(struct vm_conf *conf)
 	return 0;
 }
 
+char *
+get_fbuf_option(int pcid, struct fbuf *fb)
+{
+	char *ret;
+	if (asprintf(&ret, "%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s,password=%s",
+		     pcid, fb->ipaddr, fb->port, fb->width, fb->height,
+		     fb->vgaconf, fb->wait ? ",wait" : "",
+		     fb->password) < 0)
+		return NULL;
+	return ret;
+}
+
 int
 exec_bhyve(struct vm *vm)
 {
@@ -220,68 +232,105 @@ exec_bhyve(struct vm *vm)
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	pid_t pid;
-	int i, pcid;
+	int pcid;
 	char **args;
-
-	args = malloc(sizeof(char*) *
-		      (17
-		       + conf->ndisks * 2
-		       + conf->nisoes * 2
-		       + conf->nnets * 2));
-	if (args == NULL)
-		return -1;
-
-	i = 0;
-	args[i++] = "/usr/sbin/bhyve";
-	args[i++] = "-A";
-	args[i++] = "-H";
-	args[i++] = "-u";
-	args[i++] = "-w";
-	args[i++] = "-c";
-	args[i++] = conf->ncpu;
-	args[i++] = "-m";
-	args[i++] = conf->memory;
-	args[i++] = "-l";
-	asprintf(&args[i++], "com1,%s", conf->comport);
-	args[i++] = "-s";
-	args[i++] = "0,hostbridge";
-	args[i++] = "-s";
-	args[i++] = "1,lpc";
-
-	pcid = 2;
-	STAILQ_FOREACH(dc, &conf->disks, next) {
-		args[i++] = "-s";
-		asprintf(&args[i++], "%d,%s,%s", pcid++, dc->type, dc->path);
-	}
-	STAILQ_FOREACH(ic, &conf->isoes, next) {
-		args[i++] = "-s";
-		asprintf(&args[i++], "%d,%s,%s", pcid++, ic->type, ic->path);
-	}
-	STAILQ_FOREACH(nc, &conf->nets, next) {
-		args[i++] = "-s";
-		asprintf(&args[i++], "%d,%s,%s", pcid++, nc->type, nc->tap);
-	}
-	args[i++] = conf->name;
-	args[i++] = NULL;
+	char *buf = NULL;
+	size_t buf_size;
+	FILE *fp;
+	char *p;
 
 	pid = fork();
 	if (pid > 0) {
-		free(args[10]);
-		free(args);
+		/* parent process */
+		vm->pid = pid;
+		vm->state = RUN;
+		EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+		       NOTE_EXIT, 0, vm);
+		kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
 	} else if (pid == 0) {
-		execv(args[0],args);
+		/* child process */
+		fp = open_memstream(&buf, &buf_size);
+
+		p = "/usr/sbin/bhyve";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "-A";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "-H";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "-u";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "-w";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "-c";
+		fwrite(&p, sizeof(char*), 1, fp);
+		fwrite(&conf->ncpu, sizeof(char*), 1, fp);
+		p = "-m";
+		fwrite(&p, sizeof(char*), 1, fp);
+		fwrite(&conf->memory, sizeof(char*), 1, fp);
+		p = "-l";
+		fwrite(&p, sizeof(char*), 1, fp);
+		asprintf(&p, "com1,%s", conf->comport);
+		fwrite(&p, sizeof(char*), 1, fp);
+
+		if (strcasecmp(conf->loader, "uefi") == 0) {
+			p = "-l";
+			fwrite(&p, sizeof(char*), 1, fp);
+			p = "bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd";
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		p = "-s";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "0,hostbridge";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "-s";
+		fwrite(&p, sizeof(char*), 1, fp);
+		p = "1,lpc";
+		fwrite(&p, sizeof(char*), 1, fp);
+
+		pcid = 2;
+		STAILQ_FOREACH(dc, &conf->disks, next) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "%d,%s,%s", pcid++, dc->type, dc->path);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		STAILQ_FOREACH(ic, &conf->isoes, next) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		STAILQ_FOREACH(nc, &conf->nets, next) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "%d,%s,%s", pcid++, nc->type, nc->tap);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		if (conf->fbuf->enable) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			p = get_fbuf_option(pcid++, conf->fbuf);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		if (conf->mouse) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "%d,xhci,tablet", pcid++);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		fwrite(&conf->name, sizeof(char*), 1, fp);
+		p = NULL;
+		fwrite(&p, sizeof(char*), 1, fp);
+
+		fflush(fp);
+		args = (char **)buf;
+		execv(args[0], args);
 		fprintf(stderr, "can not exec %s\n", args[0]);
 		exit(1);
 	} else {
 		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
 		exit(1);
 	}
-
-	vm->pid = pid;
-	vm->state = RUN;
-	EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
-	       NOTE_EXIT, 0, vm);
-	kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
 
 	return 0;
 }
@@ -401,6 +450,16 @@ start_vm(struct vm *vm)
 		if (write_mapfile(vm) < 0 ||
 		    (pid = grub_load(vm)) < 0)
 			pid = -1;
+	} else if (strcasecmp(conf->loader, "uefi") == 0) {
+		if (exec_bhyve(vm) < 0) {
+			remove_taps(conf);
+			return -1;
+		}
+		vm->state = RUN;
+		EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+		       NOTE_EXIT, 0, vm);
+		kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+		return 0;
 	} else {
 		pid = -1;
 		fprintf(stderr, "unknown loader\n");
