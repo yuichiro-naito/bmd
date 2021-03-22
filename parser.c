@@ -359,6 +359,12 @@ parse_graphics_wait(struct vm_conf *conf, char *val)
 	return set_fbuf_wait(conf->fbuf, parse_boolean(val));
 }
 
+static int
+parse_xhci_mouse(struct vm_conf *conf, char *val)
+{
+	return set_mouse(conf, parse_boolean(val));
+}
+
 static pfunc
 get_parser(char *name)
 {
@@ -410,6 +416,10 @@ get_parser(char *name)
 	case 'i':
 		if (strcasecmp(name, "iso") == 0)
 			return &parse_iso;
+		break;
+	case 'x':
+		if (strcasecmp(name, "xhci_mouse") == 0)
+			return &parse_xhci_mouse;
 		break;
 	}
 	return NULL;

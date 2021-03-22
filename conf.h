@@ -26,6 +26,7 @@ int set_fbuf_port(struct fbuf *fb, int port);
 int set_fbuf_res(struct fbuf *fb, int width, int height);
 int set_fbuf_vgaconf(struct fbuf *fb, char *vga);
 int set_fbuf_wait(struct fbuf *fb, int wait);
+int set_mouse(struct vm_conf *conf, bool use);
 
 struct fbuf *create_fbuf();
 struct vm_conf *create_vm_conf(char *name);

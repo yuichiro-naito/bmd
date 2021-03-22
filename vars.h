@@ -56,6 +56,7 @@ struct vm_conf {
 	char *loader;
 	char *loadcmd;
 	struct fbuf *fbuf;
+	bool mouse;
 	int ndisks;
 	int nisoes;
 	int nnets;

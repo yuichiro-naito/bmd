@@ -265,6 +265,13 @@ set_fbuf_wait(struct fbuf *fb, int wait)
 	return 0;
 }
 
+int
+set_mouse(struct vm_conf *conf, bool use)
+{
+	conf->mouse = use;
+	return 0;
+}
+
 struct fbuf *
 create_fbuf()
 {
@@ -356,5 +363,6 @@ dump_vm_conf(struct vm_conf *conf)
 		       fb->ipaddr,fb->port, fb->width, fb->height,
 		       fb->vgaconf, fb->wait ? "wait" : "nowait");
 	}
+	printf("xhci_mouse: %s\n", conf->mouse ? "true":"false");
 	return 0;
 }
