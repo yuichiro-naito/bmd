@@ -309,8 +309,7 @@ parse_int(int *val, char *value)
 static int
 parse_graphics(struct vm_conf *conf, char *val)
 {
-	conf->fbuf->enable = parse_boolean(val);
-	return 0;
+	return set_fbuf_enable(conf->fbuf, parse_boolean(val));
 }
 
 static int
@@ -345,11 +344,7 @@ parse_graphics_res(struct vm_conf *conf, char *val)
 	    parse_int(&height, val) < 0)
 		return -1;
 
-	conf->fbuf->width = width;
-	conf->fbuf->height = height;
-	conf->fbuf->enable = 1;
-
-	return 0;
+	return set_fbuf_res(conf->fbuf, width, height);
 }
 
 static int
@@ -361,8 +356,7 @@ parse_graphics_vga(struct vm_conf *conf, char *val)
 static int
 parse_graphics_wait(struct vm_conf *conf, char *val)
 {
-	conf->fbuf->wait = parse_boolean(val);
-	return 0;
+	return set_fbuf_wait(conf->fbuf, parse_boolean(val));
 }
 
 static pfunc
