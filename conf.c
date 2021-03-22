@@ -10,6 +10,7 @@ free_disk_conf(struct disk_conf *c)
 	if (c == NULL) return;
 	free(c->type);
 	free(c->path);
+	free(c);
 }
 
 void
@@ -18,6 +19,7 @@ free_iso_conf(struct iso_conf *c)
 	if (c == NULL) return;
 	free(c->type);
 	free(c->path);
+	free(c);
 }
 
 void
@@ -27,14 +29,24 @@ free_net_conf(struct net_conf *c)
 	free(c->type);
 	free(c->bridge);
 	free(c->tap);
+	free(c);
+}
+
+void
+free_fbuf(struct fbuf *f)
+{
+	if (f == NULL) return;
+	free(f->ipaddr);
+	free(f->vgaconf);
+	free(f);
 }
 
 void
 free_vm_conf(struct vm_conf *vc)
 {
-	struct disk_conf *dc;
-	struct iso_conf *ic;
-	struct net_conf *nc;
+	struct disk_conf *dc, *dn;
+	struct iso_conf *ic, *in;
+	struct net_conf *nc, *nn;
 
 	if (vc == NULL) return;
 	free(vc->name);
@@ -43,11 +55,12 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->comport);
 	free(vc->loader);
 	free(vc->loadcmd);
-	STAILQ_FOREACH(dc, &vc->disks, next)
+	free_fbuf(vc->fbuf);
+	STAILQ_FOREACH_SAFE(dc, &vc->disks, next, dn)
 		free_disk_conf(dc);
-	STAILQ_FOREACH(ic, &vc->isoes, next)
+	STAILQ_FOREACH_SAFE(ic, &vc->isoes, next, in)
 		free_iso_conf(ic);
-	STAILQ_FOREACH(nc, &vc->nets, next)
+	STAILQ_FOREACH_SAFE(nc, &vc->nets, next, nn)
 		free_net_conf(nc);
 	free(vc);
 }
@@ -192,26 +205,120 @@ set_boot(struct vm_conf *conf, enum BOOT boot)
 	return 0;
 }
 
+int
+set_fbuf_enable(struct fbuf *fb, bool enable)
+{
+	if (fb == NULL) return 0;
+	fb->enable = enable;
+	return 0;
+}
+
+int
+set_fbuf_ipaddr(struct fbuf *fb, char *ipaddr)
+{
+	int ret;
+	if (fb == NULL) return 0;
+
+	ret = set_string(&fb->ipaddr, ipaddr);
+	if (ret == 0)
+		fb->enable = 1;
+	return ret;
+}
+
+int
+set_fbuf_port(struct fbuf *fb, int port)
+{
+	if (fb == NULL) return 0;
+
+	fb->port = port;
+	fb->enable = 1;
+	return 0;
+}
+
+int
+set_fbuf_res(struct fbuf *fb, int width, int height)
+{
+	if (fb == NULL) return 0;
+
+	fb->width = width;
+	fb->height = height;
+	fb->enable = 1;
+	return 0;
+}
+
+int
+set_fbuf_vgaconf(struct fbuf *fb, char *vga)
+{
+	int ret;
+	if (fb == NULL) return 0;
+
+	ret = set_string(&fb->vgaconf,vga);
+	if (ret == 0)
+		fb->enable = 1;
+	return ret;
+}
+
+int
+set_fbuf_wait(struct fbuf *fb, int wait)
+{
+	fb->wait = wait;
+	return 0;
+}
+
+struct fbuf *
+create_fbuf()
+{
+	struct fbuf *ret;
+	char *addr, *vga;
+	ret = calloc(1, sizeof(typeof(*ret)));
+	addr = strdup("0.0.0.0");
+	vga = strdup("io");
+	if (ret == NULL || addr == NULL || vga == NULL)
+		goto err;
+
+	ret->ipaddr = addr;
+	ret->vgaconf = vga;
+	ret->port = 5900;
+	ret->width = 1024;
+	ret->height = 768;
+	return ret;
+err:
+	free(ret);
+	free(addr);
+	free(vga);
+	return NULL;
+}
+
 struct vm_conf *
 create_vm_conf(char *name)
 {
 	struct vm_conf *ret;
+	struct fbuf *fbuf;
+	char *com;
 
-	ret = calloc(1, sizeof(struct vm_conf));
-	if (ret == NULL) return NULL;
-	ret->name = strdup(name);
-	ret->comport = strdup("stdio");
+	ret = calloc(1, sizeof(typeof(*ret)));
+	fbuf = create_fbuf();
+	name = strdup(name);
+	com = strdup("stdio");
+	if (ret == NULL || fbuf == NULL || name == NULL || com == NULL)
+		goto err;
+
+	ret->fbuf = fbuf;
+	ret->name = name;
+	ret->comport = com;
 	ret->nmdm = -1;
-	ret->ncpu = 0;
-	ret->memory = 0;
-	ret->ndisks = 0;
-	ret->nisoes = 0;
-	ret->nnets = 0;
+
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
 	STAILQ_INIT(&ret->nets);
 
 	return ret;
+err:
+	free(ret);
+	free(fbuf);
+	free(name);
+	free(com);
+	return NULL;
 }
 
 int
@@ -221,6 +328,7 @@ dump_vm_conf(struct vm_conf *conf)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
+	struct fbuf *fb;
 	static char *btype[] = {
 		"no", "yes", "delayed", "oneshot", "install"
 	};
@@ -242,5 +350,11 @@ dump_vm_conf(struct vm_conf *conf)
 	STAILQ_FOREACH(nc, &conf->nets, next)
 		printf("net%d: %s,%s\n", i++, nc->type, nc->bridge);
 
+	fb = conf->fbuf;
+	if (fb->enable) {
+		printf("graphics: %s:%d, %dx%d, %s, %s\n",
+		       fb->ipaddr,fb->port, fb->width, fb->height,
+		       fb->vgaconf, fb->wait ? "wait" : "nowait");
+	}
 	return 0;
 }

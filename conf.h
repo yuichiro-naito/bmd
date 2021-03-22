@@ -7,6 +7,8 @@ void free_disk_conf(struct disk_conf *c);
 void free_iso_conf(struct iso_conf *c);
 void free_net_conf(struct net_conf *c);
 void free_vm_conf(struct vm_conf *vc);
+void free_fbuf(struct fbuf *f);
+
 int add_disk_conf(struct vm_conf *conf, char *type, char *path);
 int add_iso_conf(struct vm_conf *conf, char *type, char *path);
 int add_net_conf(struct vm_conf *conf, char *type, char *bridge);
@@ -18,7 +20,14 @@ int set_loadcmd(struct vm_conf *conf, char *cmd);
 int set_loader(struct vm_conf *conf, char *loader);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
 int set_comport(struct vm_conf *conf, char *cmd);
+int set_fbuf_enable(struct fbuf *fb, bool enable);
+int set_fbuf_ipaddr(struct fbuf *fb, char *ipaddr);
+int set_fbuf_port(struct fbuf *fb, int port);
+int set_fbuf_res(struct fbuf *fb, int width, int height);
+int set_fbuf_vgaconf(struct fbuf *fb, char *vga);
+int set_fbuf_wait(struct fbuf *fb, int wait);
 
+struct fbuf *create_fbuf();
 struct vm_conf *create_vm_conf(char *name);
 int dump_vm_conf(struct vm_conf *conf);
 #endif

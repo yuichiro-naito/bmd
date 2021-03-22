@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 #include <sys/event.h>
+#include <stdbool.h>
 
 struct disk_conf {
 	STAILQ_ENTRY(disk_conf) next;
@@ -33,6 +34,16 @@ enum BOOT {
 	ALWAYS
 };
 
+struct fbuf {
+	bool enable;
+	char *ipaddr;
+	int port;
+	int width;
+	int height;
+	char *vgaconf;
+	int wait;
+};
+
 struct vm_conf {
 	SLIST_ENTRY(vm_conf) next;
 	unsigned int nmdm;
@@ -44,6 +55,7 @@ struct vm_conf {
 	enum BOOT boot;
 	char *loader;
 	char *loadcmd;
+	struct fbuf *fbuf;
 	int ndisks;
 	int nisoes;
 	int nnets;

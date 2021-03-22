@@ -283,6 +283,88 @@ parse_comport(struct vm_conf *conf, char *val)
 	return 0;
 }
 
+static int
+parse_boolean(const char *value)
+{
+	if (strcasecmp(value, "yes") == 0 ||
+	    strcasecmp(value, "true") == 0)
+		return 1;
+	return 0;
+}
+
+static int
+parse_int(int *val, char *value)
+{
+	long n;
+	char *p;
+
+	n = strtol(value, &p, 10);
+	if (*p != '\0') {
+		return -1;
+	}
+	*val = n;
+	return 0;
+}
+
+static int
+parse_graphics(struct vm_conf *conf, char *val)
+{
+	conf->fbuf->enable = parse_boolean(val);
+	return 0;
+}
+
+static int
+parse_graphics_port(struct vm_conf *conf, char *val)
+{
+	int port;
+
+	if (parse_int(&port, val) < 0)
+		return -1;
+
+	return set_fbuf_port(conf->fbuf, port);
+}
+
+static int
+parse_graphics_listen(struct vm_conf *conf, char *val)
+{
+	return set_fbuf_ipaddr(conf->fbuf, val);
+}
+
+static int
+parse_graphics_res(struct vm_conf *conf, char *val)
+{
+	char *p;
+	int width, height;
+
+	p = strchr(val, 'x');
+	if (p == NULL) return -1;
+
+	*p = '\0';
+
+	if (parse_int(&width, val) < 0 ||
+	    parse_int(&height, val) < 0)
+		return -1;
+
+	conf->fbuf->width = width;
+	conf->fbuf->height = height;
+	conf->fbuf->enable = 1;
+
+	return 0;
+}
+
+static int
+parse_graphics_vga(struct vm_conf *conf, char *val)
+{
+	return set_fbuf_vgaconf(conf->fbuf, val);
+}
+
+static int
+parse_graphics_wait(struct vm_conf *conf, char *val)
+{
+	conf->fbuf->wait = parse_boolean(val);
+	return 0;
+}
+
 static pfunc
 get_parser(char *name)
 {
@@ -298,6 +380,20 @@ get_parser(char *name)
 	case 'd':
 		if (strcasecmp(name, "disk") == 0)
 			return &parse_disk;
+		break;
+	case 'g':
+		if (strcasecmp(name, "graphics") == 0)
+			return &parse_graphics;
+		else if (strcasecmp(name, "graphics_port") == 0)
+			return &parse_graphics_port;
+		else if (strcasecmp(name, "graphics_listen") == 0)
+			return &parse_graphics_listen;
+		else if (strcasecmp(name, "graphics_res") == 0)
+			return &parse_graphics_res;
+		else if (strcasecmp(name, "graphics_vga") == 0)
+			return &parse_graphics_vga;
+		else if (strcasecmp(name, "graphics_wait") == 0)
+			return &parse_graphics_wait;
 		break;
 	case 'l':
 		if (strcasecmp(name, "loader") == 0)
