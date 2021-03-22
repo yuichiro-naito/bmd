@@ -341,7 +341,7 @@ parse_graphics_res(struct vm_conf *conf, char *val)
 	*p = '\0';
 
 	if (parse_int(&width, val) < 0 ||
-	    parse_int(&height, val) < 0)
+	    parse_int(&height, p+1) < 0)
 		return -1;
 
 	return set_fbuf_res(conf->fbuf, width, height);
@@ -357,6 +357,12 @@ static int
 parse_graphics_wait(struct vm_conf *conf, char *val)
 {
 	return set_fbuf_wait(conf->fbuf, parse_boolean(val));
+}
+
+static int
+parse_graphics_password(struct vm_conf *conf, char *val)
+{
+	return set_fbuf_password(conf->fbuf, val);
 }
 
 static int
@@ -394,6 +400,8 @@ get_parser(char *name)
 			return &parse_graphics_vga;
 		else if (strcasecmp(name, "graphics_wait") == 0)
 			return &parse_graphics_wait;
+		else if (strcasecmp(name, "graphics_password") == 0)
+			return &parse_graphics_password;
 		break;
 	case 'l':
 		if (strcasecmp(name, "loader") == 0)

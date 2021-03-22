@@ -38,6 +38,7 @@ free_fbuf(struct fbuf *f)
 	if (f == NULL) return;
 	free(f->ipaddr);
 	free(f->vgaconf);
+	free(f->password);
 	free(f);
 }
 
@@ -69,52 +70,76 @@ int
 add_disk_conf(struct vm_conf *conf, char *type, char *path)
 {
 	struct disk_conf *t;
+	char *y, *p;
 	if (conf == NULL) return 0;
 
 	t = malloc(sizeof(struct disk_conf));
-	if (t == NULL)
-		return -1;
-	t->type = strdup(type);
-	t->path = strdup(path);
+	y = strdup(type);
+	p = strdup(path);
+	if (t == NULL || y == NULL || p == NULL)
+		goto err;
+	t->type = y;
+	t->path = p;
 
 	STAILQ_INSERT_TAIL(&conf->disks, t, next);
 	conf->ndisks++;
 	return 0;
+err:
+	free(p);
+	free(y);
+	free(t);
+	return -1;
 }
 
 int
 add_iso_conf(struct vm_conf *conf, char *type, char *path)
 {
 	struct iso_conf *t;
+	char *y, *p;
 	if (conf == NULL) return 0;
 
 	t = malloc(sizeof(struct iso_conf));
+	y = strdup(type);
+	p = strdup(path);
 	if (t == NULL)
-		return -1;
-	t->type = strdup(type);
-	t->path = strdup(path);
+		goto err;
+	t->type = y;
+	t->path = p;
 
 	STAILQ_INSERT_TAIL(&conf->isoes, t, next);
 	conf->nisoes++;
 	return 0;
+err:
+	free(p);
+	free(y);
+	free(t);
+	return -1;
 }
 
 int
 add_net_conf(struct vm_conf *conf, char *type, char *bridge)
 {
 	struct net_conf *t;
+	char *y, *b;
 	if (conf == NULL) return 0;
 
 	t = malloc(sizeof(struct net_conf));
-	if (t == NULL)
-		return -1;
-	t->type = strdup(type);
-	t->bridge = strdup(bridge);
+	y = strdup(type);
+	b = strdup(bridge);
+	if (t == NULL || y == NULL || b == NULL)
+		goto err;
+	t->type = y;
+	t->bridge = b;
 	t->tap = NULL;
 
 	STAILQ_INSERT_TAIL(&conf->nets, t, next);
 	conf->nnets++;
 	return 0;
+err:
+	free(b);
+	free(y);
+	free(t);
+	return -1;
 }
 
 static int
@@ -266,6 +291,18 @@ set_fbuf_wait(struct fbuf *fb, int wait)
 }
 
 int
+set_fbuf_password(struct fbuf *fb, char *pass)
+{
+	int ret;
+	if (fb == NULL) return 0;
+
+	ret = set_string(&fb->password, pass);
+	if (ret == 0)
+		fb->enable = 1;
+	return ret;
+}
+
+int
 set_mouse(struct vm_conf *conf, bool use)
 {
 	conf->mouse = use;
@@ -276,11 +313,12 @@ struct fbuf *
 create_fbuf()
 {
 	struct fbuf *ret;
-	char *addr, *vga;
+	char *addr, *vga, *pass;
 	ret = calloc(1, sizeof(typeof(*ret)));
 	addr = strdup("0.0.0.0");
 	vga = strdup("io");
-	if (ret == NULL || addr == NULL || vga == NULL)
+	pass = strdup("password");
+	if (ret == NULL || addr == NULL || vga == NULL || pass == NULL)
 		goto err;
 
 	ret->ipaddr = addr;
@@ -288,11 +326,13 @@ create_fbuf()
 	ret->port = 5900;
 	ret->width = 1024;
 	ret->height = 768;
+	ret->password = pass;
 	return ret;
 err:
 	free(ret);
 	free(addr);
 	free(vga);
+	free(pass);
 	return NULL;
 }
 

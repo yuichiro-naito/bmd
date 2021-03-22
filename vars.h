@@ -42,6 +42,7 @@ struct fbuf {
 	int height;
 	char *vgaconf;
 	int wait;
+	char *password;
 };
 
 struct vm_conf {
