@@ -341,18 +341,15 @@ create_vm_conf(char *name)
 {
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
-	char *com;
 
 	ret = calloc(1, sizeof(typeof(*ret)));
 	fbuf = create_fbuf();
 	name = strdup(name);
-	com = strdup("stdio");
-	if (ret == NULL || fbuf == NULL || name == NULL || com == NULL)
+	if (ret == NULL || fbuf == NULL || name == NULL)
 		goto err;
 
 	ret->fbuf = fbuf;
 	ret->name = name;
-	ret->comport = com;
 	ret->nmdm = -1;
 
 	STAILQ_INIT(&ret->disks);
@@ -364,7 +361,6 @@ err:
 	free(ret);
 	free(fbuf);
 	free(name);
-	free(com);
 	return NULL;
 }
 

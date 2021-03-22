@@ -267,10 +267,12 @@ exec_bhyve(struct vm *vm)
 		p = "-m";
 		fwrite(&p, sizeof(char*), 1, fp);
 		fwrite(&conf->memory, sizeof(char*), 1, fp);
-		p = "-l";
-		fwrite(&p, sizeof(char*), 1, fp);
-		asprintf(&p, "com1,%s", conf->comport);
-		fwrite(&p, sizeof(char*), 1, fp);
+		if (conf->comport != NULL) {
+			p = "-l";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "com1,%s", conf->comport);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
 
 		if (strcasecmp(conf->loader, "uefi") == 0) {
 			p = "-l";
