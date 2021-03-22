@@ -283,13 +283,13 @@ parse_comport(struct vm_conf *conf, char *val)
 	return 0;
 }
 
-static int
+static bool
 parse_boolean(const char *value)
 {
 	if (strcasecmp(value, "yes") == 0 ||
 	    strcasecmp(value, "true") == 0)
-		return 1;
-	return 0;
+		return true;
+	return false;
 }
 
 static int
