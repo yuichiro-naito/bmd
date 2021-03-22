@@ -463,11 +463,12 @@ start_virtual_machines()
 		return -1;
 
 	SLIST_FOREACH(conf, &vm_conf_list, next) {
-		vm = malloc(sizeof(struct vm));
+		vm = calloc(1, sizeof(struct vm));
+		if (vm == NULL)
+			return -1;
 		vm->conf = conf;
 		vm->state = STOP;
 		vm->pid = -1;
-		vm->mapfile = NULL;
 		vm->infd = -1;
 		if (conf->boot != NO)
 			if (assign_taps(conf) < 0 ||
@@ -550,12 +551,51 @@ wait:
 int
 stop_virtual_machines()
 {
+	struct kevent ev;
+	struct vm *vm;
+	int status, count = 0;
+
+	SLIST_FOREACH(vm, &vm_list, next)
+		if (vm->state == RUN || vm->state == LOAD) {
+			count++;
+			kill(vm->pid, SIGTERM);
+		}
+
+	while (count > 0) {
+		if (kevent(kq, NULL, 0, &ev, 1, NULL) < 0) {
+			if (errno == EINTR) continue;
+			return -1;
+		}
+		if (ev.filter == EVFILT_PROC) {
+			vm = ev.udata;
+			vm->kevent.flags = EV_DELETE;
+			kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+			if (waitpid(vm->pid, &status, 0) < 0) {
+				fprintf(stderr, "wait error (%s)\n",
+					strerror(errno));
+			}
+			remove_taps(vm->conf);
+			destroy_vm(vm->conf);
+			if (vm->mapfile) unlink(vm->mapfile);
+			vm->state=TERMINATE;
+			count--;
+		}
+	}
+
 	return 0;
 }
 
 int
 main(int argc, char *argv[])
 {
+	sigset_t nmask, omask;
+
+	sigemptyset(&nmask);
+	sigaddset(&nmask, SIGTERM);
+	sigaddset(&nmask, SIGINT);
+	sigaddset(&nmask, SIGHUP);
+	sigprocmask(SIG_BLOCK, &nmask, &omask);
+
 	kq = kqueue();
 
 	if (load_config_files() < 0 ||
