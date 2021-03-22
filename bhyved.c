@@ -85,31 +85,31 @@ grub_load(struct vm *vm)
 	int len;
 	char *cmd;
 
-	if (pipe(ifd) < 0)
+	if ((len = asprintf(&cmd, "%s\nboot\n", conf->loadcmd)) < 0)
 		return -1;
 
-	if ((len = asprintf(&cmd, "%s\nboot\n", conf->loadcmd)) < 0) {
-		close(ifd[0]);
-		close(ifd[1]);
+	if (pipe(ifd) < 0) {
+		free(cmd);
 		return -1;
 	}
-
-	args[0] = "/usr/local/sbin/grub-bhyve";
-	args[1] = "-r";
-	args[2] = "hdd0,msdos1";
-	args[3] = "-M";
-	args[4] = conf->memory;
-	args[5] = "-m";
-	args[6] = vm->mapfile;
-	args[7] = conf->name;
-	args[8] = NULL;
 
 	pid = fork();
 	if (pid > 0) {
 		close(ifd[1]);
 		vm->infd = ifd[0];
 		write(ifd[0], cmd, len+1);
+		free(cmd);
 	} else if (pid == 0) {
+		args[0] = "/usr/local/sbin/grub-bhyve";
+		args[1] = "-r";
+		args[2] = "hdd0,msdos1";
+		args[3] = "-M";
+		args[4] = conf->memory;
+		args[5] = "-m";
+		args[6] = vm->mapfile;
+		args[7] = conf->name;
+		args[8] = NULL;
+
 		close(ifd[0]);
 		dup2(ifd[1], 0);
 		execv(args[0],args);
@@ -129,19 +129,21 @@ bhyve_load(struct vm_conf *conf)
 	pid_t pid;
 	char *args[9];
 
-	args[0] = "/usr/sbin/bhyveload";
-	args[1] = "-c";
-	args[2] = conf->comport;
-	args[3] = "-m";
-	args[4] = conf->memory;
-	args[5] = "-d";
-	args[6] = STAILQ_FIRST(&conf->disks)->path;
-	args[7] = conf->name;
-	args[8] = NULL;
 
 	pid = fork();
 	if (pid > 0) {
+		return pid;
 	} else if (pid == 0) {
+		args[0] = "/usr/sbin/bhyveload";
+		args[1] = "-c";
+		args[2] = conf->comport;
+		args[3] = "-m";
+		args[4] = conf->memory;
+		args[5] = "-d";
+		args[6] = STAILQ_FIRST(&conf->disks)->path;
+		args[7] = conf->name;
+		args[8] = NULL;
+
 		execv(args[0],args);
 		fprintf(stderr, "can not exec %s\n", args[0]);
 		exit(1);
@@ -344,25 +346,23 @@ destroy_vm(struct vm_conf *conf)
 	int status;
 	char *args[4];
 
-	args[0]="/usr/sbin/bhyvectl";
-	args[1]="--destroy";
-	asprintf(&args[2], "--vm=%s", conf->name);
-	args[3]=NULL;
-
 	pid = fork();
 	if (pid > 0) {
-		free(args[2]);
+		if (waitpid(pid, &status, 0) < 0) {
+			fprintf(stderr, "wait error (%s)\n", strerror(errno));
+			return -1;
+		}
 	} else if (pid == 0) {
+		args[0]="/usr/sbin/bhyvectl";
+		args[1]="--destroy";
+		asprintf(&args[2], "--vm=%s", conf->name);
+		args[3]=NULL;
+
 		execv(args[0],args);
 		fprintf(stderr, "can not exec %s\n", args[0]);
 		exit(1);
 	} else {
 		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
-		exit(1);
-	}
-
-	if (waitpid(pid, &status, 0) < 0) {
-		fprintf(stderr, "wait error (%s)\n", strerror(errno));
 		exit(1);
 	}
 
