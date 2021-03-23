@@ -14,8 +14,18 @@
 #include "conf.h"
 #include "parser.h"
 
-SLIST_HEAD(, vm_conf) vm_conf_list = SLIST_HEAD_INITIALIZER();
-SLIST_HEAD(, vm) vm_list = SLIST_HEAD_INITIALIZER();
+struct vm_conf_entry {
+	struct vm_conf conf;
+	SLIST_ENTRY(vm_conf_entry) next;
+};
+
+struct vm_entry {
+	struct vm vm;
+	SLIST_ENTRY(vm_entry) next;
+};
+
+SLIST_HEAD(, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
+SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 
 char *config_directory = "./conf.d";
 int kq;
@@ -376,6 +386,7 @@ load_config_files()
 	DIR *d;
 	struct dirent *ent;
 	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
 
 	d = opendir(config_directory);
 	if (d == NULL) {
@@ -393,13 +404,18 @@ load_config_files()
 		free(path);
 		if (conf == NULL)
 			continue;
-		SLIST_INSERT_HEAD(&vm_conf_list, conf, next);
+		conf_ent = realloc(conf, sizeof(*conf_ent));
+		if (conf_ent == NULL) {
+			free_vm_conf(conf);
+			continue;
+		}
+		SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
 	}
 
 	closedir(d);
 
-	SLIST_FOREACH(conf, &vm_conf_list, next) {
-		dump_vm_conf(conf);
+	SLIST_FOREACH(conf_ent, &vm_conf_list, next) {
+		dump_vm_conf(&conf_ent->conf);
 	}
 
 	return 0;
@@ -453,7 +469,9 @@ int
 start_virtual_machines()
 {
 	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
 	struct vm *vm;
+	struct vm_entry *vm_ent;
 	struct kevent sigev[3];
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -462,21 +480,21 @@ start_virtual_machines()
 	if (kevent(kq, sigev, 3, NULL, 0, NULL) < 0)
 		return -1;
 
-	SLIST_FOREACH(conf, &vm_conf_list, next) {
-		vm = calloc(1, sizeof(struct vm));
-		if (vm == NULL)
+	SLIST_FOREACH(conf_ent, &vm_conf_list, next) {
+		vm_ent = calloc(1, sizeof(struct vm_entry));
+		if (vm_ent == NULL)
 			return -1;
+		vm = &vm_ent->vm;
+		conf = &conf_ent->conf;
 		vm->conf = conf;
 		vm->state = STOP;
 		vm->pid = -1;
 		vm->infd = -1;
 		if (conf->boot != NO)
 			if (assign_taps(conf) < 0 ||
-			    start_vm(vm) < 0) {
-				free(vm);
-				continue;
-			}
-		SLIST_INSERT_HEAD(&vm_list, vm, next);
+			    start_vm(vm) < 0)
+				fprintf(stderr, "fail to start %s\n", conf->name);
+		SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 	}
 
 	return 0;
@@ -553,9 +571,11 @@ stop_virtual_machines()
 {
 	struct kevent ev;
 	struct vm *vm;
+	struct vm_entry *vm_entry;
 	int status, count = 0;
 
-	SLIST_FOREACH(vm, &vm_list, next)
+	SLIST_FOREACH(vm_entry, &vm_list, next)
+		vm = &vm_entry->vm;
 		if (vm->state == RUN || vm->state == LOAD) {
 			count++;
 			kill(vm->pid, SIGTERM);

@@ -46,7 +46,6 @@ struct fbuf {
 };
 
 struct vm_conf {
-	SLIST_ENTRY(vm_conf) next;
 	unsigned int nmdm;
 	int boot_delay;
 	char *ncpu;
@@ -74,13 +73,14 @@ enum STATE {
 };
 
 struct vm {
-	SLIST_ENTRY(vm) next;
 	struct vm_conf *conf;
 	pid_t pid;
 	enum STATE state;
 	struct kevent kevent;
 	char *mapfile;
 	int infd;
+	int outfd;
+	int errfd;
 };
 
 #endif
