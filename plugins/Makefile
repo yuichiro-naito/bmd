@@ -7,3 +7,5 @@ libavahiplugin.so: avahi.o
 
 clean:
 	rm -f *.o *.so
+
+avahi.o: avahi.c ../vars.h

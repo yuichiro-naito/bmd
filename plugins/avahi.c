@@ -69,7 +69,7 @@ avahi_status_change(struct vm *vm, void **data)
 		ad = *data;
 
 	switch (vm->state) {
-	case STOP:
+	case INIT:
 		break;
 	case LOAD:
 	case RUN:

@@ -71,7 +71,7 @@ struct vm_conf {
 };
 
 enum STATE {
-	STOP,
+	INIT,
 	LOAD,
 	RUN,
 	TERMINATE

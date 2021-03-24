@@ -586,7 +586,7 @@ start_virtual_machines()
 		vm = &vm_ent->vm;
 		conf = &conf_ent->conf;
 		vm->conf = conf;
-		vm->state = STOP;
+		vm->state = INIT;
 		vm->pid = -1;
 		vm->infd = -1;
 		SLIST_FOREACH(pl_ent, &plugin_list, next) {
@@ -633,7 +633,7 @@ wait:
 				strerror(errno));
 		}
 		switch (vm->state) {
-		case STOP:
+		case INIT:
 			break;
 		case LOAD:
 			if (vm->infd != -1) {
