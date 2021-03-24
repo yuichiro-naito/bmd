@@ -1,15 +1,5 @@
-OBJS= bhyved.o tap.o conf.o parser.o
-CFLAGS+=-Wall
+SUBDIR=	plugins
+PROG=	bhyved
+SRCS=	bhyved.c conf.c tap.c parser.c
 
-.PHONY: clean
-
-bhyved:	$(OBJS)
-	cc -o $@ $(OBJS)
-
-clean:
-	rm -f bhyved $(OBJS) *.core
-
-bhyved.o: bhyved.c vars.h tap.h
-conf.o: conf.c vars.h conf.h
-tap.o: tap.c tap.h
-parser.o: parser.c vars.h
+.include <bsd.prog.mk>
