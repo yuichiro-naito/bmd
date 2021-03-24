@@ -1,3 +1,7 @@
 bhyved
+bhyved.debug
+bhyved.full
+bhyved.1.gz
 .depend*
 *.o
+*.so
