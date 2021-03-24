@@ -6,6 +6,11 @@
 #include <sys/event.h>
 #include <stdbool.h>
 
+struct global_conf {
+	char *config_dir;
+	char *plugin_dir;
+};
+
 struct disk_conf {
 	STAILQ_ENTRY(disk_conf) next;
 	char *type;
@@ -76,11 +81,20 @@ struct vm {
 	struct vm_conf *conf;
 	pid_t pid;
 	enum STATE state;
-	struct kevent kevent;
 	char *mapfile;
 	int infd;
 	int outfd;
 	int errfd;
 };
+
+#define PLUGIN_VERSION 1
+
+typedef struct plugin_desc {
+	int version;
+	char *name;
+	int (*initialize)(struct global_conf*);
+	void (*finalize)(struct global_conf*);
+	void (*on_status_change)(struct vm*, void**);
+} PLUGIN_DESC;
 
 #endif

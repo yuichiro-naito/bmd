@@ -8,11 +8,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <dlfcn.h>
 
 #include "vars.h"
 #include "tap.h"
 #include "conf.h"
 #include "parser.h"
+
+struct plugin_entry {
+	struct plugin_desc desc;
+	void *handle;
+	SLIST_ENTRY(plugin_entry) next;
+};
+
+struct plugin_data {
+	struct plugin_entry *ent;
+	void *data;
+	SLIST_ENTRY(plugin_data) next;
+};
 
 struct vm_conf_entry {
 	struct vm_conf conf;
@@ -21,14 +34,94 @@ struct vm_conf_entry {
 
 struct vm_entry {
 	struct vm vm;
+	struct kevent kevent;
+	SLIST_HEAD(, plugin_data) pl_data;
 	SLIST_ENTRY(vm_entry) next;
 };
 
+
 SLIST_HEAD(, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
+SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
 char *config_directory = "./conf.d";
 int kq;
+
+struct global_conf gl_conf = {
+	"./conf.d",
+	"./plugins"
+};
+
+int
+load_plugins()
+{
+	char *path;
+	DIR *d;
+	void *hdl;
+	struct dirent *ent;
+	struct plugin_desc *desc;
+	struct plugin_entry *pl_ent;
+
+	d = opendir(gl_conf.plugin_dir);
+	if (d == NULL) {
+		fprintf(stderr,"can not open %s\n", gl_conf.plugin_dir);
+		return -1;
+	}
+
+	while ((ent = readdir(d)) != NULL) {
+		path = NULL;
+		if (ent->d_namlen < 4 ||
+		    ent->d_name[0] == '.' ||
+		    strcmp(&ent->d_name[ent->d_namlen-3], ".so") != 0 ||
+		    asprintf(&path, "%s/%s", gl_conf.plugin_dir, ent->d_name) < 0 ||
+		    ((hdl = dlopen(path, RTLD_LAZY)) == NULL))
+			goto next;
+
+		desc = dlsym(hdl, "plugin_desc");
+		if (desc == NULL ||
+		    desc->version != PLUGIN_VERSION ||
+		    (desc->initialize && (*(desc->initialize))(&gl_conf) < 0) ||
+		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
+			dlclose(hdl);
+			goto next;
+		}
+		memcpy(&pl_ent->desc, desc, sizeof(PLUGIN_DESC));
+		pl_ent->handle = hdl;
+		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+	next:
+		free(path);
+	}
+
+	closedir(d);
+
+	return 0;
+}
+
+int
+remove_plugins()
+{
+	struct plugin_entry *pl_ent, *pln;
+
+	SLIST_FOREACH_SAFE(pl_ent, &plugin_list, next, pln) {
+		if (pl_ent->desc.finalize)
+			(*pl_ent->desc.finalize)(&gl_conf);
+		dlclose(pl_ent->handle);
+		free(pl_ent);
+	}
+
+	return 0;
+}
+
+void
+call_plugins(struct vm_entry *vm_ent)
+{
+	struct plugin_data *pl_data;
+	struct vm *vm = &vm_ent->vm;
+
+	SLIST_FOREACH(pl_data, &vm_ent->pl_data, next)
+		if (pl_data->ent->desc.on_status_change)
+			(*(pl_data->ent->desc.on_status_change))(vm, &pl_data->data);
+}
 
 int
 write_mapfile(struct vm *vm)
@@ -237,8 +330,9 @@ get_fbuf_option(int pcid, struct fbuf *fb)
 }
 
 int
-exec_bhyve(struct vm *vm)
+exec_bhyve(struct vm_entry *vm_ent)
 {
+	struct vm *vm = &vm_ent->vm;
 	struct vm_conf *conf = vm->conf;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
@@ -256,9 +350,9 @@ exec_bhyve(struct vm *vm)
 		/* parent process */
 		vm->pid = pid;
 		vm->state = RUN;
-		EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
-		kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+		kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 	} else if (pid == 0) {
 		/* child process */
 		fp = open_memstream(&buf, &buf_size);
@@ -422,9 +516,10 @@ load_config_files()
 }
 
 int
-start_vm(struct vm *vm)
+start_vm(struct vm_entry *vm_ent)
 {
 	pid_t pid;
+	struct vm *vm = &vm_ent->vm;
 	struct vm_conf *conf = vm->conf;
 
 	if (activate_taps(conf) < 0)
@@ -437,15 +532,15 @@ start_vm(struct vm *vm)
 		    (pid = grub_load(vm)) < 0)
 			pid = -1;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
-		if (exec_bhyve(vm) < 0) {
+		if (exec_bhyve(vm_ent) < 0) {
 			remove_taps(conf);
 			return -1;
 		}
 		vm->state = RUN;
-		EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
-		kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
-		return 0;
+		kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+		goto end;
 	} else {
 		pid = -1;
 		fprintf(stderr, "unknown loader\n");
@@ -458,10 +553,12 @@ start_vm(struct vm *vm)
 	vm->pid = pid;
 	vm->state = LOAD;
 
-	EV_SET(&vm->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+	EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 	       NOTE_EXIT, 0, vm);
-	kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+	kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 
+end:
+	call_plugins(vm_ent);
 	return 0;
 }
 
@@ -472,6 +569,8 @@ start_virtual_machines()
 	struct vm_conf_entry *conf_ent;
 	struct vm *vm;
 	struct vm_entry *vm_ent;
+	struct plugin_entry *pl_ent;
+	struct plugin_data *pl_data;
 	struct kevent sigev[3];
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -490,9 +589,18 @@ start_virtual_machines()
 		vm->state = STOP;
 		vm->pid = -1;
 		vm->infd = -1;
+		SLIST_FOREACH(pl_ent, &plugin_list, next) {
+			pl_data = calloc(1, sizeof(*pl_data));
+			if (pl_data == NULL) {
+				free(vm_ent);
+				return -1;
+			}
+			pl_data->ent = pl_ent;
+			SLIST_INSERT_HEAD(&vm_ent->pl_data, pl_data, next);
+		}
 		if (conf->boot != NO)
 			if (assign_taps(conf) < 0 ||
-			    start_vm(vm) < 0)
+			    start_vm(vm_ent) < 0)
 				fprintf(stderr, "fail to start %s\n", conf->name);
 		SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 	}
@@ -504,6 +612,7 @@ int
 event_loop()
 {
 	struct kevent ev;
+	struct vm_entry *vm_ent;
 	struct vm *vm;
 	int status;
 
@@ -515,9 +624,10 @@ wait:
 
 	switch (ev.filter) {
 	case EVFILT_PROC:
-		vm = ev.udata;
-		vm->kevent.flags = EV_DELETE;
-		kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+		vm_ent = ev.udata;
+		vm = &vm_ent->vm;
+		vm_ent->kevent.flags = EV_DELETE;
+		kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 		if (waitpid(vm->pid, &status, 0) < 0) {
 			fprintf(stderr, "wait error (%s)\n",
 				strerror(errno));
@@ -530,17 +640,20 @@ wait:
 				close(vm->infd);
 				vm->infd = -1;
 			}
-			exec_bhyve(vm);
+			exec_bhyve(vm_ent);
+			vm->state = RUN;
+			call_plugins(vm_ent);
 			break;
 		case RUN:
 			if (WIFEXITED(status) && (WEXITSTATUS(status) == 0)) {
-				start_vm(vm);
+				start_vm(vm_ent);
 				break;
 			}
 			remove_taps(vm->conf);
 			destroy_vm(vm->conf);
 			if (vm->mapfile) unlink(vm->mapfile);
 			vm->state=TERMINATE;
+			call_plugins(vm_ent);
 			break;
 		case TERMINATE:
 			break;
@@ -571,11 +684,11 @@ stop_virtual_machines()
 {
 	struct kevent ev;
 	struct vm *vm;
-	struct vm_entry *vm_entry;
+	struct vm_entry *vm_ent;
 	int status, count = 0;
 
-	SLIST_FOREACH(vm_entry, &vm_list, next)
-		vm = &vm_entry->vm;
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		vm = &vm_ent->vm;
 		if (vm->state == RUN || vm->state == LOAD) {
 			count++;
 			kill(vm->pid, SIGTERM);
@@ -587,9 +700,10 @@ stop_virtual_machines()
 			return -1;
 		}
 		if (ev.filter == EVFILT_PROC) {
-			vm = ev.udata;
-			vm->kevent.flags = EV_DELETE;
-			kevent(kq, &vm->kevent, 1, NULL, 0, NULL);
+			vm_ent = ev.udata;
+			vm = &vm_ent->vm;
+			vm_ent->kevent.flags = EV_DELETE;
+			kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 			if (waitpid(vm->pid, &status, 0) < 0) {
 				fprintf(stderr, "wait error (%s)\n",
 					strerror(errno));
@@ -598,6 +712,7 @@ stop_virtual_machines()
 			destroy_vm(vm->conf);
 			if (vm->mapfile) unlink(vm->mapfile);
 			vm->state=TERMINATE;
+			call_plugins(vm_ent);
 			count--;
 		}
 	}
@@ -618,7 +733,8 @@ main(int argc, char *argv[])
 
 	kq = kqueue();
 
-	if (load_config_files() < 0 ||
+	if (load_plugins() < 0 ||
+	    load_config_files() < 0 ||
 	    start_virtual_machines())
 		return 1;
 
@@ -626,5 +742,6 @@ main(int argc, char *argv[])
 
 	stop_virtual_machines();
 	close(kq);
+	remove_plugins();
 	return 0;
 }
