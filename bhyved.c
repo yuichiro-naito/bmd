@@ -687,12 +687,13 @@ stop_virtual_machines()
 	struct vm_entry *vm_ent;
 	int status, count = 0;
 
-	SLIST_FOREACH(vm_ent, &vm_list, next)
+	SLIST_FOREACH(vm_ent, &vm_list, next) {
 		vm = &vm_ent->vm;
 		if (vm->state == RUN || vm->state == LOAD) {
 			count++;
 			kill(vm->pid, SIGTERM);
 		}
+	}
 
 	while (count > 0) {
 		if (kevent(kq, NULL, 0, &ev, 1, NULL) < 0) {
