@@ -44,7 +44,6 @@ SLIST_HEAD(, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
-char *config_directory = "./conf.d";
 int kq;
 
 struct global_conf gl_conf = {
@@ -482,9 +481,9 @@ load_config_files()
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 
-	d = opendir(config_directory);
+	d = opendir(gl_conf.config_dir);
 	if (d == NULL) {
-		fprintf(stderr,"can not open %s\n", config_directory);
+		fprintf(stderr,"can not open %s\n", gl_conf.config_dir);
 		return -1;
 	}
 
@@ -492,7 +491,7 @@ load_config_files()
 		if (ent->d_namlen > 0 &&
 		    ent->d_name[0] == '.')
 			continue;
-		if (asprintf(&path, "%s/%s", config_directory, ent->d_name) < 0)
+		if (asprintf(&path, "%s/%s", gl_conf.config_dir, ent->d_name) < 0)
 			continue;
 		conf = parse_file(path);
 		free(path);
