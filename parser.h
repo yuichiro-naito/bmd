@@ -3,6 +3,6 @@
 
 #include "vars.h"
 
-struct vm_conf *parse_file(char *name);
+struct vm_conf *parse_file(int fd, char *name);
 
 #endif

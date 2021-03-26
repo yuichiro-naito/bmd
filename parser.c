@@ -488,19 +488,17 @@ bad:
 }
 
 struct vm_conf *
-parse_file(char *name)
+parse_file(int fd, char *name)
 {
 	int ret;
 	struct vm_conf *c;
 	char *bname;
 
-	FILE *fp = fopen(name, "r");
+	FILE *fp = fdopen(fd, "r");
 	if (fp == NULL)
 		return NULL;
 
-	bname = strdup(name);
-	c = create_vm_conf(basename(bname));
-	free(bname);
+	c = create_vm_conf(name);
 	if (c == NULL)
 		return NULL;
 

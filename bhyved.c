@@ -1,6 +1,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
@@ -54,26 +55,26 @@ struct global_conf gl_conf = {
 int
 load_plugins()
 {
-	char *path;
 	DIR *d;
 	void *hdl;
+	int fd;
 	struct dirent *ent;
 	struct plugin_desc *desc;
 	struct plugin_entry *pl_ent;
 
-	d = opendir(gl_conf.plugin_dir);
+	d = fdopendir(gl_conf.plugin_fd);
 	if (d == NULL) {
 		fprintf(stderr,"can not open %s\n", gl_conf.plugin_dir);
 		return -1;
 	}
 
 	while ((ent = readdir(d)) != NULL) {
-		path = NULL;
+		fd = -1;
 		if (ent->d_namlen < 4 ||
 		    ent->d_name[0] == '.' ||
 		    strcmp(&ent->d_name[ent->d_namlen-3], ".so") != 0 ||
-		    asprintf(&path, "%s/%s", gl_conf.plugin_dir, ent->d_name) < 0 ||
-		    ((hdl = dlopen(path, RTLD_LAZY)) == NULL))
+		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) < 0 ||
+		    ((hdl = fdlopen(fd, RTLD_LAZY)) == NULL))
 			goto next;
 
 		desc = dlsym(hdl, "plugin_desc");
@@ -88,7 +89,7 @@ load_plugins()
 		pl_ent->handle = hdl;
 		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	next:
-		free(path);
+		close(fd);
 	}
 
 	closedir(d);
@@ -477,11 +478,12 @@ load_config_files()
 {
 	char *path;
 	DIR *d;
+	int fd;
 	struct dirent *ent;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 
-	d = opendir(gl_conf.config_dir);
+	d = fdopendir(gl_conf.config_fd);
 	if (d == NULL) {
 		fprintf(stderr,"can not open %s\n", gl_conf.config_dir);
 		return -1;
@@ -491,10 +493,10 @@ load_config_files()
 		if (ent->d_namlen > 0 &&
 		    ent->d_name[0] == '.')
 			continue;
-		if (asprintf(&path, "%s/%s", gl_conf.config_dir, ent->d_name) < 0)
+		if ((fd = openat(gl_conf.config_fd, ent->d_name, O_RDONLY)) < 0)
 			continue;
-		conf = parse_file(path);
-		free(path);
+		conf = parse_file(fd, ent->d_name);
+		close(fd);
 		if (conf == NULL)
 			continue;
 		conf_ent = realloc(conf, sizeof(*conf_ent));
@@ -723,6 +725,7 @@ stop_virtual_machines()
 int
 main(int argc, char *argv[])
 {
+	int fd;
 	sigset_t nmask, omask;
 
 	sigemptyset(&nmask);
@@ -733,6 +736,20 @@ main(int argc, char *argv[])
 
 	kq = kqueue();
 
+	fd = open(gl_conf.config_dir, O_DIRECTORY|O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr,"can not open %s\n",gl_conf.config_dir);
+		return 1;
+	}
+	gl_conf.config_fd = fd;
+
+	fd = open(gl_conf.plugin_dir, O_DIRECTORY|O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr,"can not open %s\n",gl_conf.plugin_dir);
+		return 1;
+	}
+	gl_conf.plugin_fd = fd;
+
 	if (load_plugins() < 0 ||
 	    load_config_files() < 0 ||
 	    start_virtual_machines())
@@ -742,6 +759,8 @@ main(int argc, char *argv[])
 
 	stop_virtual_machines();
 	close(kq);
+	close(gl_conf.plugin_fd);
+	close(gl_conf.config_fd);
 	remove_plugins();
 	return 0;
 }

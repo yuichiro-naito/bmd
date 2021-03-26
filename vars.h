@@ -9,6 +9,8 @@
 struct global_conf {
 	char *config_dir;
 	char *plugin_dir;
+	int config_fd;
+	int plugin_fd;
 };
 
 struct disk_conf {
