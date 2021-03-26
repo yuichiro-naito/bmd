@@ -45,8 +45,6 @@ SLIST_HEAD(, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
-int kq;
-
 struct global_conf gl_conf = {
 	"./conf.d",
 	"./plugins"
@@ -352,7 +350,7 @@ exec_bhyve(struct vm_entry *vm_ent)
 		vm->state = RUN;
 		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
-		kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+		kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 	} else if (pid == 0) {
 		/* child process */
 		fp = open_memstream(&buf, &buf_size);
@@ -540,7 +538,7 @@ start_vm(struct vm_entry *vm_ent)
 		vm->state = RUN;
 		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
-		kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+		kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 		goto end;
 	} else {
 		pid = -1;
@@ -556,7 +554,7 @@ start_vm(struct vm_entry *vm_ent)
 
 	EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 	       NOTE_EXIT, 0, vm);
-	kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+	kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 
 end:
 	call_plugins(vm_ent);
@@ -577,7 +575,7 @@ start_virtual_machines()
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[2], SIGHUP,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
-	if (kevent(kq, sigev, 3, NULL, 0, NULL) < 0)
+	if (kevent(gl_conf.kq, sigev, 3, NULL, 0, NULL) < 0)
 		return -1;
 
 	SLIST_FOREACH(conf_ent, &vm_conf_list, next) {
@@ -618,7 +616,7 @@ event_loop()
 	int status;
 
 wait:
-	if (kevent(kq, NULL, 0, &ev, 1, NULL) < 0) {
+	if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
 		if (errno == EINTR) goto wait;
 		return -1;
 	}
@@ -627,8 +625,18 @@ wait:
 	case EVFILT_PROC:
 		vm_ent = ev.udata;
 		vm = &vm_ent->vm;
+		if (vm == NULL || vm->pid != ev.ident) {
+			// maybe plugin's child process
+			ev.flags = EV_DELETE;
+			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+			if (waitpid(ev.ident, &status, 0) < 0) {
+				fprintf(stderr, "wait error (%s)\n",
+					strerror(errno));
+			}
+			break;
+		}
 		vm_ent->kevent.flags = EV_DELETE;
-		kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+		kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 		if (waitpid(vm->pid, &status, 0) < 0) {
 			fprintf(stderr, "wait error (%s)\n",
 				strerror(errno));
@@ -697,7 +705,7 @@ stop_virtual_machines()
 	}
 
 	while (count > 0) {
-		if (kevent(kq, NULL, 0, &ev, 1, NULL) < 0) {
+		if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
 			if (errno == EINTR) continue;
 			return -1;
 		}
@@ -705,7 +713,7 @@ stop_virtual_machines()
 			vm_ent = ev.udata;
 			vm = &vm_ent->vm;
 			vm_ent->kevent.flags = EV_DELETE;
-			kevent(kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+			kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 			if (waitpid(vm->pid, &status, 0) < 0) {
 				fprintf(stderr, "wait error (%s)\n",
 					strerror(errno));
@@ -734,7 +742,12 @@ main(int argc, char *argv[])
 	sigaddset(&nmask, SIGHUP);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
-	kq = kqueue();
+	fd = kqueue();
+	if (fd < 0) {
+		fprintf(stderr,"can not open kqueue\n");
+		return 1;
+	}
+	gl_conf.kq = fd;
 
 	fd = open(gl_conf.config_dir, O_DIRECTORY|O_RDONLY);
 	if (fd < 0) {
@@ -758,7 +771,7 @@ main(int argc, char *argv[])
 	event_loop();
 
 	stop_virtual_machines();
-	close(kq);
+	close(gl_conf.kq);
 	close(gl_conf.plugin_fd);
 	close(gl_conf.config_fd);
 	remove_plugins();

@@ -11,6 +11,7 @@ struct global_conf {
 	char *plugin_dir;
 	int config_fd;
 	int plugin_fd;
+	int kq;
 };
 
 struct disk_conf {
