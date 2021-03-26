@@ -6,13 +6,20 @@
 #include "stdlib.h"
 #include "../vars.h"
 
+#define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"
+
 struct avahi_data {
 	pid_t pid;
 };
 
+static int avahi_enable = 0;
+
 static int
 avahi_initialize(struct global_conf *conf)
 {
+	if (access(AVAHI_PUBLISH, R_OK|X_OK) == 0)
+		avahi_enable = 1;
+
 	return 0;
 }
 
@@ -37,7 +44,7 @@ exec_avahi_publish(struct vm *vm)
 		sigaddset(&mask, SIGHUP);
 		sigprocmask(SIG_UNBLOCK, &mask, NULL);
 
-		args[0] = "/usr/local/bin/avahi-publish";
+		args[0] = AVAHI_PUBLISH;
 		args[1] = "-s";
 		args[2] = vm->conf->name;
 		args[3] = "_rfb._tcp";
@@ -57,7 +64,8 @@ avahi_status_change(struct vm *vm, void **data)
 	int status;
 	struct avahi_data *ad;
 
-	if (vm->conf->fbuf->enable == false)
+	if (avahi_enable == 0 ||
+	    vm->conf->fbuf->enable == false)
 		return;
 
 	if (*data == NULL) {
