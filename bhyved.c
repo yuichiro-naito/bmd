@@ -712,6 +712,16 @@ stop_virtual_machines()
 		if (ev.filter == EVFILT_PROC) {
 			vm_ent = ev.udata;
 			vm = &vm_ent->vm;
+			if (vm == NULL || vm->pid != ev.ident) {
+				// maybe plugin's child process
+				ev.flags = EV_DELETE;
+				kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+				if (waitpid(ev.ident, &status, 0) < 0) {
+					fprintf(stderr, "wait error (%s)\n",
+						strerror(errno));
+				}
+				continue;
+			}
 			vm_ent->kevent.flags = EV_DELETE;
 			kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
 			if (waitpid(vm->pid, &status, 0) < 0) {
