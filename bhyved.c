@@ -671,7 +671,9 @@ wait:
 			call_plugins(vm_ent);
 			break;
 		case RUN:
-			if (WIFEXITED(status) && (WEXITSTATUS(status) == 0)) {
+			if (WIFEXITED(status) &&
+			    (vm->conf->boot == ALWAYS ||
+			     WEXITSTATUS(status) == 0)) {
 				if (start_vm(vm_ent) < 0)
 					fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
 				break;
