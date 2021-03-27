@@ -170,6 +170,13 @@ set_loadcmd(struct vm_conf *conf, char *cmd)
 }
 
 int
+set_hookcmd(struct vm_conf *conf, char *cmd)
+{
+	if (conf == NULL) return 0;
+	return set_string(&conf->hookcmd, cmd);
+}
+
+int
 set_loader(struct vm_conf *conf, char *loader)
 {
 	if (conf == NULL) return 0;

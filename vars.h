@@ -62,6 +62,7 @@ struct vm_conf {
 	enum BOOT boot;
 	char *loader;
 	char *loadcmd;
+	char *hookcmd;
 	struct fbuf *fbuf;
 	bool mouse;
 	int ndisks;

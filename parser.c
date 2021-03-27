@@ -255,6 +255,13 @@ parse_loadcmd(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_hookcmd(struct vm_conf *conf, char *val)
+{
+	set_hookcmd(conf, val);
+	return 0;
+}
+
+static int
 parse_loader(struct vm_conf *conf, char *val)
 {
 	if (strcasecmp(val, "uefi") != 0 &&
@@ -412,6 +419,10 @@ get_parser(char *name)
 			return &parse_graphics_wait;
 		else if (strcasecmp(name, "graphics_password") == 0)
 			return &parse_graphics_password;
+		break;
+	case 'h':
+		if (strcasecmp(name, "hookcmd") == 0)
+			return &parse_hookcmd;
 		break;
 	case 'l':
 		if (strcasecmp(name, "loader") == 0)

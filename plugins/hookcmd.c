@@ -25,11 +25,23 @@ hookcmd_status_change(struct vm *vm, void **data)
 {
 	pid_t pid;
 	struct kevent ev;
+	char *args[4];
+	static char *state_name[] = {
+		"INIT",	"LOAD", "RUN", "TERMINATE"
+	};
 
-	if ((pid = fork()) <0 )
+	if (vm->conf->hookcmd == NULL)
+		return;
+
+	if ((pid = fork()) < 0)
 		return;
 
 	if (pid == 0) {
+		args[0] = vm->conf->hookcmd;
+		args[1] = vm->conf->name;
+		args[2] = state_name[vm->state];
+		args[3] = NULL;
+		execv(args[0], args);
 		exit(1);
 	}
 
