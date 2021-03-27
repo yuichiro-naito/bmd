@@ -600,11 +600,12 @@ start_virtual_machines()
 		SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 		if (conf->boot == NO)
 			continue;
-		if (conf->boot == DELAY && conf->boot_delay > 0) {
+		if (conf->boot_delay > 0) {
 			EV_SET(&vm_ent->kevent, 1, EVFILT_TIMER, EV_ADD,
 			       NOTE_SECONDS, conf->boot_delay, vm_ent);
 			if (kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL) < 0)
 				return -1;
+			continue;
 		}
 		if (assign_taps(conf) < 0 ||
 		    start_vm(vm_ent) < 0)
@@ -634,7 +635,7 @@ wait:
 		vm = &vm_ent->vm;
 		ev.flags = EV_DELETE;
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-		if (vm->conf->boot == DELAY)
+		if (vm->state == INIT)
 			if (assign_taps(vm->conf) < 0 ||
 			    start_vm(vm_ent) < 0)
 				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);

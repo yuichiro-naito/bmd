@@ -274,9 +274,6 @@ parse_boot(struct vm_conf *conf, char *val)
 	if (strcasecmp(val, "yes") == 0 ||
 	    strcasecmp(val, "true") == 0)
 		b = YES;
-	else if (strcasecmp(val, "delay") == 0 ||
-		 strcasecmp(val, "delayed") == 0)
-		b = DELAY;
 	else if (strcasecmp(val, "oneshot") == 0)
 		b = ONESHOT;
 	else if (strcasecmp(val, "install") == 0)

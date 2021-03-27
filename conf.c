@@ -382,7 +382,7 @@ dump_vm_conf(struct vm_conf *conf)
 	struct net_conf *nc;
 	struct fbuf *fb;
 	static char *btype[] = {
-		"no", "yes", "delay", "oneshot", "install","always"
+		"no", "yes", "oneshot", "install","always"
 	};
 
 	printf("name: %s\n", conf->name);
