@@ -36,7 +36,7 @@ struct net_conf {
 enum BOOT {
 	NO,
 	YES,
-	DELAYED,
+	DELAY,
 	ONESHOT,
 	INSTALL,
 	ALWAYS

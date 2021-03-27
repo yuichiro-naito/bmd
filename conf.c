@@ -231,6 +231,15 @@ set_boot(struct vm_conf *conf, enum BOOT boot)
 }
 
 int
+set_boot_delay(struct vm_conf *conf, int delay)
+{
+	if (conf == NULL) return 0;
+
+	conf->boot_delay = delay;
+	return 0;
+}
+
+int
 set_fbuf_enable(struct fbuf *fb, bool enable)
 {
 	if (fb == NULL) return 0;

@@ -19,6 +19,7 @@ int assign_nmdm(struct vm_conf *conf);
 int set_loadcmd(struct vm_conf *conf, char *cmd);
 int set_loader(struct vm_conf *conf, char *loader);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
+int set_boot_delay(struct vm_conf *conf, int delay);
 int set_comport(struct vm_conf *conf, char *cmd);
 int set_fbuf_enable(struct fbuf *fb, bool enable);
 int set_fbuf_ipaddr(struct fbuf *fb, char *ipaddr);

@@ -130,6 +130,20 @@ loop_end:
 typedef int (*pfunc)(struct vm_conf *conf, char *val);
 
 static int
+parse_int(int *val, char *value)
+{
+	long n;
+	char *p;
+
+	n = strtol(value, &p, 10);
+	if (*p != '\0') {
+		return -1;
+	}
+	*val = n;
+	return 0;
+}
+
+static int
 parse_name(struct vm_conf *conf, char *val)
 {
 	set_name(conf, val);
@@ -262,7 +276,7 @@ parse_boot(struct vm_conf *conf, char *val)
 		b = YES;
 	else if (strcasecmp(val, "delay") == 0 ||
 		 strcasecmp(val, "delayed") == 0)
-		b = DELAYED;
+		b = DELAY;
 	else if (strcasecmp(val, "oneshot") == 0)
 		b = ONESHOT;
 	else if (strcasecmp(val, "install") == 0)
@@ -274,6 +288,17 @@ parse_boot(struct vm_conf *conf, char *val)
 
 	set_boot(conf, b);
 	return 0;
+}
+
+static int
+parse_boot_delay(struct vm_conf *conf, char *val)
+{
+	int delay;
+
+	if (parse_int(&delay, val) < 0)
+		return -1;
+
+	return set_boot_delay(conf, delay);
 }
 
 static int
@@ -290,20 +315,6 @@ parse_boolean(const char *value)
 	    strcasecmp(value, "true") == 0)
 		return true;
 	return false;
-}
-
-static int
-parse_int(int *val, char *value)
-{
-	long n;
-	char *p;
-
-	n = strtol(value, &p, 10);
-	if (*p != '\0') {
-		return -1;
-	}
-	*val = n;
-	return 0;
 }
 
 static int
@@ -378,6 +389,8 @@ get_parser(char *name)
 	case 'b':
 		if (strcasecmp(name, "boot") == 0)
 			return &parse_boot;
+		else if (strcasecmp(name, "boot_delay") == 0)
+			return &parse_boot_delay;
 		break;
 	case 'c':
 		if (strcasecmp(name, "comport") == 0)

@@ -597,11 +597,18 @@ start_virtual_machines()
 			pl_data->ent = pl_ent;
 			SLIST_INSERT_HEAD(&vm_ent->pl_data, pl_data, next);
 		}
-		if (conf->boot != NO)
-			if (assign_taps(conf) < 0 ||
-			    start_vm(vm_ent) < 0)
-				fprintf(stderr, "fail to start %s\n", conf->name);
 		SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
+		if (conf->boot == NO)
+			continue;
+		if (conf->boot == DELAY && conf->boot_delay > 0) {
+			EV_SET(&vm_ent->kevent, 1, EVFILT_TIMER, EV_ADD,
+			       NOTE_SECONDS, conf->boot_delay, vm_ent);
+			if (kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL) < 0)
+				return -1;
+		}
+		if (assign_taps(conf) < 0 ||
+		    start_vm(vm_ent) < 0)
+			fprintf(stderr, "failed to start vm %s\n", conf->name);
 	}
 
 	return 0;
@@ -622,6 +629,16 @@ wait:
 	}
 
 	switch (ev.filter) {
+	case EVFILT_TIMER:
+		vm_ent = ev.udata;
+		vm = &vm_ent->vm;
+		ev.flags = EV_DELETE;
+		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+		if (vm->conf->boot == DELAY)
+			if (assign_taps(vm->conf) < 0 ||
+			    start_vm(vm_ent) < 0)
+				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+		break;
 	case EVFILT_PROC:
 		vm_ent = ev.udata;
 		vm = &vm_ent->vm;
@@ -655,7 +672,8 @@ wait:
 			break;
 		case RUN:
 			if (WIFEXITED(status) && (WEXITSTATUS(status) == 0)) {
-				start_vm(vm_ent);
+				if (start_vm(vm_ent) < 0)
+					fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
 				break;
 			}
 			remove_taps(vm->conf);
