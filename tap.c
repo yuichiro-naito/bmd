@@ -5,6 +5,7 @@
 #include <net/ethernet.h>
 #include <net/if_bridgevar.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -100,5 +101,27 @@ destroy_tap(int s, char *name)
 
 	if (ioctl(s, SIOCIFDESTROY, &ifr) < 0)
 			fprintf(stderr, "SIOCIFDESTROY\n");
+	return 0;
+}
+
+int
+set_tap_description(int s, char *tap, char *desc)
+{
+        struct ifreq ifr;
+
+	memset(&ifr, 0, sizeof(struct ifreq));
+	strncpy(ifr.ifr_name, tap, sizeof(ifr.ifr_name));
+
+	ifr.ifr_buffer.length = strlen(desc) + 1;
+	if (ifr.ifr_buffer.length == 1) {
+		ifr.ifr_buffer.buffer = NULL;
+		ifr.ifr_buffer.length = 0;
+	} else
+		ifr.ifr_buffer.buffer = desc;
+
+
+	if (ioctl(s, SIOCSIFDESCR, (caddr_t)&ifr) < 0)
+		return -1;
+
 	return 0;
 }

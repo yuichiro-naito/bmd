@@ -295,21 +295,29 @@ activate_taps(struct vm_conf *conf)
 int
 assign_taps(struct vm_conf *conf)
 {
-	int s;
+	int s, i;
 	struct net_conf *nc;
+	char *desc;
 
 	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (s < 0)
 		return -1;
 
-	STAILQ_FOREACH(nc, &conf->nets, next)
+	i = 0;
+	STAILQ_FOREACH(nc, &conf->nets, next) {
+		if (asprintf(&desc,"vm-%s-%d", conf->name, i++) < 0)
+			continue;
 		if (create_tap(s, &nc->tap) < 0 ||
+		    set_tap_description(s, nc->tap, desc) < 0 ||
 		    add_to_bridge(s, nc->bridge, nc->tap) < 0) {
 			fprintf(stderr, "failed to create tap\n");
+			free(desc);
 			remove_taps(conf);
 			close(s);
 			return -1;
 		}
+		free(desc);
+	}
 
 	close(s);
 	return 0;
