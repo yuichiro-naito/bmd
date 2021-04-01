@@ -12,6 +12,7 @@ void free_fbuf(struct fbuf *f);
 int add_disk_conf(struct vm_conf *conf, char *type, char *path);
 int add_iso_conf(struct vm_conf *conf, char *type, char *path);
 int add_net_conf(struct vm_conf *conf, char *type, char *bridge);
+struct net_conf *copy_net_conf(struct net_conf *nc);
 int set_name(struct vm_conf *conf, char *name);
 int set_memory_size(struct vm_conf *conf, char *memory);
 int set_ncpu(struct vm_conf *conf, int ncpu);

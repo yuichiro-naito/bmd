@@ -142,6 +142,33 @@ err:
 	return -1;
 }
 
+struct net_conf*
+copy_net_conf(struct net_conf *nc)
+{
+	struct net_conf *ret;
+	char *y, *b, *t;
+
+	ret = malloc(sizeof(struct net_conf));
+	y = strdup(nc->type);
+	b = strdup(nc->bridge);
+	t = (nc->tap) ? strdup(nc->tap) : NULL;
+	if (ret == NULL || y == NULL || b == NULL)
+		goto err;
+	if (nc->tap != NULL && t == NULL)
+		goto err;
+
+	ret->type = y;
+	ret->bridge = b;
+	ret->tap = t;
+	return ret;
+err:
+	free(t);
+	free(b);
+	free(y);
+	free(ret);
+	return NULL;
+}
+
 static int
 set_string(char **var, char *value)
 {

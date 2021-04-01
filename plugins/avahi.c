@@ -84,6 +84,10 @@ avahi_status_change(struct vm *vm, void **data)
 		if (ad->pid <= 0)
 			ad->pid = exec_avahi_publish(vm);
 		break;
+	case STOP:
+	case REMOVE:
+	case RESTART:
+		break;
 	case TERMINATE:
 		if (ad->pid > 0) {
 			kill(ad->pid, SIGINT);

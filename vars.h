@@ -38,7 +38,8 @@ enum BOOT {
 	YES,
 	ONESHOT,
 	INSTALL,
-	ALWAYS
+	ALWAYS,
+	REBOOT
 };
 
 struct fbuf {
@@ -74,20 +75,23 @@ struct vm_conf {
 };
 
 enum STATE {
-	INIT,
-	LOAD,
-	RUN,
-	TERMINATE
+	INIT,         // initial state
+	LOAD,         // bhyveload or grub-bhyve
+	RUN,          // bhyve is running
+	TERMINATE,    // bhyve is terminated
+	STOP,         // send SIGTERM to stop bhyve
+	REMOVE,       // send SIGTERM to stop bhyve and remove vm_entry
+	RESTART       // send SIGTERM and need rebooting
 };
 
 struct vm {
 	struct vm_conf *conf;
 	pid_t pid;
 	enum STATE state;
-	char *mapfile;
 	int infd;
-	int outfd;
-	int errfd;
+	int ntaps;
+	STAILQ_HEAD(, net_conf) taps;
+	char *mapfile;
 };
 
 #define PLUGIN_VERSION 1

@@ -28,20 +28,29 @@ struct plugin_data {
 	SLIST_ENTRY(plugin_data) next;
 };
 
+/*
+  entry of vm_conf list.
+  make sure 'conf' is the first element of the structure.
+ */
 struct vm_conf_entry {
 	struct vm_conf conf;
 	SLIST_ENTRY(vm_conf_entry) next;
 };
 
+/*
+  entry of vm list.
+  make sure 'vm' is the first element of the structure.
+ */
 struct vm_entry {
 	struct vm vm;
+	struct vm_conf *new_conf;
 	struct kevent kevent;
 	SLIST_HEAD(, plugin_data) pl_data;
 	SLIST_ENTRY(vm_entry) next;
 };
 
 
-SLIST_HEAD(, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
+SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
@@ -90,7 +99,7 @@ load_plugins()
 		close(fd);
 	}
 
-	closedir(d);
+	fdclosedir(d);
 
 	return 0;
 }
@@ -121,6 +130,21 @@ call_plugins(struct vm_entry *vm_ent)
 			(*(pl_data->ent->desc.on_status_change))(vm, &pl_data->data);
 }
 
+void
+free_vm_entry(struct vm_entry *vm_ent)
+{
+	struct plugin_data *pl_data, *pln;
+	struct net_conf *nc, *nnc;
+
+	SLIST_FOREACH_SAFE(pl_data, &vm_ent->pl_data, next, pln)
+		free(pl_data);
+	STAILQ_FOREACH_SAFE(nc, &vm_ent->vm.taps, next, nnc)
+		free_net_conf(nc);
+	free(vm_ent->vm.mapfile);
+	free_vm_conf(vm_ent->vm.conf);
+	free(vm_ent);
+}
+
 int
 write_mapfile(struct vm *vm)
 {
@@ -142,6 +166,7 @@ write_mapfile(struct vm *vm)
 		return -1;
 	}
 
+	free(vm->mapfile);
 	vm->mapfile = fn;
 
 	fp = fdopen(fd, "w+");
@@ -257,28 +282,31 @@ bhyve_load(struct vm_conf *conf)
 }
 
 int
-remove_taps(struct vm_conf *conf)
+remove_taps(struct vm *vm)
 {
 	int s;
-	struct net_conf *nc;
+	struct net_conf *nc, *nnc;
 
 	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (s < 0)
 		return -1;
 
-	STAILQ_FOREACH(nc, &conf->nets, next)
+	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc) {
 		if (nc->tap != NULL) {
 			destroy_tap(s, nc->tap);
 			free(nc->tap);
 			nc->tap = NULL;
 		}
+		free(nc);
+	}
+	STAILQ_INIT(&vm->taps);
 
 	close(s);
 	return 0;
 }
 
 int
-activate_taps(struct vm_conf *conf)
+activate_taps(struct vm *vm)
 {
 	int s;
 	struct net_conf *nc;
@@ -286,25 +314,33 @@ activate_taps(struct vm_conf *conf)
 	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (s < 0)
 		return -1;
-	STAILQ_FOREACH(nc, &conf->nets, next)
+	STAILQ_FOREACH(nc, &vm->taps, next)
 		activate_tap(s, nc->tap);
 	close(s);
 	return 0;
 }
 
 int
-assign_taps(struct vm_conf *conf)
+assign_taps(struct vm *vm)
 {
 	int s, i;
-	struct net_conf *nc;
+	struct net_conf *nc, *nnc;
 	char *desc;
+	struct vm_conf *conf = vm->conf;
+
+	STAILQ_FOREACH(nc, &conf->nets, next) {
+		nnc = copy_net_conf(nc);
+		if (nnc == NULL)
+			goto err;
+		STAILQ_INSERT_TAIL(&vm->taps, nnc, next);
+	}
 
 	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (s < 0)
-		return -1;
+		goto err;
 
 	i = 0;
-	STAILQ_FOREACH(nc, &conf->nets, next) {
+	STAILQ_FOREACH(nc, &vm->taps, next) {
 		if (asprintf(&desc,"vm-%s-%d", conf->name, i++) < 0)
 			continue;
 		if (create_tap(s, &nc->tap) < 0 ||
@@ -312,15 +348,20 @@ assign_taps(struct vm_conf *conf)
 		    add_to_bridge(s, nc->bridge, nc->tap) < 0) {
 			fprintf(stderr, "failed to create tap\n");
 			free(desc);
-			remove_taps(conf);
+			remove_taps(vm);
 			close(s);
-			return -1;
+			goto err;
 		}
 		free(desc);
 	}
 
 	close(s);
 	return 0;
+err:
+	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc)
+		free_net_conf(nc);
+	STAILQ_INIT(&vm->taps);
+	return -1;
 }
 
 char *
@@ -414,7 +455,7 @@ exec_bhyve(struct vm_entry *vm_ent)
 			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
 			fwrite(&p, sizeof(char*), 1, fp);
 		}
-		STAILQ_FOREACH(nc, &conf->nets, next) {
+		STAILQ_FOREACH(nc, &vm->taps, next) {
 			p = "-s";
 			fwrite(&p, sizeof(char*), 1, fp);
 			asprintf(&p, "%d,%s,%s", pcid++, nc->type, nc->tap);
@@ -480,9 +521,8 @@ destroy_vm(struct vm_conf *conf)
 }
 
 int
-load_config_files()
+load_config_files(struct vm_conf_head *list)
 {
-	char *path;
 	DIR *d;
 	int fd;
 	struct dirent *ent;
@@ -494,6 +534,8 @@ load_config_files()
 		fprintf(stderr,"can not open %s\n", gl_conf.config_dir);
 		return -1;
 	}
+
+	rewinddir(d);
 
 	while ((ent = readdir(d)) != NULL) {
 		if (ent->d_namlen > 0 &&
@@ -510,12 +552,12 @@ load_config_files()
 			free_vm_conf(conf);
 			continue;
 		}
-		SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
+		SLIST_INSERT_HEAD(list, conf_ent, next);
 	}
 
-	closedir(d);
+	fdclosedir(d);
 
-	SLIST_FOREACH(conf_ent, &vm_conf_list, next) {
+	SLIST_FOREACH(conf_ent, list, next) {
 		dump_vm_conf(&conf_ent->conf);
 	}
 
@@ -529,7 +571,7 @@ start_vm(struct vm_entry *vm_ent)
 	struct vm *vm = &vm_ent->vm;
 	struct vm_conf *conf = vm->conf;
 
-	if (activate_taps(conf) < 0)
+	if (activate_taps(vm) < 0)
 		return -1;
 
 	if (strcasecmp(conf->loader, "bhyveload") == 0)
@@ -539,10 +581,8 @@ start_vm(struct vm_entry *vm_ent)
 		    (pid = grub_load(vm)) < 0)
 			pid = -1;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
-		if (exec_bhyve(vm_ent) < 0) {
-			remove_taps(conf);
+		if (exec_bhyve(vm_ent) < 0)
 			return -1;
-		}
 		vm->state = RUN;
 		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
@@ -553,10 +593,9 @@ start_vm(struct vm_entry *vm_ent)
 		fprintf(stderr, "unknown loader\n");
 	}
 
-	if (pid < 0) {
-		remove_taps(conf);
+	if (pid < 0)
 		return -1;
-	}
+
 	vm->pid = pid;
 	vm->state = LOAD;
 
@@ -569,6 +608,40 @@ end:
 	return 0;
 }
 
+struct vm_entry*
+create_vm_entry(struct vm_conf_entry *conf_ent)
+{
+	struct vm_entry *vm_ent;
+	struct vm *vm;
+	struct vm_conf *conf;
+	struct plugin_entry *pl_ent;
+	struct plugin_data *pl_data;
+
+	vm_ent = calloc(1, sizeof(struct vm_entry));
+	if (vm_ent == NULL)
+		return NULL;
+	vm = &vm_ent->vm;
+	conf = &conf_ent->conf;
+	vm->conf = conf;
+	vm->state = INIT;
+	vm->pid = -1;
+	vm->infd = -1;
+	SLIST_INIT(&vm_ent->pl_data);
+	STAILQ_INIT(&vm->taps);
+	SLIST_FOREACH(pl_ent, &plugin_list, next) {
+		pl_data = calloc(1, sizeof(*pl_data));
+		if (pl_data == NULL) {
+			free(vm_ent);
+			return NULL;
+		}
+		pl_data->ent = pl_ent;
+		SLIST_INSERT_HEAD(&vm_ent->pl_data, pl_data, next);
+	}
+	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
+
+	return vm_ent;
+}
+
 int
 start_virtual_machines()
 {
@@ -576,8 +649,6 @@ start_virtual_machines()
 	struct vm_conf_entry *conf_ent;
 	struct vm *vm;
 	struct vm_entry *vm_ent;
-	struct plugin_entry *pl_ent;
-	struct plugin_data *pl_data;
 	struct kevent sigev[3];
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -587,25 +658,10 @@ start_virtual_machines()
 		return -1;
 
 	SLIST_FOREACH(conf_ent, &vm_conf_list, next) {
-		vm_ent = calloc(1, sizeof(struct vm_entry));
+		vm_ent = create_vm_entry(conf_ent);
 		if (vm_ent == NULL)
 			return -1;
-		vm = &vm_ent->vm;
 		conf = &conf_ent->conf;
-		vm->conf = conf;
-		vm->state = INIT;
-		vm->pid = -1;
-		vm->infd = -1;
-		SLIST_FOREACH(pl_ent, &plugin_list, next) {
-			pl_data = calloc(1, sizeof(*pl_data));
-			if (pl_data == NULL) {
-				free(vm_ent);
-				return -1;
-			}
-			pl_data->ent = pl_ent;
-			SLIST_INSERT_HEAD(&vm_ent->pl_data, pl_data, next);
-		}
-		SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 		if (conf->boot == NO)
 			continue;
 		if (conf->boot_delay > 0) {
@@ -615,10 +671,157 @@ start_virtual_machines()
 				return -1;
 			continue;
 		}
-		if (assign_taps(conf) < 0 ||
-		    start_vm(vm_ent) < 0)
+		vm = &vm_ent->vm;
+		if (assign_taps(vm) < 0 ||
+		    start_vm(vm_ent) < 0) {
+			remove_taps(vm);
 			fprintf(stderr, "failed to start vm %s\n", conf->name);
+		}
 	}
+
+	return 0;
+}
+
+void
+cleanup_vm(struct vm_entry *vm_ent)
+{
+	struct vm *vm= &vm_ent->vm;
+
+	remove_taps(vm);
+	destroy_vm(vm->conf);
+	if (vm->mapfile) {
+		unlink(vm->mapfile);
+		free(vm->mapfile);
+		vm->mapfile = NULL;
+	}
+	vm->state=TERMINATE;
+	call_plugins(vm_ent);
+}
+
+struct vm_entry*
+lookup_vm(struct vm_conf *conf)
+{
+	struct vm_entry *vm_ent;
+
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		if (strcmp(vm_ent->vm.conf->name, conf->name) == 0)
+			return vm_ent;
+	return NULL;
+}
+
+int
+reload_virtual_machines()
+{
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent, *cen;
+	struct vm *vm;
+	struct vm_entry *vm_ent;
+	struct vm_conf_head new_list = SLIST_HEAD_INITIALIZER();
+
+	if (load_config_files(&new_list) < 0)
+		return -1;
+
+	/* make sure new config is NULL */
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		vm_ent->new_conf = NULL;
+
+	SLIST_FOREACH(conf_ent, &new_list, next) {
+		conf = &conf_ent->conf;
+		vm_ent = lookup_vm(conf);
+		if (vm_ent == NULL) {
+			vm_ent = create_vm_entry(conf_ent);
+			if (vm_ent == NULL)
+				return -1;
+			if (conf->boot == NO)
+				continue;
+			if (conf->boot_delay > 0) {
+				EV_SET(&vm_ent->kevent, 1, EVFILT_TIMER, EV_ADD,
+				       NOTE_SECONDS, conf->boot_delay, vm_ent);
+				if (kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL) < 0)
+					return -1;
+				continue;
+			}
+			vm = &vm_ent->vm;
+			if (assign_taps(vm) < 0 ||
+			    start_vm(vm_ent) < 0) {
+				remove_taps(vm);
+				fprintf(stderr, "failed to start vm %s\n",
+					conf->name);
+			}
+			vm_ent->new_conf = conf;
+			continue;
+		}
+		vm = &vm_ent->vm;
+		switch (conf->boot) {
+		case NO:
+			if (vm->state == LOAD ||
+			    vm->state == RUN) {
+				kill(vm->pid, SIGTERM);
+			} else if (vm->state == RESTART)
+				vm->state = STOP;
+			break;
+		case ALWAYS:
+		case YES:
+			if (vm->state == INIT ||
+			    vm->state == TERMINATE) {
+				if (assign_taps(vm) < 0 ||
+				    start_vm(vm_ent) < 0) {
+					remove_taps(vm);
+					fprintf(stderr,
+						"failed to start vm %s\n",
+						conf->name);
+				}
+			} else if (vm->state == STOP)
+				vm->state = RESTART;
+			break;
+		case ONESHOT:
+			// do nothing
+			break;
+		case INSTALL:
+			if (vm->state == INIT ||
+			    vm->state == TERMINATE) {
+				// do_install
+			}
+			break;
+		case REBOOT:
+			kill(vm->pid, SIGTERM);
+			vm->state = RESTART;
+			break;
+		}
+		vm_ent->new_conf = conf;
+	}
+
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		if (vm_ent->new_conf == NULL) {
+			vm = &vm_ent->vm;
+			switch(vm->state) {
+			case LOAD:
+			case RUN:
+				kill(vm->pid, SIGTERM);
+			case STOP:
+			case REMOVE:
+			case RESTART:
+				vm->state = REMOVE;
+				/* remove vm_conf_entry from the list
+				   to keep it when removed. */
+				if (SLIST_FIRST(&vm_conf_list))
+					SLIST_REMOVE(&vm_conf_list,
+						     (struct vm_conf_entry*)vm->conf,
+						     vm_conf_entry,
+						     next);
+				break;
+			default:
+				SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+				free_vm_entry(vm_ent);
+			}
+
+		} else
+			vm_ent->vm.conf = vm_ent->new_conf;
+
+	SLIST_FOREACH_SAFE(conf_ent, &vm_conf_list, next, cen)
+		free_vm_conf(&conf_ent->conf);
+
+	vm_conf_list = new_list;
 
 	return 0;
 }
@@ -644,9 +847,11 @@ wait:
 		ev.flags = EV_DELETE;
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (vm->state == INIT)
-			if (assign_taps(vm->conf) < 0 ||
-			    start_vm(vm_ent) < 0)
+			if (assign_taps(vm) < 0 ||
+			    start_vm(vm_ent) < 0) {
+				remove_taps(vm);
 				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+			}
 		break;
 	case EVFILT_PROC:
 		vm_ent = ev.udata;
@@ -679,6 +884,14 @@ wait:
 			vm->state = RUN;
 			call_plugins(vm_ent);
 			break;
+		case RESTART:
+			cleanup_vm(vm_ent);
+			if (assign_taps(vm) < 0 ||
+			    start_vm(vm_ent) < 0) {
+				remove_taps(vm);
+				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+			}
+			break;
 		case RUN:
 			if (WIFEXITED(status) &&
 			    (vm->conf->boot == ALWAYS ||
@@ -687,11 +900,14 @@ wait:
 					fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
 				break;
 			}
-			remove_taps(vm->conf);
-			destroy_vm(vm->conf);
-			if (vm->mapfile) unlink(vm->mapfile);
-			vm->state=TERMINATE;
-			call_plugins(vm_ent);
+			/* RUN THROUGH */
+		case STOP:
+			cleanup_vm(vm_ent);
+			break;
+		case REMOVE:
+			cleanup_vm(vm_ent);
+			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+			free_vm_entry(vm_ent);
 			break;
 		case TERMINATE:
 			break;
@@ -703,7 +919,7 @@ wait:
 		case SIGINT:
 			return 0;
 		case SIGHUP:
-			// do_reload();
+			reload_virtual_machines();
 			goto wait;
 		}
 		break;
@@ -757,11 +973,7 @@ stop_virtual_machines()
 				fprintf(stderr, "wait error (%s)\n",
 					strerror(errno));
 			}
-			remove_taps(vm->conf);
-			destroy_vm(vm->conf);
-			if (vm->mapfile) unlink(vm->mapfile);
-			vm->state=TERMINATE;
-			call_plugins(vm_ent);
+			cleanup_vm(vm_ent);
 			count--;
 		}
 	}
@@ -803,7 +1015,7 @@ main(int argc, char *argv[])
 	gl_conf.plugin_fd = fd;
 
 	if (load_plugins() < 0 ||
-	    load_config_files() < 0 ||
+	    load_config_files(&vm_conf_list) < 0 ||
 	    start_virtual_machines())
 		return 1;
 

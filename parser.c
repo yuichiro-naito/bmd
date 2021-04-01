@@ -287,6 +287,8 @@ parse_boot(struct vm_conf *conf, char *val)
 		b = INSTALL;
 	else if (strcasecmp(val, "always") == 0)
 		b = ALWAYS;
+	else if (strcasecmp(val, "reboot") == 0)
+		b = REBOOT;
 	else
 		b = NO;
 
@@ -513,7 +515,6 @@ parse_file(int fd, char *name)
 {
 	int ret;
 	struct vm_conf *c;
-	char *bname;
 
 	FILE *fp = fdopen(fd, "r");
 	if (fp == NULL)
