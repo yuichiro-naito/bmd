@@ -44,7 +44,6 @@ struct vm_conf_entry {
 struct vm_entry {
 	struct vm vm;
 	struct vm_conf *new_conf;
-	struct kevent kevent;
 	SLIST_HEAD(, plugin_data) pl_data;
 	SLIST_ENTRY(vm_entry) next;
 };
@@ -377,9 +376,8 @@ get_fbuf_option(int pcid, struct fbuf *fb)
 }
 
 int
-exec_bhyve(struct vm_entry *vm_ent)
+exec_bhyve(struct vm *vm)
 {
-	struct vm *vm = &vm_ent->vm;
 	struct vm_conf *conf = vm->conf;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
@@ -391,15 +389,16 @@ exec_bhyve(struct vm_entry *vm_ent)
 	size_t buf_size;
 	FILE *fp;
 	char *p;
+	struct kevent ev;
 
 	pid = fork();
 	if (pid > 0) {
 		/* parent process */
 		vm->pid = pid;
 		vm->state = RUN;
-		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+		EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
-		kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 	} else if (pid == 0) {
 		/* child process */
 		fp = open_memstream(&buf, &buf_size);
@@ -565,11 +564,11 @@ load_config_files(struct vm_conf_head *list)
 }
 
 int
-start_vm(struct vm_entry *vm_ent)
+start_vm(struct vm *vm)
 {
 	pid_t pid;
-	struct vm *vm = &vm_ent->vm;
 	struct vm_conf *conf = vm->conf;
+	struct kevent ev;
 
 	if (activate_taps(vm) < 0)
 		return -1;
@@ -581,13 +580,13 @@ start_vm(struct vm_entry *vm_ent)
 		    (pid = grub_load(vm)) < 0)
 			pid = -1;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
-		if (exec_bhyve(vm_ent) < 0)
+		if (exec_bhyve(vm) < 0)
 			return -1;
 		vm->state = RUN;
-		EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+		EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
 		       NOTE_EXIT, 0, vm);
-		kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
-		goto end;
+		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+		return 0;
 	} else {
 		pid = -1;
 		fprintf(stderr, "unknown loader\n");
@@ -599,12 +598,10 @@ start_vm(struct vm_entry *vm_ent)
 	vm->pid = pid;
 	vm->state = LOAD;
 
-	EV_SET(&vm_ent->kevent, vm->pid, EVFILT_PROC, EV_ADD,
+	EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
 	       NOTE_EXIT, 0, vm);
-	kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+	kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 
-end:
-	call_plugins(vm_ent);
 	return 0;
 }
 
@@ -649,7 +646,7 @@ start_virtual_machines()
 	struct vm_conf_entry *conf_ent;
 	struct vm *vm;
 	struct vm_entry *vm_ent;
-	struct kevent sigev[3];
+	struct kevent ev,sigev[3];
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -665,28 +662,27 @@ start_virtual_machines()
 		if (conf->boot == NO)
 			continue;
 		if (conf->boot_delay > 0) {
-			EV_SET(&vm_ent->kevent, 1, EVFILT_TIMER, EV_ADD,
+			EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
 			       NOTE_SECONDS, conf->boot_delay, vm_ent);
-			if (kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL) < 0)
+			if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 				return -1;
 			continue;
 		}
 		vm = &vm_ent->vm;
 		if (assign_taps(vm) < 0 ||
-		    start_vm(vm_ent) < 0) {
+		    start_vm(vm) < 0) {
 			remove_taps(vm);
 			fprintf(stderr, "failed to start vm %s\n", conf->name);
-		}
+		} else
+			call_plugins(vm_ent);
 	}
 
 	return 0;
 }
 
 void
-cleanup_vm(struct vm_entry *vm_ent)
+cleanup_vm(struct vm *vm)
 {
-	struct vm *vm= &vm_ent->vm;
-
 	remove_taps(vm);
 	destroy_vm(vm->conf);
 	if (vm->mapfile) {
@@ -695,7 +691,6 @@ cleanup_vm(struct vm_entry *vm_ent)
 		vm->mapfile = NULL;
 	}
 	vm->state=TERMINATE;
-	call_plugins(vm_ent);
 }
 
 struct vm_entry*
@@ -717,6 +712,7 @@ reload_virtual_machines()
 	struct vm *vm;
 	struct vm_entry *vm_ent;
 	struct vm_conf_head new_list = SLIST_HEAD_INITIALIZER();
+	struct kevent ev;
 
 	if (load_config_files(&new_list) < 0)
 		return -1;
@@ -735,19 +731,20 @@ reload_virtual_machines()
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
-				EV_SET(&vm_ent->kevent, 1, EVFILT_TIMER, EV_ADD,
+				EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
 				       NOTE_SECONDS, conf->boot_delay, vm_ent);
-				if (kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL) < 0)
+				if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 					return -1;
 				continue;
 			}
 			vm = &vm_ent->vm;
 			if (assign_taps(vm) < 0 ||
-			    start_vm(vm_ent) < 0) {
+			    start_vm(vm) < 0) {
 				remove_taps(vm);
 				fprintf(stderr, "failed to start vm %s\n",
 					conf->name);
-			}
+			} else
+				call_plugins(vm_ent);
 			vm_ent->new_conf = conf;
 			continue;
 		}
@@ -765,12 +762,13 @@ reload_virtual_machines()
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
 				if (assign_taps(vm) < 0 ||
-				    start_vm(vm_ent) < 0) {
+				    start_vm(vm) < 0) {
 					remove_taps(vm);
 					fprintf(stderr,
 						"failed to start vm %s\n",
 						conf->name);
-				}
+				} else
+					call_plugins(vm_ent);
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
 			break;
@@ -846,12 +844,14 @@ wait:
 		vm = &vm_ent->vm;
 		ev.flags = EV_DELETE;
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-		if (vm->state == INIT)
+		if (vm->state == INIT) {
 			if (assign_taps(vm) < 0 ||
-			    start_vm(vm_ent) < 0) {
+			    start_vm(vm) < 0) {
 				remove_taps(vm);
 				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
-			}
+			} else
+				call_plugins(vm_ent);
+		}
 		break;
 	case EVFILT_PROC:
 		vm_ent = ev.udata;
@@ -866,8 +866,8 @@ wait:
 			}
 			break;
 		}
-		vm_ent->kevent.flags = EV_DELETE;
-		kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+		ev.flags = EV_DELETE;
+		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (waitpid(vm->pid, &status, 0) < 0) {
 			fprintf(stderr, "wait error (%s)\n",
 				strerror(errno));
@@ -880,32 +880,38 @@ wait:
 				close(vm->infd);
 				vm->infd = -1;
 			}
-			exec_bhyve(vm_ent);
+			exec_bhyve(vm);
 			vm->state = RUN;
 			call_plugins(vm_ent);
 			break;
 		case RESTART:
-			cleanup_vm(vm_ent);
+			cleanup_vm(vm);
+			call_plugins(vm_ent);
 			if (assign_taps(vm) < 0 ||
-			    start_vm(vm_ent) < 0) {
+			    start_vm(vm) < 0) {
 				remove_taps(vm);
 				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
-			}
+			} else
+				call_plugins(vm_ent);
 			break;
 		case RUN:
 			if (WIFEXITED(status) &&
 			    (vm->conf->boot == ALWAYS ||
 			     WEXITSTATUS(status) == 0)) {
-				if (start_vm(vm_ent) < 0)
+				if (start_vm(vm) < 0)
 					fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+				else
+					call_plugins(vm_ent);
 				break;
 			}
 			/* RUN THROUGH */
 		case STOP:
-			cleanup_vm(vm_ent);
+			cleanup_vm(vm);
+			call_plugins(vm_ent);
 			break;
 		case REMOVE:
-			cleanup_vm(vm_ent);
+			cleanup_vm(vm);
+			call_plugins(vm_ent);
 			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 			free_vm_entry(vm_ent);
 			break;
@@ -967,13 +973,14 @@ stop_virtual_machines()
 				}
 				continue;
 			}
-			vm_ent->kevent.flags = EV_DELETE;
-			kevent(gl_conf.kq, &vm_ent->kevent, 1, NULL, 0, NULL);
+			ev.flags = EV_DELETE;
+			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 			if (waitpid(vm->pid, &status, 0) < 0) {
 				fprintf(stderr, "wait error (%s)\n",
 					strerror(errno));
 			}
-			cleanup_vm(vm_ent);
+			cleanup_vm(vm);
+			call_plugins(vm_ent);
 			count--;
 		}
 	}
