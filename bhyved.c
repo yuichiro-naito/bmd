@@ -249,11 +249,11 @@ grub_load(struct vm *vm)
 }
 
 pid_t
-bhyve_load(struct vm_conf *conf)
+bhyve_load(struct vm *vm)
 {
 	pid_t pid;
 	char *args[9];
-
+	struct vm_conf *conf = vm->conf;
 
 	pid = fork();
 	if (pid > 0) {
@@ -490,11 +490,12 @@ exec_bhyve(struct vm *vm)
 }
 
 int
-destroy_vm(struct vm_conf *conf)
+destroy_vm(struct vm *vm)
 {
 	pid_t pid;
 	int status;
 	char *args[4];
+	struct vm_conf *conf = vm->conf;
 
 	pid = fork();
 	if (pid > 0) {
@@ -574,7 +575,7 @@ start_vm(struct vm *vm)
 		return -1;
 
 	if (strcasecmp(conf->loader, "bhyveload") == 0)
-		pid = bhyve_load(conf);
+		pid = bhyve_load(vm);
 	else if (strcasecmp(conf->loader, "grub") == 0) {
 		if (write_mapfile(vm) < 0 ||
 		    (pid = grub_load(vm)) < 0)
@@ -684,7 +685,7 @@ void
 cleanup_vm(struct vm *vm)
 {
 	remove_taps(vm);
-	destroy_vm(vm->conf);
+	destroy_vm(vm);
 	if (vm->mapfile) {
 		unlink(vm->mapfile);
 		free(vm->mapfile);
