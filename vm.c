@@ -229,7 +229,7 @@ assign_taps(struct vm *vm)
 			free(desc);
 			remove_taps(vm);
 			close(s);
-			goto err;
+			return -1;
 		}
 		free(desc);
 	}
@@ -407,10 +407,7 @@ start_vm(struct vm *vm)
 		if (exec_bhyve(vm) < 0)
 			return -1;
 		vm->state = RUN;
-		EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
-		       NOTE_EXIT, 0, vm);
-		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-		return 0;
+		goto end;
 	} else {
 		pid = -1;
 		fprintf(stderr, "unknown loader\n");
@@ -422,6 +419,7 @@ start_vm(struct vm *vm)
 	vm->pid = pid;
 	vm->state = LOAD;
 
+end:
 	EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
 	       NOTE_EXIT, 0, vm);
 	kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
