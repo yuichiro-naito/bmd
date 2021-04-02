@@ -260,6 +260,7 @@ start_virtual_machines()
 			continue;
 		}
 		vm = &vm_ent->vm;
+		INFO("start vm %s\n", conf->name);
 		if (assign_taps(vm) < 0 ||
 		    start_vm(vm) < 0) {
 			remove_taps(vm);
@@ -308,7 +309,6 @@ reload_virtual_machines()
 				return -1;
 			if (conf->boot == NO)
 				continue;
-			INFO("start vm %s\n", conf->name);
 			if (conf->boot_delay > 0) {
 				EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
 				       NOTE_SECONDS, conf->boot_delay, vm_ent);
@@ -317,6 +317,7 @@ reload_virtual_machines()
 				continue;
 			}
 			vm = &vm_ent->vm;
+			INFO("start vm %s\n", conf->name);
 			if (assign_taps(vm) < 0 ||
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
@@ -361,9 +362,22 @@ reload_virtual_machines()
 			}
 			break;
 		case REBOOT:
-			INFO("reboot vm %s\n", conf->name);
-			kill(vm->pid, SIGTERM);
-			vm->state = RESTART;
+			if (vm->state == INIT ||
+			    vm->state == TERMINATE) {
+				INFO("start vm %s\n", conf->name);
+				if (assign_taps(vm) < 0 ||
+				    start_vm(vm) < 0) {
+					remove_taps(vm);
+					ERR("failed to start vm %s\n", conf->name);
+				} else
+					call_plugins(vm_ent);
+			} else if (vm->state == LOAD ||
+				   vm->state == RUN) {
+				INFO("reboot vm %s\n", conf->name);
+				kill(vm->pid, SIGTERM);
+				vm->state = RESTART;
+			} else
+				vm->state = RESTART;
 			break;
 		}
 		vm_ent->new_conf = conf;
@@ -428,6 +442,7 @@ wait:
 		ev.flags = EV_DELETE;
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (vm->state == INIT) {
+			INFO("start vm %s\n", vm->conf->name);
 			if (assign_taps(vm) < 0 ||
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
