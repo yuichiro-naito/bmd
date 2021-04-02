@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include "tap.h"
+#include "log.h"
 
 static int
 getifflags(int s, const char *ifname)
@@ -79,10 +81,9 @@ create_tap(int s, char **name)
 	if (ioctl(s, SIOCIFCREATE2, &ifr) < 0) {
 		switch (errno) {
 		case EEXIST:
-			fprintf(stderr,
-				"interface %s already exists\n", ifr.ifr_name);
+			ERR("interface %s already exists\n", ifr.ifr_name);
 		default:
-			fprintf(stderr, "SIOCIFCREATE2\n");
+			ERR("%s\n", "SIOCIFCREATE2");
 		}
 		return -1;
 	}
@@ -99,7 +100,7 @@ destroy_tap(int s, char *name)
 	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
 	if (ioctl(s, SIOCIFDESTROY, &ifr) < 0)
-			fprintf(stderr, "SIOCIFDESTROY\n");
+		return -1;
 	return 0;
 }
 
