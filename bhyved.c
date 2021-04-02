@@ -19,6 +19,8 @@
 #include "parser.h"
 #include "log.h"
 
+#define MAX(x,y)      ((x) > (y) ? (x) : (y))
+
 struct plugin_entry {
 	struct plugin_desc desc;
 	void *handle;
@@ -449,19 +451,26 @@ wait:
 				close(vm->infd);
 				vm->infd = -1;
 			}
-			exec_bhyve(vm);
-			vm->state = RUN;
-			call_plugins(vm_ent);
+			if (WIFEXITED(status) &&
+			    WEXITSTATUS(status) == 0) {
+				exec_bhyve(vm);
+				vm->state = RUN;
+				call_plugins(vm_ent);
+			} else {
+				ERR("failed loading vm %s\n", vm->conf->name);
+				cleanup_vm(vm);
+				call_plugins(vm_ent);
+			}
 			break;
 		case RESTART:
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
-			if (assign_taps(vm) < 0 ||
-			    start_vm(vm) < 0) {
-				remove_taps(vm);
-				ERR("failed to start vm %s\n", vm->conf->name);
-			} else
-				call_plugins(vm_ent);
+
+			EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
+			       NOTE_SECONDS, MAX(vm->conf->boot_delay,3),
+			       vm_ent);
+			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+			vm->state = INIT;
 			break;
 		case RUN:
 			if (WIFEXITED(status) &&
