@@ -64,6 +64,13 @@ struct global_conf gl_conf = {
 };
 
 int
+get_evid()
+{
+	static int i = 1;
+	return i++;
+}
+
+int
 load_plugins()
 {
 	DIR *d;
@@ -246,7 +253,7 @@ start_virtual_machines()
 		if (conf->boot == NO)
 			continue;
 		if (conf->boot_delay > 0) {
-			EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
+			EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
 			       NOTE_SECONDS, conf->boot_delay, vm_ent);
 			if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 				return -1;
@@ -303,7 +310,7 @@ reload_virtual_machines()
 				continue;
 			INFO("start vm %s\n", conf->name);
 			if (conf->boot_delay > 0) {
-				EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
+				EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
 				       NOTE_SECONDS, conf->boot_delay, vm_ent);
 				if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 					return -1;
@@ -461,7 +468,7 @@ wait:
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
 
-			EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
+			EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
 			       NOTE_SECONDS, MAX(vm->conf->boot_delay,3),
 			       vm_ent);
 			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
