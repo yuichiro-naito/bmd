@@ -3,6 +3,7 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/event.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -15,6 +16,26 @@
 #include "vm.h"
 
 extern struct global_conf gl_conf;
+
+static int
+redirect_to_null()
+{
+	int fd1, fd2;
+
+	fd1 = open("/dev/null", O_WRONLY);
+	fd2 = open("/dev/null", O_WRONLY);
+	if (fd1 < 0 || fd2 < 0) {
+		close(fd1);
+		close(fd2);
+		ERR("can't open /dev/null (%s)\n",strerror(errno));
+		return -1;
+	}
+	close(1);
+	close(2);
+	dup2(fd1, 1);
+	dup2(fd2, 2);
+	return 0;
+}
 
 static char *
 get_fbuf_option(int pcid, struct fbuf *fb)
@@ -111,6 +132,8 @@ grub_load(struct vm *vm)
 		write(ifd[0], cmd, len+1);
 		free(cmd);
 	} else if (pid == 0) {
+		redirect_to_null();
+
 		args[0] = "/usr/local/sbin/grub-bhyve";
 		args[1] = "-r";
 		args[2] = "hdd0,msdos1";
@@ -147,6 +170,8 @@ bhyve_load(struct vm *vm)
 		vm->state = LOAD;
 		return 0;
 	} else if (pid == 0) {
+		redirect_to_null();
+
 		args[0] = "/usr/sbin/bhyveload";
 		args[1] = "-c";
 		args[2] = conf->comport;
@@ -277,6 +302,8 @@ exec_bhyve(struct vm *vm)
 		       NOTE_EXIT, 0, vm);
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 	} else if (pid == 0) {
+		redirect_to_null();
+
 		/* child process */
 		fp = open_memstream(&buf, &buf_size);
 
