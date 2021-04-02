@@ -501,6 +501,7 @@ wait:
 			}
 			/* RUN THROUGH */
 		case STOP:
+			INFO("stop vm %s\n", vm->conf->name);
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
 			break;
