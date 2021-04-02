@@ -1,9 +1,11 @@
-#include <sys/types.h>
+#include <stdbool.h>
+#include <sys/unistd.h>
+#include <sys/signal.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include "unistd.h"
-#include "stdio.h"
-#include "stdlib.h"
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "../vars.h"
 
 #define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"

@@ -3,7 +3,6 @@
 
 #include <sys/types.h>
 #include <sys/queue.h>
-#include <sys/event.h>
 #include <stdbool.h>
 
 struct global_conf {

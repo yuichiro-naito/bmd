@@ -1,6 +1,7 @@
 #ifndef _CONF_H_
 #define _CONF_H_
 
+#include "stdbool.h"
 #include "vars.h"
 
 void free_disk_conf(struct disk_conf *c);

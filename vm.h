@@ -1,6 +1,7 @@
 #ifndef _VM_H_
 #define _VM_H_
 
+#include <sys/types.h>
 #include "vars.h"
 
 int write_mapfile(struct vm *vm);

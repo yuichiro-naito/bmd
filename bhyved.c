@@ -1,6 +1,9 @@
 #include <errno.h>
-#include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/event.h>
+#include <sys/dirent.h>
+#include <sys/queue.h>
+#include <sys/signal.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -12,7 +15,6 @@
 
 #include "vars.h"
 #include "vm.h"
-#include "tap.h"
 #include "conf.h"
 #include "parser.h"
 

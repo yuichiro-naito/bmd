@@ -1,9 +1,7 @@
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include "unistd.h"
-#include "stdio.h"
-#include "stdlib.h"
+#include <sys/event.h>
+#include <stddef.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include "../vars.h"
 
 static struct global_conf *gl_conf;
