@@ -322,18 +322,18 @@ reload_virtual_machines()
 		vm = &vm_ent->vm;
 		switch (conf->boot) {
 		case NO:
-			INFO("stop vm %s\n", conf->name);
 			if (vm->state == LOAD ||
 			    vm->state == RUN) {
+				INFO("stop vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
 			} else if (vm->state == RESTART)
 				vm->state = STOP;
 			break;
 		case ALWAYS:
 		case YES:
-			INFO("start vm %s\n", conf->name);
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
+				INFO("start vm %s\n", conf->name);
 				if (assign_taps(vm) < 0 ||
 				    start_vm(vm) < 0) {
 					remove_taps(vm);
@@ -347,9 +347,9 @@ reload_virtual_machines()
 			// do nothing
 			break;
 		case INSTALL:
-			INFO("install vm %s\n", conf->name);
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
+				INFO("install vm %s\n", conf->name);
 				// do_install
 			}
 			break;
@@ -368,7 +368,9 @@ reload_virtual_machines()
 			switch(vm->state) {
 			case LOAD:
 			case RUN:
+				INFO("stop vm %s\n", vm->conf->name);
 				kill(vm->pid, SIGTERM);
+				/* GO THROUGH */
 			case STOP:
 			case REMOVE:
 			case RESTART:
@@ -382,7 +384,8 @@ reload_virtual_machines()
 						     next);
 				break;
 			default:
-				SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+				if (SLIST_FIRST(&vm_conf_list))
+					SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 				free_vm_entry(vm_ent);
 			}
 
