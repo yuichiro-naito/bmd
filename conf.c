@@ -417,7 +417,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct net_conf *nc;
 	struct fbuf *fb;
 	static char *btype[] = {
-		"no", "yes", "oneshot", "install","always"
+		"no", "yes", "oneshot", "install","always","reboot"
 	};
 
 	fprintf(fp, "name: %s\n", conf->name);
