@@ -17,6 +17,7 @@
 #include "vm.h"
 #include "conf.h"
 #include "parser.h"
+#include "log.h"
 
 struct plugin_entry {
 	struct plugin_desc desc;
@@ -72,7 +73,7 @@ load_plugins()
 
 	d = fdopendir(gl_conf.plugin_fd);
 	if (d == NULL) {
-		fprintf(stderr,"can not open %s\n", gl_conf.plugin_dir);
+		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return -1;
 	}
 
@@ -157,7 +158,7 @@ load_config_files(struct vm_conf_head *list)
 
 	d = fdopendir(gl_conf.config_fd);
 	if (d == NULL) {
-		fprintf(stderr,"can not open %s\n", gl_conf.config_dir);
+		ERR("can not open %s\n", gl_conf.config_dir);
 		return -1;
 	}
 
@@ -182,10 +183,6 @@ load_config_files(struct vm_conf_head *list)
 	}
 
 	fdclosedir(d);
-
-	SLIST_FOREACH(conf_ent, list, next) {
-		dump_vm_conf(&conf_ent->conf);
-	}
 
 	return 0;
 }
@@ -257,7 +254,7 @@ start_virtual_machines()
 		if (assign_taps(vm) < 0 ||
 		    start_vm(vm) < 0) {
 			remove_taps(vm);
-			fprintf(stderr, "failed to start vm %s\n", conf->name);
+			ERR("failed to start vm %s\n", conf->name);
 		} else
 			call_plugins(vm_ent);
 	}
@@ -302,6 +299,7 @@ reload_virtual_machines()
 				return -1;
 			if (conf->boot == NO)
 				continue;
+			INFO("start vm %s\n", conf->name);
 			if (conf->boot_delay > 0) {
 				EV_SET(&ev, 1, EVFILT_TIMER, EV_ADD,
 				       NOTE_SECONDS, conf->boot_delay, vm_ent);
@@ -313,8 +311,7 @@ reload_virtual_machines()
 			if (assign_taps(vm) < 0 ||
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
-				fprintf(stderr, "failed to start vm %s\n",
-					conf->name);
+				ERR("failed to start vm %s\n", conf->name);
 			} else
 				call_plugins(vm_ent);
 			vm_ent->new_conf = conf;
@@ -323,6 +320,7 @@ reload_virtual_machines()
 		vm = &vm_ent->vm;
 		switch (conf->boot) {
 		case NO:
+			INFO("stop vm %s\n", conf->name);
 			if (vm->state == LOAD ||
 			    vm->state == RUN) {
 				kill(vm->pid, SIGTERM);
@@ -331,14 +329,13 @@ reload_virtual_machines()
 			break;
 		case ALWAYS:
 		case YES:
+			INFO("start vm %s\n", conf->name);
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
 				if (assign_taps(vm) < 0 ||
 				    start_vm(vm) < 0) {
 					remove_taps(vm);
-					fprintf(stderr,
-						"failed to start vm %s\n",
-						conf->name);
+					ERR("failed to start vm %s\n", conf->name);
 				} else
 					call_plugins(vm_ent);
 			} else if (vm->state == STOP)
@@ -348,12 +345,14 @@ reload_virtual_machines()
 			// do nothing
 			break;
 		case INSTALL:
+			INFO("install vm %s\n", conf->name);
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
 				// do_install
 			}
 			break;
 		case REBOOT:
+			INFO("reboot vm %s\n", conf->name);
 			kill(vm->pid, SIGTERM);
 			vm->state = RESTART;
 			break;
@@ -420,7 +419,7 @@ wait:
 			if (assign_taps(vm) < 0 ||
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
-				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+				ERR("failed to start vm %s\n", vm->conf->name);
 			} else
 				call_plugins(vm_ent);
 		}
@@ -433,16 +432,14 @@ wait:
 			ev.flags = EV_DELETE;
 			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 			if (waitpid(ev.ident, &status, 0) < 0) {
-				fprintf(stderr, "wait error (%s)\n",
-					strerror(errno));
+				ERR("wait error (%s)\n", strerror(errno));
 			}
 			break;
 		}
 		ev.flags = EV_DELETE;
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (waitpid(vm->pid, &status, 0) < 0) {
-			fprintf(stderr, "wait error (%s)\n",
-				strerror(errno));
+			ERR("wait error (%s)\n", strerror(errno));
 		}
 		switch (vm->state) {
 		case INIT:
@@ -462,7 +459,7 @@ wait:
 			if (assign_taps(vm) < 0 ||
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
-				fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+				ERR("failed to start vm %s\n", vm->conf->name);
 			} else
 				call_plugins(vm_ent);
 			break;
@@ -471,7 +468,7 @@ wait:
 			    (vm->conf->boot == ALWAYS ||
 			     WEXITSTATUS(status) == 0)) {
 				if (start_vm(vm) < 0)
-					fprintf(stderr, "failed to start vm %s\n", vm->conf->name);
+					ERR("failed to start vm %s\n", vm->conf->name);
 				else
 					call_plugins(vm_ent);
 				break;
@@ -497,6 +494,7 @@ wait:
 		case SIGINT:
 			return 0;
 		case SIGHUP:
+			INFO("%s\n", "reload config files");
 			reload_virtual_machines();
 			goto wait;
 		}
@@ -539,18 +537,15 @@ stop_virtual_machines()
 				// maybe plugin's child process
 				ev.flags = EV_DELETE;
 				kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-				if (waitpid(ev.ident, &status, 0) < 0) {
-					fprintf(stderr, "wait error (%s)\n",
-						strerror(errno));
-				}
+				if (waitpid(ev.ident, &status, 0) < 0)
+					ERR("wait error (%s)\n",
+					    strerror(errno));
 				continue;
 			}
 			ev.flags = EV_DELETE;
 			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-			if (waitpid(vm->pid, &status, 0) < 0) {
-				fprintf(stderr, "wait error (%s)\n",
-					strerror(errno));
-			}
+			if (waitpid(vm->pid, &status, 0) < 0)
+				ERR("wait error (%s)\n", strerror(errno));
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
 			count--;
@@ -566,29 +561,33 @@ main(int argc, char *argv[])
 	int fd;
 	sigset_t nmask, omask;
 
+	LOG_OPEN_PERROR();
+
 	sigemptyset(&nmask);
 	sigaddset(&nmask, SIGTERM);
 	sigaddset(&nmask, SIGINT);
 	sigaddset(&nmask, SIGHUP);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
+	INFO("%s\n", "start");
+
 	fd = kqueue();
 	if (fd < 0) {
-		fprintf(stderr,"can not open kqueue\n");
+		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
 	gl_conf.kq = fd;
 
 	fd = open(gl_conf.config_dir, O_DIRECTORY|O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr,"can not open %s\n",gl_conf.config_dir);
+		ERR("can not open %s\n", gl_conf.config_dir);
 		return 1;
 	}
 	gl_conf.config_fd = fd;
 
 	fd = open(gl_conf.plugin_dir, O_DIRECTORY|O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr,"can not open %s\n",gl_conf.plugin_dir);
+		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return 1;
 	}
 	gl_conf.plugin_fd = fd;
@@ -605,5 +604,7 @@ main(int argc, char *argv[])
 	close(gl_conf.plugin_fd);
 	close(gl_conf.config_fd);
 	remove_plugins();
+	INFO("%s\n", "quit");
+	LOG_CLOSE();
 	return 0;
 }
