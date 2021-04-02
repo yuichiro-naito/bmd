@@ -7,6 +7,7 @@
 #include "vars.h"
 #include "conf.h"
 #include "parser.h"
+#include "log.h"
 
 static int
 get_token(FILE *fp, char **token)
@@ -476,14 +477,14 @@ parse(struct vm_conf *conf, FILE *fp)
 			break;
 		}
 		if (val[0] != '=') {
-			fprintf(stderr, "value not found for %s\n", key);
+			ERR("value not found for %s\n", key);
 			free(key);
 			goto bad;
 		}
 
 		parser = get_parser(key);
 		if (parser == NULL) {
-			fprintf(stderr, "unknown key %s\n", key);
+			ERR("unknown key %s\n", key);
 			free(key);
 			goto bad;
 		}
@@ -496,7 +497,7 @@ parse(struct vm_conf *conf, FILE *fp)
 			}
 
 			if ((*parser)(conf, val) < 0) {
-				fprintf(stderr, "invalid value %s\n", val);
+				ERR("invalid value %s\n", val);
 				free(val);
 				free(key);
 				goto bad;
