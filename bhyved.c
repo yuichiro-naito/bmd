@@ -501,6 +501,7 @@ wait:
 		switch (ev.ident) {
 		case SIGTERM:
 		case SIGINT:
+			INFO("%s\n", "recieved SIGTERM quitting.");
 			return 0;
 		case SIGHUP:
 			INFO("%s\n", "reload config files");
