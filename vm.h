@@ -1,12 +1,11 @@
 #ifndef _VM_H_
 #define _VM_H_
 
-#include <sys/types.h>
-#include "vars.h"
+struct vm;
 
 int write_mapfile(struct vm *vm);
-pid_t grub_load(struct vm *vm);
-pid_t bhyve_load(struct vm *vm);
+int grub_load(struct vm *vm);
+int bhyve_load(struct vm *vm);
 int remove_taps(struct vm *vm);
 int activate_taps(struct vm *vm);
 int assign_taps(struct vm *vm);

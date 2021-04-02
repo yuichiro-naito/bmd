@@ -11,6 +11,8 @@
 #include "vars.h"
 #include "conf.h"
 #include "tap.h"
+#include "log.h"
+#include "vm.h"
 
 extern struct global_conf gl_conf;
 
@@ -42,7 +44,7 @@ write_mapfile(struct vm *vm)
 
 	fd = mkstemp(fn);
 	if (fd < 0) {
-		fprintf(stderr,"can't create mapfile\n");
+		ERR("%s\n", "can't create mapfile");
 		free(fn);
 		return -1;
 	}
@@ -52,7 +54,7 @@ write_mapfile(struct vm *vm)
 
 	fp = fdopen(fd, "w+");
 	if (fp == NULL) {
-		fprintf(stderr,"can't fdopen mapfile\n");
+		ERR("can't open mapfile (%s)\n", strerror(errno));
 		unlink(fn);
 		vm->mapfile = NULL;
 		free(fn);
@@ -74,7 +76,7 @@ write_mapfile(struct vm *vm)
 	fclose(fp);
 	return 0;
 err:
-	fprintf(stderr,"can't write mapfile\n");
+	ERR("can't write mapfile (%s)\n", strerror(errno));
 	vm->mapfile = NULL;
 	unlink(fn);
 	free(fn);
@@ -82,7 +84,7 @@ err:
 
 }
 
-pid_t
+int
 grub_load(struct vm *vm)
 {
 	int ifd[2];
@@ -102,6 +104,8 @@ grub_load(struct vm *vm)
 
 	pid = fork();
 	if (pid > 0) {
+		vm->pid = pid;
+		vm->state = LOAD;
 		close(ifd[1]);
 		vm->infd = ifd[0];
 		write(ifd[0], cmd, len+1);
@@ -120,17 +124,17 @@ grub_load(struct vm *vm)
 		close(ifd[0]);
 		dup2(ifd[1], 0);
 		execv(args[0],args);
-		fprintf(stderr, "can not exec %s\n", args[0]);
+		ERR("can not exec %s\n", args[0]);
 		exit(1);
 	} else {
-		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
+		ERR("can't fork (%s)\n", strerror(errno));
 		return -1;
 	}
 
-	return pid;
+	return 0;
 }
 
-pid_t
+int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
@@ -139,7 +143,9 @@ bhyve_load(struct vm *vm)
 
 	pid = fork();
 	if (pid > 0) {
-		return pid;
+		vm->pid = pid;
+		vm->state = LOAD;
+		return 0;
 	} else if (pid == 0) {
 		args[0] = "/usr/sbin/bhyveload";
 		args[1] = "-c";
@@ -152,10 +158,10 @@ bhyve_load(struct vm *vm)
 		args[8] = NULL;
 
 		execv(args[0],args);
-		fprintf(stderr, "can not exec %s\n", args[0]);
+		ERR("can't exec %s\n", args[0]);
 		exit(1);
 	} else {
-		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
+		ERR("can't fork (%s)\n", strerror(errno));
 		return -1;
 	}
 
@@ -196,7 +202,8 @@ activate_taps(struct vm *vm)
 	if (s < 0)
 		return -1;
 	STAILQ_FOREACH(nc, &vm->taps, next)
-		activate_tap(s, nc->tap);
+		if (activate_tap(s, nc->tap) < 0)
+			ERR("failed to up %s\n", nc->tap);
 	close(s);
 	return 0;
 }
@@ -227,7 +234,7 @@ assign_taps(struct vm *vm)
 		if (create_tap(s, &nc->tap) < 0 ||
 		    set_tap_description(s, nc->tap, desc) < 0 ||
 		    add_to_bridge(s, nc->bridge, nc->tap) < 0) {
-			fprintf(stderr, "failed to create tap\n");
+			ERR("failed to create tap for %s\n", nc->bridge);
 			free(desc);
 			remove_taps(vm);
 			close(s);
@@ -239,6 +246,7 @@ assign_taps(struct vm *vm)
 	close(s);
 	return 0;
 err:
+	ERR("%s\n", "failed to create tap");
 	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc)
 		free_net_conf(nc);
 	STAILQ_INIT(&vm->taps);
@@ -348,10 +356,10 @@ exec_bhyve(struct vm *vm)
 		fflush(fp);
 		args = (char **)buf;
 		execv(args[0], args);
-		fprintf(stderr, "can not exec %s\n", args[0]);
+		ERR("can not exec %s\n", args[0]);
 		exit(1);
 	} else {
-		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
+		ERR("can not fork (%s)\n", strerror(errno));
 		exit(1);
 	}
 
@@ -369,7 +377,7 @@ destroy_vm(struct vm *vm)
 	pid = fork();
 	if (pid > 0) {
 		if (waitpid(pid, &status, 0) < 0) {
-			fprintf(stderr, "wait error (%s)\n", strerror(errno));
+			ERR("wait error (%s)\n", strerror(errno));
 			return -1;
 		}
 	} else if (pid == 0) {
@@ -379,10 +387,10 @@ destroy_vm(struct vm *vm)
 		args[3]=NULL;
 
 		execv(args[0],args);
-		fprintf(stderr, "can not exec %s\n", args[0]);
+		ERR("can not exec %s\n", args[0]);
 		exit(1);
 	} else {
-		fprintf(stderr, "can not fork (%s)\n", strerror(errno));
+		ERR("can not fork (%s)\n", strerror(errno));
 		exit(1);
 	}
 
@@ -392,36 +400,27 @@ destroy_vm(struct vm *vm)
 int
 start_vm(struct vm *vm)
 {
-	pid_t pid;
 	struct vm_conf *conf = vm->conf;
 	struct kevent ev;
 
 	if (activate_taps(vm) < 0)
 		return -1;
 
-	if (strcasecmp(conf->loader, "bhyveload") == 0)
-		pid = bhyve_load(vm);
-	else if (strcasecmp(conf->loader, "grub") == 0) {
+	if (strcasecmp(conf->loader, "bhyveload") == 0) {
+		if (bhyve_load(vm) < 0)
+			return -1;
+	} else if (strcasecmp(conf->loader, "grub") == 0) {
 		if (write_mapfile(vm) < 0 ||
-		    (pid = grub_load(vm)) < 0)
-			pid = -1;
+		    (grub_load(vm)) < 0)
+			return -1;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
 		if (exec_bhyve(vm) < 0)
 			return -1;
-		vm->state = RUN;
-		goto end;
 	} else {
-		pid = -1;
-		fprintf(stderr, "unknown loader\n");
+		ERR("unknown loader %s\n", conf->loader);
+		return -1;
 	}
 
-	if (pid < 0)
-		return -1;
-
-	vm->pid = pid;
-	vm->state = LOAD;
-
-end:
 	EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
 	       NOTE_EXIT, 0, vm);
 	kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
@@ -441,4 +440,3 @@ cleanup_vm(struct vm *vm)
 	}
 	vm->state=TERMINATE;
 }
-

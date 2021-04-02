@@ -409,7 +409,7 @@ err:
 }
 
 int
-dump_vm_conf(struct vm_conf *conf)
+dump_vm_conf(struct vm_conf *conf, FILE *fp)
 {
 	int i;
 	struct disk_conf *dc;
@@ -420,29 +420,29 @@ dump_vm_conf(struct vm_conf *conf)
 		"no", "yes", "oneshot", "install","always"
 	};
 
-	printf("name: %s\n", conf->name);
-	printf("ncpu: %s\n", conf->ncpu);
-	printf("memory: %s\n", conf->memory);
-	printf("comport: %s\n", conf->comport);
-	printf("boot: %s\n", btype[conf->boot]);
-	printf("loader: %s\n", conf->loader);
-	printf("loadcmd: %s\n", conf->loadcmd);
+	fprintf(fp, "name: %s\n", conf->name);
+	fprintf(fp, "ncpu: %s\n", conf->ncpu);
+	fprintf(fp, "memory: %s\n", conf->memory);
+	fprintf(fp, "comport: %s\n", conf->comport);
+	fprintf(fp, "boot: %s\n", btype[conf->boot]);
+	fprintf(fp, "loader: %s\n", conf->loader);
+	fprintf(fp, "loadcmd: %s\n", conf->loadcmd);
 	i = 0;
 	STAILQ_FOREACH(dc, &conf->disks, next)
-		printf("disk%d: %s,%s\n", i++, dc->type, dc->path);
+		fprintf(fp, "disk%d: %s,%s\n", i++, dc->type, dc->path);
 	i = 0;
 	STAILQ_FOREACH(ic, &conf->isoes, next)
-		printf("iso%d: %s,%s\n", i++, ic->type, ic->path);
+		fprintf(fp, "iso%d: %s,%s\n", i++, ic->type, ic->path);
 	i = 0;
 	STAILQ_FOREACH(nc, &conf->nets, next)
-		printf("net%d: %s,%s\n", i++, nc->type, nc->bridge);
+		fprintf(fp, "net%d: %s,%s\n", i++, nc->type, nc->bridge);
 
 	fb = conf->fbuf;
 	if (fb->enable) {
-		printf("graphics: %s:%d, %dx%d, %s, %s\n",
+		fprintf(fp, "graphics: %s:%d, %dx%d, %s, %s\n",
 		       fb->ipaddr,fb->port, fb->width, fb->height,
 		       fb->vgaconf, fb->wait ? "wait" : "nowait");
 	}
-	printf("xhci_mouse: %s\n", conf->mouse ? "true":"false");
+	fprintf(fp, "xhci_mouse: %s\n", conf->mouse ? "true":"false");
 	return 0;
 }

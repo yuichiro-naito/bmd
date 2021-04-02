@@ -1,7 +1,8 @@
 #ifndef _CONF_H_
 #define _CONF_H_
 
-#include "stdbool.h"
+#include <stdbool.h>
+#include <stdio.h>
 #include "vars.h"
 
 void free_disk_conf(struct disk_conf *c);
@@ -35,5 +36,5 @@ int set_mouse(struct vm_conf *conf, bool use);
 
 struct fbuf *create_fbuf();
 struct vm_conf *create_vm_conf(char *name);
-int dump_vm_conf(struct vm_conf *conf);
+int dump_vm_conf(struct vm_conf *conf, FILE *fp);
 #endif
