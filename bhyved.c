@@ -436,6 +436,8 @@ wait:
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (waitpid(ev.ident, &status, 0) < 0)
 			ERR("wait error (%s)\n", strerror(errno));
+		if (vm == NULL || vm->pid != ev.ident)
+			break;
 		switch (vm->state) {
 		case INIT:
 			break;
