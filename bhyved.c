@@ -432,20 +432,10 @@ wait:
 	case EVFILT_PROC:
 		vm_ent = ev.udata;
 		vm = &vm_ent->vm;
-		if (vm == NULL || vm->pid != ev.ident) {
-			// maybe plugin's child process
-			ev.flags = EV_DELETE;
-			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-			if (waitpid(ev.ident, &status, 0) < 0) {
-				ERR("wait error (%s)\n", strerror(errno));
-			}
-			break;
-		}
 		ev.flags = EV_DELETE;
 		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
-		if (waitpid(vm->pid, &status, 0) < 0) {
+		if (waitpid(ev.ident, &status, 0) < 0)
 			ERR("wait error (%s)\n", strerror(errno));
-		}
 		switch (vm->state) {
 		case INIT:
 			break;
