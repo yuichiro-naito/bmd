@@ -456,8 +456,6 @@ wait:
 	case EVFILT_TIMER:
 		vm_ent = ev.udata;
 		vm = &vm_ent->vm;
-		ev.flags = EV_DELETE;
-		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (vm->state == INIT) {
 			INFO("start vm %s\n", vm->conf->name);
 			if (assign_taps(vm) < 0 ||
@@ -473,8 +471,6 @@ wait:
 	case EVFILT_PROC:
 		vm_ent = ev.udata;
 		vm = &vm_ent->vm;
-		ev.flags = EV_DELETE;
-		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 		if (waitpid(ev.ident, &status, 0) < 0)
 			ERR("wait error (%s)\n", strerror(errno));
 		if (vm == NULL || vm->pid != ev.ident)
@@ -582,15 +578,11 @@ stop_virtual_machines()
 			vm = &vm_ent->vm;
 			if (vm == NULL || vm->pid != ev.ident) {
 				// maybe plugin's child process
-				ev.flags = EV_DELETE;
-				kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 				if (waitpid(ev.ident, &status, 0) < 0)
 					ERR("wait error (%s)\n",
 					    strerror(errno));
 				continue;
 			}
-			ev.flags = EV_DELETE;
-			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 			if (waitpid(vm->pid, &status, 0) < 0)
 				ERR("wait error (%s)\n", strerror(errno));
 			cleanup_vm(vm);
