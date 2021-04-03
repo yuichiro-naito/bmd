@@ -64,10 +64,24 @@ struct global_conf gl_conf = {
 };
 
 int
-get_evid()
+set_timer(struct vm_entry *vm_ent, int second)
 {
-	static int i = 1;
-	return i++;
+	static int id = 1;
+	struct kevent ev;
+
+	EV_SET(&ev, id++, EVFILT_TIMER, EV_ADD|EV_ONESHOT,
+	       NOTE_SECONDS, second, vm_ent);
+	return kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+}
+
+int
+wait_for_process(struct vm_entry *vm_ent)
+{
+	struct kevent ev;
+
+	EV_SET(&ev, vm_ent->vm.pid, EVFILT_PROC, EV_ADD|EV_ONESHOT,
+	       NOTE_EXIT, 0, vm_ent);
+	return kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 }
 
 int
@@ -237,7 +251,7 @@ start_virtual_machines()
 	struct vm_conf_entry *conf_ent;
 	struct vm *vm;
 	struct vm_entry *vm_ent;
-	struct kevent ev,sigev[3];
+	struct kevent sigev[3];
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -253,9 +267,7 @@ start_virtual_machines()
 		if (conf->boot == NO)
 			continue;
 		if (conf->boot_delay > 0) {
-			EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
-			       NOTE_SECONDS, conf->boot_delay, vm_ent);
-			if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+			if (set_timer(vm_ent, conf->boot_delay) < 0)
 				return -1;
 			continue;
 		}
@@ -265,8 +277,10 @@ start_virtual_machines()
 		    start_vm(vm) < 0) {
 			remove_taps(vm);
 			ERR("failed to start vm %s\n", conf->name);
-		} else
+		} else {
+			wait_for_process(vm_ent);
 			call_plugins(vm_ent);
+		}
 	}
 
 	return 0;
@@ -291,7 +305,6 @@ reload_virtual_machines()
 	struct vm *vm;
 	struct vm_entry *vm_ent;
 	struct vm_conf_head new_list = SLIST_HEAD_INITIALIZER();
-	struct kevent ev;
 
 	if (load_config_files(&new_list) < 0)
 		return -1;
@@ -310,9 +323,7 @@ reload_virtual_machines()
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
-				EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
-				       NOTE_SECONDS, conf->boot_delay, vm_ent);
-				if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+				if (set_timer(vm_ent, conf->boot_delay) < 0)
 					return -1;
 				continue;
 			}
@@ -322,8 +333,10 @@ reload_virtual_machines()
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
 				ERR("failed to start vm %s\n", conf->name);
-			} else
+			} else {
+				wait_for_process(vm_ent);
 				call_plugins(vm_ent);
+			}
 			vm_ent->new_conf = conf;
 			continue;
 		}
@@ -346,8 +359,10 @@ reload_virtual_machines()
 				    start_vm(vm) < 0) {
 					remove_taps(vm);
 					ERR("failed to start vm %s\n", conf->name);
-				} else
+				} else {
+					wait_for_process(vm_ent);
 					call_plugins(vm_ent);
+				}
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
 			break;
@@ -369,8 +384,10 @@ reload_virtual_machines()
 				    start_vm(vm) < 0) {
 					remove_taps(vm);
 					ERR("failed to start vm %s\n", conf->name);
-				} else
+				} else {
+					wait_for_process(vm_ent);
 					call_plugins(vm_ent);
+				}
 			} else if (vm->state == LOAD ||
 				   vm->state == RUN) {
 				INFO("reboot vm %s\n", conf->name);
@@ -447,8 +464,10 @@ wait:
 			    start_vm(vm) < 0) {
 				remove_taps(vm);
 				ERR("failed to start vm %s\n", vm->conf->name);
-			} else
+			} else {
+				wait_for_process(vm_ent);
 				call_plugins(vm_ent);
+			}
 		}
 		break;
 	case EVFILT_PROC:
@@ -472,6 +491,7 @@ wait:
 			    WEXITSTATUS(status) == 0) {
 				exec_bhyve(vm);
 				vm->state = RUN;
+				wait_for_process(vm_ent);
 				call_plugins(vm_ent);
 			} else {
 				ERR("failed loading vm %s\n", vm->conf->name);
@@ -483,11 +503,8 @@ wait:
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
 
-			EV_SET(&ev, get_evid(), EVFILT_TIMER, EV_ADD,
-			       NOTE_SECONDS, MAX(vm->conf->boot_delay,3),
-			       vm_ent);
-			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 			vm->state = INIT;
+			set_timer(vm_ent, MAX(vm->conf->boot_delay,3));
 			break;
 		case RUN:
 			if (WIFEXITED(status) &&
@@ -495,8 +512,10 @@ wait:
 			     WEXITSTATUS(status) == 0)) {
 				if (start_vm(vm) < 0)
 					ERR("failed to start vm %s\n", vm->conf->name);
-				else
+				else {
+					wait_for_process(vm_ent);
 					call_plugins(vm_ent);
+				}
 				break;
 			}
 			/* RUN THROUGH */

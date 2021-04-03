@@ -2,7 +2,6 @@
 #include <sys/queue.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
-#include <sys/event.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -14,8 +13,6 @@
 #include "tap.h"
 #include "log.h"
 #include "vm.h"
-
-extern struct global_conf gl_conf;
 
 static int
 redirect_to_null()
@@ -293,6 +290,7 @@ err:
 	STAILQ_INIT(&vm->taps);
 	return -1;
 }
+
 int
 exec_bhyve(struct vm *vm)
 {
@@ -307,20 +305,16 @@ exec_bhyve(struct vm *vm)
 	size_t buf_size;
 	FILE *fp;
 	char *p;
-	struct kevent ev;
 
 	pid = fork();
 	if (pid > 0) {
 		/* parent process */
 		vm->pid = pid;
 		vm->state = RUN;
-		EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
-		       NOTE_EXIT, 0, vm);
-		kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 	} else if (pid == 0) {
+		/* child process */
 		redirect_to_null();
 
-		/* child process */
 		fp = open_memstream(&buf, &buf_size);
 
 		p = "/usr/sbin/bhyve";
@@ -444,7 +438,6 @@ int
 start_vm(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
-	struct kevent ev;
 
 	if (activate_taps(vm) < 0)
 		return -1;
@@ -463,10 +456,6 @@ start_vm(struct vm *vm)
 		ERR("unknown loader %s\n", conf->loader);
 		return -1;
 	}
-
-	EV_SET(&ev, vm->pid, EVFILT_PROC, EV_ADD,
-	       NOTE_EXIT, 0, vm);
-	kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 
 	return 0;
 }
