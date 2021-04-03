@@ -20,20 +20,36 @@ extern struct global_conf gl_conf;
 static int
 redirect_to_null()
 {
-	int fd1, fd2;
+	int fd;
 
-	fd1 = open("/dev/null", O_WRONLY);
-	fd2 = open("/dev/null", O_WRONLY);
-	if (fd1 < 0 || fd2 < 0) {
-		close(fd1);
-		close(fd2);
-		ERR("can't open /dev/null (%s)\n",strerror(errno));
+	fd = open("/dev/null", O_WRONLY);
+	if (fd < 0) {
+		ERR("can't open /dev/null (%s)\n", strerror(errno));
 		return -1;
 	}
-	close(1);
-	close(2);
-	dup2(fd1, 1);
-	dup2(fd2, 2);
+	dup2(fd, 1);
+	dup2(fd, 2);
+
+	return 0;
+}
+
+static int
+redirect_to_com(struct vm *vm)
+{
+	int fd;
+	char *com;
+
+	if ((com = vm->conf->comport) == NULL)
+		com = "/dev/null";
+
+	fd = open(com, O_WRONLY);
+	if (fd < 0) {
+		ERR("can't open %s (%s)\n", com, strerror(errno));
+		return -1;
+	}
+	dup2(fd, 1);
+	dup2(fd, 2);
+
 	return 0;
 }
 
@@ -132,7 +148,7 @@ grub_load(struct vm *vm)
 		write(ifd[0], cmd, len+1);
 		free(cmd);
 	} else if (pid == 0) {
-		redirect_to_null();
+		redirect_to_com(vm);
 
 		args[0] = "/usr/local/sbin/grub-bhyve";
 		args[1] = "-r";
@@ -174,7 +190,7 @@ bhyve_load(struct vm *vm)
 
 		args[0] = "/usr/sbin/bhyveload";
 		args[1] = "-c";
-		args[2] = conf->comport;
+		args[2] = (conf->comport != NULL) ? conf->comport : "stdio";
 		args[3] = "-m";
 		args[4] = conf->memory;
 		args[5] = "-d";
