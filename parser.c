@@ -123,10 +123,8 @@ loop_end:
 		return 1;
 	}
 
-	fflush(t);
-	*token = strdup(buf);
 	fclose(t);
-	free(buf);
+	*token = buf;
 
 	return 0;
 }
