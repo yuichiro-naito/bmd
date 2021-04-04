@@ -217,12 +217,9 @@ remove_taps(struct vm *vm)
 		return -1;
 
 	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc) {
-		if (nc->tap != NULL) {
+		if (nc->tap != NULL)
 			destroy_tap(s, nc->tap);
-			free(nc->tap);
-			nc->tap = NULL;
-		}
-		free(nc);
+		free_net_conf(nc);
 	}
 	STAILQ_INIT(&vm->taps);
 
@@ -439,25 +436,32 @@ start_vm(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
 
-	if (activate_taps(vm) < 0)
+	if (STAILQ_FIRST(&vm->taps) == NULL &&
+	    assign_taps(vm) < 0)
 		return -1;
+
+	if (activate_taps(vm) < 0)
+		goto err;
 
 	if (strcasecmp(conf->loader, "bhyveload") == 0) {
 		if (bhyve_load(vm) < 0)
-			return -1;
+			goto err;
 	} else if (strcasecmp(conf->loader, "grub") == 0) {
 		if (write_mapfile(vm) < 0 ||
 		    (grub_load(vm)) < 0)
-			return -1;
+			goto err;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
 		if (exec_bhyve(vm) < 0)
-			return -1;
+			goto err;
 	} else {
 		ERR("unknown loader %s\n", conf->loader);
-		return -1;
+		goto err;
 	}
 
 	return 0;
+err:
+	remove_taps(vm);
+	return -1;
 }
 
 void

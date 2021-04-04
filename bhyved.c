@@ -184,6 +184,16 @@ free_vm_entry(struct vm_entry *vm_ent)
 	free(vm_ent);
 }
 
+void
+free_vm_list()
+{
+	struct vm_entry *vm_ent, *vmn;
+
+	SLIST_FOREACH_SAFE(vm_ent, &vm_list, next, vmn)
+		free_vm_entry(vm_ent);
+	SLIST_INIT(&vm_list);
+}
+
 int
 load_config_files(struct vm_conf_head *list)
 {
@@ -259,11 +269,32 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 }
 
 int
+start_virtual_machine(struct vm_entry *vm_ent)
+{
+	struct vm *vm = &vm_ent->vm;
+	char *name = vm->conf->name;
+
+	INFO("start vm %s\n", name);
+
+	if (start_vm(vm) < 0 ||
+	    wait_for_process(vm_ent) < 0) {
+		ERR("failed to start vm %s\n", name);
+		return -1;
+	}
+	call_plugins(vm_ent);
+	if (vm->state == LOAD &&
+	    set_timer(vm_ent, 3) < 0) {
+		ERR("failed to set timer for vm %s\n", name);
+		return -1;
+	}
+	return 0;
+}
+
+int
 start_virtual_machines()
 {
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
-	struct vm *vm;
 	struct vm_entry *vm_ent;
 	struct kevent sigev[3];
 
@@ -286,21 +317,10 @@ retry:
 			continue;
 		if (conf->boot_delay > 0) {
 			if (set_timer(vm_ent, conf->boot_delay) < 0)
-				return -1;
+				ERR("failed to set boot delay timer for vm %s\n", conf->name);
 			continue;
 		}
-		vm = &vm_ent->vm;
-		INFO("start vm %s\n", conf->name);
-		if (assign_taps(vm) < 0 ||
-		    start_vm(vm) < 0) {
-			remove_taps(vm);
-			ERR("failed to start vm %s\n", conf->name);
-		} else {
-			wait_for_process(vm_ent);
-			call_plugins(vm_ent);
-			if (vm->state == LOAD)
-				set_timer(vm_ent, 3);
-		}
+		start_virtual_machine(vm_ent);
 	}
 
 	return 0;
@@ -329,7 +349,7 @@ reload_virtual_machines()
 	if (load_config_files(&new_list) < 0)
 		return -1;
 
-	/* make sure new config is NULL */
+	/* make sure new_conf is NULL */
 	SLIST_FOREACH(vm_ent, &vm_list, next)
 		vm_ent->new_conf = NULL;
 
@@ -344,21 +364,11 @@ reload_virtual_machines()
 				continue;
 			if (conf->boot_delay > 0) {
 				if (set_timer(vm_ent, conf->boot_delay) < 0)
-					return -1;
+					ERR("failed to set timer for %s\n",
+					    conf->name);
 				continue;
 			}
-			vm = &vm_ent->vm;
-			INFO("start vm %s\n", conf->name);
-			if (assign_taps(vm) < 0 ||
-			    start_vm(vm) < 0) {
-				remove_taps(vm);
-				ERR("failed to start vm %s\n", conf->name);
-			} else {
-				wait_for_process(vm_ent);
-				call_plugins(vm_ent);
-				if (vm->state == LOAD)
-					set_timer(vm_ent, 3);
-			}
+			start_virtual_machine(vm_ent);
 			vm_ent->new_conf = conf;
 			continue;
 		}
@@ -377,17 +387,7 @@ reload_virtual_machines()
 		case YES:
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
-				INFO("start vm %s\n", conf->name);
-				if (assign_taps(vm) < 0 ||
-				    start_vm(vm) < 0) {
-					remove_taps(vm);
-					ERR("failed to start vm %s\n", conf->name);
-				} else {
-					wait_for_process(vm_ent);
-					call_plugins(vm_ent);
-					if (vm->state == LOAD)
-						set_timer(vm_ent, 3);
-				}
+				start_virtual_machine(vm_ent);
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
 			break;
@@ -404,15 +404,7 @@ reload_virtual_machines()
 		case REBOOT:
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
-				INFO("start vm %s\n", conf->name);
-				if (assign_taps(vm) < 0 ||
-				    start_vm(vm) < 0) {
-					remove_taps(vm);
-					ERR("failed to start vm %s\n", conf->name);
-				} else {
-					wait_for_process(vm_ent);
-					call_plugins(vm_ent);
-				}
+				start_virtual_machine(vm_ent);
 			} else if (vm->state == LOAD ||
 				   vm->state == RUN) {
 				INFO("reboot vm %s\n", conf->name);
@@ -457,8 +449,10 @@ reload_virtual_machines()
 				free_vm_entry(vm_ent);
 			}
 
-		} else
+		} else {
 			vm_ent->vm.conf = vm_ent->new_conf;
+			vm_ent->new_conf = NULL;
+		}
 
 	SLIST_FOREACH_SAFE(conf_ent, &vm_conf_list, next, cen)
 		free_vm_conf(&conf_ent->conf);
@@ -482,20 +476,13 @@ wait:
 		return -1;
 	}
 
+	vm_ent = ev.udata;
+	vm = &vm_ent->vm;
 	switch (ev.filter) {
 	case EVFILT_TIMER:
-		vm_ent = ev.udata;
-		vm = &vm_ent->vm;
 		if (vm->state == INIT) {
-			INFO("start vm %s\n", vm->conf->name);
-			if (assign_taps(vm) < 0 ||
-			    start_vm(vm) < 0) {
-				remove_taps(vm);
-				ERR("failed to start vm %s\n", vm->conf->name);
-			} else {
-				wait_for_process(vm_ent);
-				call_plugins(vm_ent);
-			}
+			/* delayed boot */
+			start_virtual_machine(vm_ent);
 		} else if (vm->state == LOAD ||
 			   vm->state == STOP ||
 			   vm->state == REMOVE ||
@@ -505,18 +492,14 @@ wait:
 			ERR("timeout kill vm %s\n", vm->conf->name);
 			kill(vm->pid, SIGKILL);
 		}
-
 		break;
 	case EVFILT_PROC:
-		vm_ent = ev.udata;
-		vm = &vm_ent->vm;
 		if (waitpid(ev.ident, &status, 0) < 0)
 			ERR("wait error (%s)\n", strerror(errno));
 		if (vm == NULL || vm->pid != ev.ident)
+			// Maybe plugin set this event
 			break;
 		switch (vm->state) {
-		case INIT:
-			break;
 		case LOAD:
 			if (vm->infd != -1) {
 				close(vm->infd);
@@ -545,14 +528,7 @@ wait:
 			if (WIFEXITED(status) &&
 			    (vm->conf->boot == ALWAYS ||
 			     WEXITSTATUS(status) == 0)) {
-				if (start_vm(vm) < 0)
-					ERR("failed to start vm %s\n", vm->conf->name);
-				else {
-					wait_for_process(vm_ent);
-					call_plugins(vm_ent);
-					if (vm->state == LOAD)
-						set_timer(vm_ent, 3);
-				}
+				start_virtual_machine(vm_ent);
 				break;
 			}
 			/* RUN THROUGH */
@@ -567,6 +543,7 @@ wait:
 			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 			free_vm_entry(vm_ent);
 			break;
+		case INIT:
 		case TERMINATE:
 			break;
 		}
@@ -584,7 +561,7 @@ wait:
 		}
 		break;
 	default:
-		// unknown event
+		ERR("recieved unknown event! (%d)", ev.filter);
 		return -1;
 	}
 
@@ -603,7 +580,7 @@ stop_virtual_machines()
 
 	SLIST_FOREACH(vm_ent, &vm_list, next) {
 		vm = &vm_ent->vm;
-		if (vm->state == RUN || vm->state == LOAD) {
+		if (vm->state == LOAD || vm->state == RUN) {
 			count++;
 			kill(vm->pid, SIGTERM);
 		}
@@ -676,6 +653,7 @@ main(int argc, char *argv[])
 	event_loop();
 
 	stop_virtual_machines();
+	free_vm_list();
 	close(gl_conf.kq);
 	close(gl_conf.plugin_fd);
 	close(gl_conf.config_fd);
