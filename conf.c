@@ -57,6 +57,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->comport);
 	free(vc->loader);
 	free(vc->loadcmd);
+	free(vc->hookcmd);
 	free_fbuf(vc->fbuf);
 	STAILQ_FOREACH_SAFE(dc, &vc->disks, next, dn)
 		free_disk_conf(dc);

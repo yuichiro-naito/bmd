@@ -119,12 +119,14 @@ loop_end:
 
 	if (ftell(t) == 0) {
 		fclose(t);
+		free(buf);
 		return 1;
 	}
 
 	fflush(t);
 	*token = strdup(buf);
 	fclose(t);
+	free(buf);
 
 	return 0;
 }
@@ -479,6 +481,7 @@ parse(struct vm_conf *conf, FILE *fp)
 		if (val[0] != '=') {
 			ERR("value not found for %s\n", key);
 			free(key);
+			free(val);
 			goto bad;
 		}
 
@@ -486,8 +489,11 @@ parse(struct vm_conf *conf, FILE *fp)
 		if (parser == NULL) {
 			ERR("unknown key %s\n", key);
 			free(key);
+			free(val);
 			goto bad;
 		}
+		free(key);
+		free(val);
 		while (1) {
 			if (get_token(fp, &val) == 1)
 				break;
@@ -499,12 +505,10 @@ parse(struct vm_conf *conf, FILE *fp)
 			if ((*parser)(conf, val) < 0) {
 				ERR("invalid value %s\n", val);
 				free(val);
-				free(key);
 				goto bad;
 			}
 			free(val);
 		}
-		free(key);
 	}
 
 	return 0;
