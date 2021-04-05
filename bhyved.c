@@ -398,7 +398,7 @@ reload_virtual_machines()
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
 				INFO("install vm %s\n", conf->name);
-				// do_install
+				start_virtual_machine(vm_ent);
 			}
 			break;
 		case REBOOT:
