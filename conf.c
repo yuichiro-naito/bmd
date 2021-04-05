@@ -57,6 +57,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->comport);
 	free(vc->loader);
 	free(vc->loadcmd);
+	free(vc->installcmd);
 	free(vc->hookcmd);
 	free_fbuf(vc->fbuf);
 	STAILQ_FOREACH_SAFE(dc, &vc->disks, next, dn)
@@ -196,6 +197,13 @@ set_loadcmd(struct vm_conf *conf, char *cmd)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->loadcmd, cmd);
+}
+
+int
+set_installcmd(struct vm_conf *conf, char *cmd)
+{
+	if (conf == NULL) return 0;
+	return set_string(&conf->installcmd, cmd);
 }
 
 int
@@ -428,6 +436,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, "boot: %s\n", btype[conf->boot]);
 	fprintf(fp, "loader: %s\n", conf->loader);
 	fprintf(fp, "loadcmd: %s\n", conf->loadcmd);
+	fprintf(fp, "installcmd: %s\n", conf->installcmd);
 	i = 0;
 	STAILQ_FOREACH(dc, &conf->disks, next)
 		fprintf(fp, "disk%d: %s,%s\n", i++, dc->type, dc->path);

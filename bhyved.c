@@ -525,7 +525,8 @@ wait:
 			set_timer(vm_ent, MAX(vm->conf->boot_delay, 3));
 			break;
 		case RUN:
-			if (WIFEXITED(status) &&
+			if (vm->conf->boot != INSTALL &&
+			    WIFEXITED(status) &&
 			    (vm->conf->boot == ALWAYS ||
 			     WEXITSTATUS(status) == 0)) {
 				start_virtual_machine(vm_ent);

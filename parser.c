@@ -257,6 +257,13 @@ parse_loadcmd(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_installcmd(struct vm_conf *conf, char *val)
+{
+	set_installcmd(conf, val);
+	return 0;
+}
+
+static int
 parse_hookcmd(struct vm_conf *conf, char *val)
 {
 	set_hookcmd(conf, val);
@@ -428,27 +435,29 @@ get_parser(char *name)
 		if (strcasecmp(name, "hookcmd") == 0)
 			return &parse_hookcmd;
 		break;
+	case 'i':
+		if (strcasecmp(name, "installcmd") == 0)
+			return &parse_installcmd;
+		else if (strcasecmp(name, "iso") == 0)
+			return &parse_iso;
+		break;
 	case 'l':
 		if (strcasecmp(name, "loader") == 0)
 			return &parse_loader;
-		if (strcasecmp(name, "loadcmd") == 0)
+		else if (strcasecmp(name, "loadcmd") == 0)
 			return &parse_loadcmd;
 		break;
 	case 'n':
 		if (strcasecmp(name, "name") == 0)
 			return &parse_name;
-		if (strcasecmp(name, "ncpu") == 0)
+		else if (strcasecmp(name, "ncpu") == 0)
 			return &parse_ncpu;
-		if (strcasecmp(name, "network") == 0)
+		else if (strcasecmp(name, "network") == 0)
 			return &parse_net;
 		break;
 	case 'm':
 		if (strcasecmp(name, "memory") == 0)
 			return &parse_memory;
-		break;
-	case 'i':
-		if (strcasecmp(name, "iso") == 0)
-			return &parse_iso;
 		break;
 	case 'x':
 		if (strcasecmp(name, "xhci_mouse") == 0)

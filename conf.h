@@ -20,6 +20,7 @@ int set_memory_size(struct vm_conf *conf, char *memory);
 int set_ncpu(struct vm_conf *conf, int ncpu);
 int assign_nmdm(struct vm_conf *conf);
 int set_loadcmd(struct vm_conf *conf, char *cmd);
+int set_installcmd(struct vm_conf *conf, char *cmd);
 int set_hookcmd(struct vm_conf *conf, char *cmd);
 int set_loader(struct vm_conf *conf, char *loader);
 int set_boot(struct vm_conf *conf, enum BOOT boot);

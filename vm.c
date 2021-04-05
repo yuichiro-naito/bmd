@@ -128,7 +128,8 @@ grub_load(struct vm *vm)
 	int len;
 	char *cmd;
 
-	if ((len = asprintf(&cmd, "%s\nboot\n", conf->loadcmd)) < 0)
+	if ((len = asprintf(&cmd, "%s\nboot\n",
+			    (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd)) < 0)
 		return -1;
 
 	if (pipe(ifd) < 0) {
@@ -149,7 +150,7 @@ grub_load(struct vm *vm)
 
 		args[0] = "/usr/local/sbin/grub-bhyve";
 		args[1] = "-r";
-		args[2] = "hdd0,msdos1";
+		args[2] = (conf->boot == INSTALL) ? "cd0" : "hdd0,msdos1";
 		args[3] = "-M";
 		args[4] = conf->memory;
 		args[5] = "-m";
@@ -191,7 +192,7 @@ bhyve_load(struct vm *vm)
 		args[3] = "-m";
 		args[4] = conf->memory;
 		args[5] = "-d";
-		args[6] = STAILQ_FIRST(&conf->disks)->path;
+		args[6] = (conf->boot == INSTALL) ? STAILQ_FIRST(&conf->isoes)->path : STAILQ_FIRST(&conf->disks)->path;
 		args[7] = conf->name;
 		args[8] = NULL;
 
@@ -353,6 +354,20 @@ exec_bhyve(struct vm *vm)
 		fwrite(&p, sizeof(char*), 1, fp);
 
 		pcid = 2;
+		if (conf->boot == INSTALL) {
+		STAILQ_FOREACH(ic, &conf->isoes, next) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		STAILQ_FOREACH(dc, &conf->disks, next) {
+			p = "-s";
+			fwrite(&p, sizeof(char*), 1, fp);
+			asprintf(&p, "%d,%s,%s", pcid++, dc->type, dc->path);
+			fwrite(&p, sizeof(char*), 1, fp);
+		}
+		} else {
 		STAILQ_FOREACH(dc, &conf->disks, next) {
 			p = "-s";
 			fwrite(&p, sizeof(char*), 1, fp);
@@ -364,6 +379,7 @@ exec_bhyve(struct vm *vm)
 			fwrite(&p, sizeof(char*), 1, fp);
 			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
 			fwrite(&p, sizeof(char*), 1, fp);
+		}
 		}
 		STAILQ_FOREACH(nc, &vm->taps, next) {
 			p = "-s";
