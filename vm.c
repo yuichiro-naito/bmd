@@ -354,20 +354,6 @@ exec_bhyve(struct vm *vm)
 		fwrite(&p, sizeof(char*), 1, fp);
 
 		pcid = 2;
-		if (conf->boot == INSTALL) {
-		STAILQ_FOREACH(ic, &conf->isoes, next) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
-			fwrite(&p, sizeof(char*), 1, fp);
-		}
-		STAILQ_FOREACH(dc, &conf->disks, next) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "%d,%s,%s", pcid++, dc->type, dc->path);
-			fwrite(&p, sizeof(char*), 1, fp);
-		}
-		} else {
 		STAILQ_FOREACH(dc, &conf->disks, next) {
 			p = "-s";
 			fwrite(&p, sizeof(char*), 1, fp);
@@ -379,7 +365,6 @@ exec_bhyve(struct vm *vm)
 			fwrite(&p, sizeof(char*), 1, fp);
 			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
 			fwrite(&p, sizeof(char*), 1, fp);
-		}
 		}
 		STAILQ_FOREACH(nc, &vm->taps, next) {
 			p = "-s";
