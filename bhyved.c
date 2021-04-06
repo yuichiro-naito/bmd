@@ -659,14 +659,18 @@ main(int argc, char *argv[])
 	int fd;
 	sigset_t nmask, omask;
 
-	LOG_OPEN_PERROR();
-
 	if (parse_opt(argc, argv) < 0)
 		return 1;
 
+	if (gl_conf.foreground)
+		LOG_OPEN_PERROR();
+	else
+		LOG_OPEN();
+
 	sigemptyset(&nmask);
 	sigaddset(&nmask, SIGTERM);
-	sigaddset(&nmask, SIGINT);
+	if (gl_conf.foreground)
+		sigaddset(&nmask, SIGINT);
 	sigaddset(&nmask, SIGHUP);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
