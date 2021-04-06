@@ -2,7 +2,7 @@
 
 # PROVIDE: bhyved
 # REQUIRE: DAEMON
-# BEFORE: LOGIN
+# BEFORE: LOGIN cleanvar sshd zfs
 # KEYWORD: nojail shutdown
 
 . /etc/rc.subr
@@ -13,6 +13,7 @@ rcvar="bhyved_enable"
 command="/usr/local/sbin/${name}"
 pidfile="/var/run/bhyved.pid"
 extra_commands="reload"
+required_modules="vmm"
 
 load_rc_config $name
 run_rc_command "$1"
