@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # PROVIDE: bhyved
-# REQUIRE: DAEMON
-# BEFORE: LOGIN cleanvar sshd zfs
+# REQUIRE: DAEMON syslogd
+# BEFORE: LOGIN
 # KEYWORD: nojail shutdown
 
 . /etc/rc.subr
