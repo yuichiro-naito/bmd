@@ -12,6 +12,7 @@ desc="bhyve management daemon"
 rcvar="bhyved_enable"
 command="/usr/local/sbin/${name}"
 pidfile="/var/run/bhyved.pid"
+extra_commands="reload"
 
 load_rc_config $name
 run_rc_command "$1"
