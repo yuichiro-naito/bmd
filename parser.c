@@ -523,6 +523,34 @@ bad:
 	return -1;
 }
 
+int
+check_conf(struct vm_conf *conf)
+{
+	char *name = conf->name;
+
+	if (name == NULL) {
+		ERR("%s\n", "vm name is required");
+		return -1;
+	}
+
+	if (conf->ncpu == NULL) {
+		ERR("ncpu is required for vm %s\n", name);
+		return -1;
+	}
+
+	if (conf->memory == NULL) {
+		ERR("memory is required for vm %s\n", name);
+		return -1;
+	}
+
+	if (conf->loader == NULL) {
+		ERR("loader is required for vm %s\n", name);
+		return -1;
+	}
+
+	return 0;
+}
+
 struct vm_conf *
 parse_file(int fd, char *name)
 {
@@ -540,7 +568,7 @@ parse_file(int fd, char *name)
 	ret = parse(c, fp);
 
 	fclose(fp);
-	if (ret < 0) {
+	if (ret < 0 || check_conf(c) < 0) {
 		free_vm_conf(c);
 		return NULL;
 	}
