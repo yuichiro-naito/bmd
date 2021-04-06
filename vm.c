@@ -146,8 +146,11 @@ grub_load(struct vm *vm)
 		write(ifd[0], cmd, len+1);
 		free(cmd);
 	} else if (pid == 0) {
+		close(ifd[0]);
+		dup2(ifd[1], 0);
 		redirect_to_com(vm);
 
+		setenv("TERM", "vt100", 1);
 		args[0] = "/usr/local/sbin/grub-bhyve";
 		args[1] = "-r";
 		args[2] = (conf->boot == INSTALL) ? "cd0" : "hdd0,msdos1";
@@ -158,8 +161,6 @@ grub_load(struct vm *vm)
 		args[7] = conf->name;
 		args[8] = NULL;
 
-		close(ifd[0]);
-		dup2(ifd[1], 0);
 		execv(args[0],args);
 		ERR("can not exec %s\n", args[0]);
 		exit(1);
