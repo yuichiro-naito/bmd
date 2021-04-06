@@ -19,7 +19,7 @@ redirect_to_null()
 {
 	int fd;
 
-	fd = open("/dev/null", O_WRONLY);
+	fd = open("/dev/null", O_WRONLY|O_NONBLOCK);
 	if (fd < 0) {
 		ERR("can't open /dev/null (%s)\n", strerror(errno));
 		return -1;
@@ -39,7 +39,7 @@ redirect_to_com(struct vm *vm)
 	if ((com = vm->conf->comport) == NULL)
 		com = "/dev/null";
 
-	fd = open(com, O_WRONLY);
+	fd = open(com, O_WRONLY|O_NONBLOCK);
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
 		return -1;
