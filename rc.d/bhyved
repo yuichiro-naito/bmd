@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# PROVIDE: bhyved
+# REQUIRE: DAEMON
+# BEFORE: LOGIN
+# KEYWORD: nojail shutdown
+
+. /etc/rc.subr
+
+name="bhyved"
+desc="bhyve management daemon"
+rcvar="bhyved_enable"
+command="/usr/local/sbin/${name}"
+pidfile="/var/run/bhyved.pid"
+
+load_rc_config $name
+run_rc_command "$1"

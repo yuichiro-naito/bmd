@@ -8,8 +8,10 @@
 struct global_conf {
 	char *config_dir;
 	char *plugin_dir;
+	char *pid_path;
 	int config_fd;
 	int plugin_fd;
+	int foreground;
 	int kq;
 };
 

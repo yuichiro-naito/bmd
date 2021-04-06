@@ -59,8 +59,9 @@ SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
 struct global_conf gl_conf = {
-	"./conf.d",
-	"./plugins"
+	"/usr/local/etc/bhyved.d",
+	"/usr/local/libexec/bhyved",
+	"/var/run/bhyved.pid"
 };
 
 int
@@ -610,6 +611,49 @@ stop_virtual_machines()
 }
 
 int
+parse_opt(int argc, char *argv[])
+{
+	int ch;
+	FILE *fp;
+	int fg = 0;
+
+	while ((ch = getopt(argc, argv, "Ff:p:")) != -1) {
+		switch(ch) {
+		case 'F':
+			fg = 1;
+			break;
+		case 'c':
+			gl_conf.config_dir = strdup(optarg);
+			break;
+		case 'f':
+			gl_conf.pid_path = strdup(optarg);
+			break;
+		case 'p':
+			gl_conf.plugin_dir = strdup(optarg);
+			break;
+		default:
+			fprintf(stderr,
+				"usage: %s [-F] [-f pid file] "
+				"[-p plugin directory] \n"
+				"\t[-c vm config directory]\n",
+				argv[0]);
+			return -1;
+		}
+	}
+
+	if ((gl_conf.foreground = fg) == 0)
+		daemon(0, 0);
+
+	fp = fopen(gl_conf.pid_path, "w");
+	if (fp) {
+		fprintf(fp, "%d\n", getpid());
+		fclose(fp);
+	}
+
+	return 0;
+}
+
+int
 main(int argc, char *argv[])
 {
 	int fd;
@@ -617,13 +661,14 @@ main(int argc, char *argv[])
 
 	LOG_OPEN_PERROR();
 
+	if (parse_opt(argc, argv) < 0)
+		return 1;
+
 	sigemptyset(&nmask);
 	sigaddset(&nmask, SIGTERM);
 	sigaddset(&nmask, SIGINT);
 	sigaddset(&nmask, SIGHUP);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
-
-	INFO("%s\n", "start");
 
 	fd = kqueue();
 	if (fd < 0) {
@@ -645,6 +690,8 @@ main(int argc, char *argv[])
 		return 1;
 	}
 	gl_conf.plugin_fd = fd;
+
+	INFO("%s\n", "start");
 
 	if (load_plugins() < 0 ||
 	    load_config_files(&vm_conf_list) < 0 ||
