@@ -328,13 +328,30 @@ start_virtual_machine(struct vm_entry *vm_ent)
 {
 	struct vm *vm = &vm_ent->vm;
 	char *name = vm->conf->name;
+	int (*vm_func)(struct vm *);
 
-	INFO("start vm %s\n", name);
+	if (vm->state == LOAD)
+		vm_func = &exec_bhyve;
+	else {
+		INFO("start vm %s\n", name);
+		vm_func = &start_vm;
+	}
 
-	if (start_vm(vm) < 0 ||
-	    wait_for_process(vm_ent) < 0 ||
-	    wait_for_reading(vm_ent) < 0) {
+	if ((*vm_func)(vm) < 0) {
 		ERR("failed to start vm %s\n", name);
+		return -1;
+	}
+
+	if (wait_for_process(vm_ent) < 0 ||
+	    wait_for_reading(vm_ent) < 0) {
+		ERR("failed to set kevent for vm %s\n", name);
+		/*
+		 * Force to kill bhyve.
+		 * If this error happens, we can't manage bhyve process at all.
+		 */
+		kill(vm->pid, SIGKILL);
+		waitpid(vm->pid, NULL, 0);
+		cleanup_vm(vm);
 		return -1;
 	}
 
@@ -614,12 +631,9 @@ wait:
 				vm->errfd = -1;
 			}
 			if (WIFEXITED(status) &&
-			    WEXITSTATUS(status) == 0) {
-				exec_bhyve(vm);
-				wait_for_process(vm_ent);
-				wait_for_reading(vm_ent);
-				call_plugins(vm_ent);
-			} else {
+			    WEXITSTATUS(status) == 0)
+				start_virtual_machine(vm_ent);
+			else {
 				ERR("failed loading vm %s\n", vm->conf->name);
 				stop_waiting_fd(vm_ent);
 				cleanup_vm(vm);
