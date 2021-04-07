@@ -15,22 +15,6 @@
 #include "vm.h"
 
 static int
-redirect_to_null()
-{
-	int fd;
-
-	fd = open("/dev/null", O_WRONLY|O_NONBLOCK);
-	if (fd < 0) {
-		ERR("can't open /dev/null (%s)\n", strerror(errno));
-		return -1;
-	}
-	dup2(fd, 1);
-	dup2(fd, 2);
-
-	return 0;
-}
-
-static int
 redirect_to_com(struct vm *vm)
 {
 	int fd;
@@ -133,6 +117,7 @@ grub_load(struct vm *vm)
 		return -1;
 
 	if (pipe(ifd) < 0) {
+		ERR("can not create pipe (%s)\n", strerror(errno));
 		free(cmd);
 		return -1;
 	}
@@ -143,6 +128,8 @@ grub_load(struct vm *vm)
 		vm->state = LOAD;
 		close(ifd[1]);
 		vm->infd = ifd[0];
+		vm->outfd = -1;
+		vm->errfd = -1;
 		write(ifd[0], cmd, len+1);
 		free(cmd);
 	} else if (pid == 0) {
@@ -177,15 +164,35 @@ bhyve_load(struct vm *vm)
 {
 	pid_t pid;
 	char *args[9];
+	int outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
+
+	if (pipe(outfd) < 0) {
+		ERR("can not create pipe (%s)\n", strerror(errno));
+		return -1;
+	}
+
+	if (pipe(errfd) < 0) {
+		close(outfd[0]);
+		close(outfd[1]);
+		ERR("can not create pipe (%s)\n", strerror(errno));
+		return -1;
+	}
 
 	pid = fork();
 	if (pid > 0) {
+		close(outfd[1]);
+		close(errfd[1]);
+		vm->outfd = outfd[0];
+		vm->errfd = errfd[0];
 		vm->pid = pid;
 		vm->state = LOAD;
 		return 0;
 	} else if (pid == 0) {
-		redirect_to_null();
+		close(outfd[0]);
+		close(errfd[0]);
+		dup2(outfd[1], 1);
+		dup2(errfd[1], 2);
 
 		args[0] = "/usr/sbin/bhyveload";
 		args[1] = "-c";
@@ -299,20 +306,40 @@ exec_bhyve(struct vm *vm)
 	struct net_conf *nc;
 	pid_t pid;
 	int pcid;
+	int outfd[2], errfd[2];
 	char **args;
 	char *buf = NULL;
 	size_t buf_size;
 	FILE *fp;
 	char *p;
 
+	if (pipe(outfd) < 0) {
+		ERR("can not create pipe (%s)\n", strerror(errno));
+		return -1;
+	}
+
+	if (pipe(errfd) < 0) {
+		close(outfd[0]);
+		close(outfd[1]);
+		ERR("can not create pipe (%s)\n", strerror(errno));
+		return -1;
+	}
+
 	pid = fork();
 	if (pid > 0) {
 		/* parent process */
+		close(outfd[1]);
+		close(errfd[1]);
+		vm->outfd = outfd[0];
+		vm->errfd = errfd[0];
 		vm->pid = pid;
 		vm->state = RUN;
 	} else if (pid == 0) {
 		/* child process */
-		redirect_to_null();
+		close(outfd[0]);
+		close(errfd[0]);
+		dup2(outfd[1], 1);
+		dup2(errfd[1], 2);
 
 		fp = open_memstream(&buf, &buf_size);
 
@@ -469,6 +496,22 @@ err:
 void
 cleanup_vm(struct vm *vm)
 {
+	if (vm->infd != -1) {
+		close(vm->infd);
+		vm->infd = -1;
+	}
+	if (vm->outfd != -1) {
+		close(vm->outfd);
+		vm->outfd = -1;
+	}
+	if (vm->errfd != -1) {
+		close(vm->errfd);
+		vm->errfd = -1;
+	}
+	if (vm->logfd != -1) {
+		close(vm->logfd);
+		vm->logfd = -1;
+	}
 	remove_taps(vm);
 	destroy_vm(vm);
 	if (vm->mapfile) {

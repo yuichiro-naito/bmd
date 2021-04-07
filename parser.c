@@ -271,6 +271,13 @@ parse_hookcmd(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_err_logfile(struct vm_conf *conf, char *val)
+{
+	set_err_logfile(conf, val);
+	return 0;
+}
+
+static int
 parse_loader(struct vm_conf *conf, char *val)
 {
 	if (strcasecmp(val, "uefi") != 0 &&
@@ -414,6 +421,10 @@ get_parser(char *name)
 	case 'd':
 		if (strcasecmp(name, "disk") == 0)
 			return &parse_disk;
+		break;
+	case 'e':
+		if (strcasecmp(name, "err_logfile") == 0)
+			return &parse_err_logfile;
 		break;
 	case 'g':
 		if (strcasecmp(name, "graphics") == 0)

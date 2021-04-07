@@ -66,6 +66,7 @@ struct vm_conf {
 	char *loadcmd;
 	char *installcmd;
 	char *hookcmd;
+	char *err_logfile;
 	struct fbuf *fbuf;
 	bool mouse;
 	int ndisks;
@@ -91,6 +92,9 @@ struct vm {
 	pid_t pid;
 	enum STATE state;
 	int infd;
+	int outfd;
+	int errfd;
+	int logfd;
 	int ntaps;
 	STAILQ_HEAD(, net_conf) taps;
 	char *mapfile;

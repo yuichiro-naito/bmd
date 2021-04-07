@@ -214,6 +214,13 @@ set_hookcmd(struct vm_conf *conf, char *cmd)
 }
 
 int
+set_err_logfile(struct vm_conf *conf, char *name)
+{
+	if (conf == NULL) return 0;
+	return set_string(&conf->err_logfile, name);
+}
+
+int
 set_loader(struct vm_conf *conf, char *loader)
 {
 	if (conf == NULL) return 0;

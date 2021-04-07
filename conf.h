@@ -22,6 +22,7 @@ int assign_nmdm(struct vm_conf *conf);
 int set_loadcmd(struct vm_conf *conf, char *cmd);
 int set_installcmd(struct vm_conf *conf, char *cmd);
 int set_hookcmd(struct vm_conf *conf, char *cmd);
+int set_err_logfile(struct vm_conf *conf, char *name);
 int set_loader(struct vm_conf *conf, char *loader);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
 int set_boot_delay(struct vm_conf *conf, int delay);
