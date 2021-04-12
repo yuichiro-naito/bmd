@@ -2,6 +2,7 @@
 #include <sys/queue.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/sysctl.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -432,32 +433,8 @@ exec_bhyve(struct vm *vm)
 int
 destroy_vm(struct vm *vm)
 {
-	pid_t pid;
-	int status;
-	char *args[4];
-	struct vm_conf *conf = vm->conf;
-
-	pid = fork();
-	if (pid > 0) {
-		if (waitpid(pid, &status, 0) < 0) {
-			ERR("wait error (%s)\n", strerror(errno));
-			return -1;
-		}
-	} else if (pid == 0) {
-		args[0]="/usr/sbin/bhyvectl";
-		args[1]="--destroy";
-		asprintf(&args[2], "--vm=%s", conf->name);
-		args[3]=NULL;
-
-		execv(args[0],args);
-		ERR("can not exec %s\n", args[0]);
-		exit(1);
-	} else {
-		ERR("can not fork (%s)\n", strerror(errno));
-		exit(1);
-	}
-
-	return 0;
+	char *name = vm->conf->name;
+	return sysctlbyname("hw.vmm.destroy", NULL, 0, name, strlen(name));
 }
 
 int
