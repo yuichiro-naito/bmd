@@ -739,6 +739,9 @@ stop_virtual_machines()
 		}
 	}
 
+	// make sure vm memory is actually freed in the kernel.
+	sleep(3);
+
 	return 0;
 }
 
