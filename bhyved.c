@@ -682,9 +682,8 @@ wait:
 		switch (ev.ident) {
 		case SIGTERM:
 		case SIGINT:
-			INFO("%s\n", "recieved SIGTERM quitting.");
-			free(buf);
-			return 0;
+			INFO("%s\n", "stopping daemon");
+			goto end;
 		case SIGHUP:
 			INFO("%s\n", "reload config files");
 			reload_virtual_machines();
@@ -698,7 +697,7 @@ wait:
 	}
 
 	goto wait;
-
+end:
 	free(buf);
 	return 0;
 }
@@ -739,7 +738,7 @@ stop_virtual_machines()
 		}
 	}
 
-	// make sure vm memory is actually freed in the kernel.
+	// waiting for vm memory is actually freed in the kernel.
 	sleep(3);
 
 	return 0;
@@ -830,7 +829,7 @@ main(int argc, char *argv[])
 	}
 	gl_conf.plugin_fd = fd;
 
-	INFO("%s\n", "start");
+	INFO("%s\n", "start daemon");
 
 	if (load_plugins() < 0 ||
 	    load_config_files(&vm_conf_list) < 0 ||
@@ -845,7 +844,7 @@ main(int argc, char *argv[])
 	close(gl_conf.plugin_fd);
 	close(gl_conf.config_fd);
 	remove_plugins();
-	INFO("%s\n", "quit");
+	INFO("%s\n", "quit daemon");
 	LOG_CLOSE();
 	return 0;
 }
