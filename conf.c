@@ -463,3 +463,135 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, "xhci_mouse: %s\n", conf->mouse ? "true":"false");
 	return 0;
 }
+
+static int
+compare_string(const char *a, const char *b)
+{
+	if (a == NULL && b == NULL) return 0;
+	if (a == NULL) return -1;
+	if (b == NULL) return 1;
+	return strcmp(a, b);
+}
+
+#define CMP_NUM(t) \
+	if ((rc = (a)->t - (b)->t) != 0) return rc
+#define CMP_STR(t) \
+	if ((rc = compare_string((a)->t, (b)->t)) != 0) return rc
+
+int
+compare_fbuf(struct fbuf *a, struct fbuf *b)
+{
+	int rc;
+
+	CMP_NUM(enable);
+	CMP_STR(ipaddr);
+	CMP_NUM(port);
+	CMP_NUM(width);
+	CMP_NUM(height);
+	CMP_STR(vgaconf);
+	CMP_NUM(wait);
+	CMP_STR(password);
+
+	return 0;
+}
+
+int
+compare_disk_conf(struct disk_conf *a, struct disk_conf *b)
+{
+	int rc;
+
+	CMP_STR(type);
+	CMP_STR(path);
+
+	return 0;
+}
+
+int
+compare_iso_conf(struct iso_conf *a, struct iso_conf *b)
+{
+	int rc;
+
+	CMP_STR(type);
+	CMP_STR(path);
+
+	return 0;
+}
+
+int
+compare_net_conf(struct net_conf *a, struct net_conf *b)
+{
+	int rc;
+
+	CMP_STR(type);
+	CMP_STR(bridge);
+	/*
+	 * We don't need to compare tap.
+	 * Because it is not written in the vm config file.
+	 * 'tap' holds assigned tap interface name while vm is running.
+	 *
+	 * CMP_STR(tap);
+	 */
+
+	return 0;
+}
+
+int
+compare_vm_conf(struct vm_conf *a, struct vm_conf *b)
+{
+	int rc;
+	struct disk_conf *da, *db;
+	struct iso_conf *ia, *ib;
+	struct net_conf *na, *nb;
+
+	CMP_NUM(boot_delay);
+	CMP_STR(ncpu);
+	CMP_STR(memory);
+	CMP_STR(name);
+	CMP_STR(comport);
+	CMP_NUM(boot);
+	CMP_STR(loader);
+	CMP_STR(loadcmd);
+	CMP_STR(installcmd);
+	CMP_STR(hookcmd);
+	CMP_STR(err_logfile);
+
+	if ((rc = compare_fbuf(a->fbuf, b->fbuf)) != 0)
+		return rc;
+
+	CMP_NUM(mouse);
+	CMP_NUM(ndisks);
+	CMP_NUM(nisoes);
+	CMP_NUM(nnets);
+
+	for (da = STAILQ_FIRST(&a->disks), db = STAILQ_FIRST(&b->disks);
+	     da != NULL && db != NULL;
+	     da = STAILQ_NEXT(da, next), db = STAILQ_NEXT(db, next))
+		if ((rc = compare_disk_conf(da, db)) != 0)
+			return rc;
+	if (da != NULL)
+		return 1;
+	if (db != NULL)
+		return -1;
+
+	for (ia = STAILQ_FIRST(&a->isoes), ib = STAILQ_FIRST(&b->isoes);
+	     ia != NULL && ib != NULL;
+	     ia = STAILQ_NEXT(ia, next), ib = STAILQ_NEXT(ib, next))
+		if ((rc = compare_iso_conf(ia, ib)) != 0)
+			return rc;
+	if (ia != NULL)
+		return 1;
+	if (ib != NULL)
+		return -1;
+
+	for (na = STAILQ_FIRST(&a->nets), nb = STAILQ_FIRST(&b->nets);
+	     na != NULL && nb != NULL;
+	     na = STAILQ_NEXT(na, next), nb = STAILQ_NEXT(nb, next))
+		if ((rc = compare_net_conf(na, nb)) != 0)
+			return rc;
+	if (na != NULL)
+		return 1;
+	if (nb != NULL)
+		return -1;
+
+	return 0;
+}

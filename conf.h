@@ -39,4 +39,10 @@ int set_mouse(struct vm_conf *conf, bool use);
 struct fbuf *create_fbuf();
 struct vm_conf *create_vm_conf(char *name);
 int dump_vm_conf(struct vm_conf *conf, FILE *fp);
+
+int compare_fbuf(struct fbuf *a, struct fbuf *b);
+int compare_disk_conf(struct disk_conf *a, struct disk_conf *b);
+int compare_iso_conf(struct iso_conf *a, struct iso_conf *b);
+int compare_net_conf(struct net_conf *a, struct net_conf *b);
+int compare_vm_conf(struct vm_conf *a, struct vm_conf *b);
 #endif

@@ -488,12 +488,13 @@ reload_virtual_machines()
 			if (vm->state == INIT ||
 			    vm->state == TERMINATE) {
 				start_virtual_machine(vm_ent);
-			} else if (vm->state == LOAD ||
-				   vm->state == RUN) {
+			} else if ((vm->state == LOAD ||
+				    vm->state == RUN) &&
+				   compare_vm_conf(conf, vm->conf) != 0) {
 				INFO("reboot vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
 				vm->state = RESTART;
-			} else
+			} else if (vm->state == STOP)
 				vm->state = RESTART;
 			break;
 		}
@@ -514,7 +515,7 @@ reload_virtual_machines()
 			case RESTART:
 				vm->state = REMOVE;
 				/* remove vm_conf_entry from the list
-				   to keep it when removed. */
+				   to keep it until actually freed. */
 				if (SLIST_FIRST(&vm_conf_list))
 					SLIST_REMOVE(&vm_conf_list,
 						     (struct vm_conf_entry*)vm->conf,
@@ -634,7 +635,9 @@ wait:
 			    WEXITSTATUS(status) == 0)
 				start_virtual_machine(vm_ent);
 			else {
-				ERR("failed loading vm %s\n", vm->conf->name);
+				ERR("failed loading vm %s (status:%d)\n",
+				    vm->conf->name,
+				    WEXITSTATUS(status));
 				stop_waiting_fd(vm_ent);
 				cleanup_vm(vm);
 				call_plugins(vm_ent);
