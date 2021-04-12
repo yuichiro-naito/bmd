@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <sys/unistd.h>
 #include <sys/signal.h>
-#include <sys/wait.h>
+#include <sys/event.h>
 #include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -14,11 +14,14 @@ struct avahi_data {
 	pid_t pid;
 };
 
+static struct global_conf *gl_conf;
 static int avahi_enable = 0;
 
 static int
 avahi_initialize(struct global_conf *conf)
 {
+	gl_conf = conf;
+
 	if (access(AVAHI_PUBLISH, R_OK|X_OK) == 0)
 		avahi_enable = 1;
 
@@ -41,9 +44,7 @@ exec_avahi_publish(struct vm *vm)
 	pid = fork();
 	if (pid == 0) {
 		sigemptyset(&mask);
-		sigaddset(&mask, SIGTERM);
 		sigaddset(&mask, SIGINT);
-		sigaddset(&mask, SIGHUP);
 		sigprocmask(SIG_UNBLOCK, &mask, NULL);
 
 		args[0] = AVAHI_PUBLISH;
@@ -63,7 +64,7 @@ exec_avahi_publish(struct vm *vm)
 static void
 avahi_status_change(struct vm *vm, void **data)
 {
-	int status;
+	struct kevent ev;
 	struct avahi_data *ad;
 
 	if (avahi_enable == 0 ||
@@ -71,7 +72,7 @@ avahi_status_change(struct vm *vm, void **data)
 		return;
 
 	if (*data == NULL) {
-		ad = calloc(1, sizeof(*data));
+		ad = calloc(1, sizeof(*ad));
 		if (ad == NULL)
 			return;
 		*data = ad;
@@ -79,24 +80,22 @@ avahi_status_change(struct vm *vm, void **data)
 		ad = *data;
 
 	switch (vm->state) {
-	case INIT:
-		break;
 	case LOAD:
 	case RUN:
 		if (ad->pid <= 0)
 			ad->pid = exec_avahi_publish(vm);
 		break;
-	case STOP:
-	case REMOVE:
-	case RESTART:
-		break;
 	case TERMINATE:
 		if (ad->pid > 0) {
 			kill(ad->pid, SIGINT);
-			waitpid(ad->pid, &status, 0);
+			EV_SET(&ev, ad->pid, EVFILT_PROC,
+			       EV_ADD|EV_ONESHOT, NOTE_EXIT, 0, NULL);
+			kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL);
 		}
 		free(ad);
 		*data = NULL;
+		break;
+	default:
 		break;
 	}
 }
