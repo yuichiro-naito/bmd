@@ -342,18 +342,23 @@ exec_bhyve(struct vm *vm)
 		dup2(errfd[1], 2);
 
 		fp = open_memstream(&buf, &buf_size);
+		if (fp == NULL) {
+			ERR("can not open memstrem (%s)\n", strerror(errno));
+			exit(1);
+		}
+		flockfile(fp);
 
 #define WRITE_STR(str)						\
 		do {						\
 			char *p = (str);			\
-			fwrite(&p, sizeof(char*), 1, fp);	\
+			fwrite_unlocked(&p, sizeof(char*), 1, fp);	\
 		} while(0)
 
 #define WRITE_FMT(fmt, ...)					\
 		do {						\
 			char *p;				\
 			asprintf(&p, (fmt), __VA_ARGS__);	\
-			fwrite(&p, sizeof(char*), 1, fp);	\
+			fwrite_unlocked(&p, sizeof(char*), 1, fp);	\
 		} while(0)
 
 		WRITE_STR("/usr/sbin/bhyve");
@@ -403,6 +408,7 @@ exec_bhyve(struct vm *vm)
 		WRITE_STR(conf->name);
 		WRITE_STR(NULL);
 
+		funlockfile(fp);
 		fclose(fp);
 		args = (char **)buf;
 		execv(args[0], args);
