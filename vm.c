@@ -312,7 +312,6 @@ exec_bhyve(struct vm *vm)
 	char *buf = NULL;
 	size_t buf_size;
 	FILE *fp;
-	char *p;
 
 	if (pipe(outfd) < 0) {
 		ERR("can not create pipe (%s)\n", strerror(errno));
@@ -344,80 +343,67 @@ exec_bhyve(struct vm *vm)
 
 		fp = open_memstream(&buf, &buf_size);
 
-		p = "/usr/sbin/bhyve";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "-A";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "-H";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "-u";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "-w";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "-c";
-		fwrite(&p, sizeof(char*), 1, fp);
-		fwrite(&conf->ncpu, sizeof(char*), 1, fp);
-		p = "-m";
-		fwrite(&p, sizeof(char*), 1, fp);
-		fwrite(&conf->memory, sizeof(char*), 1, fp);
+#define WRITE_STR(str)						\
+		do {						\
+			char *p = (str);			\
+			fwrite(&p, sizeof(char*), 1, fp);	\
+		} while(0)
+
+#define WRITE_FMT(fmt, ...)					\
+		do {						\
+			char *p;				\
+			asprintf(&p, (fmt), __VA_ARGS__);	\
+			fwrite(&p, sizeof(char*), 1, fp);	\
+		} while(0)
+
+		WRITE_STR("/usr/sbin/bhyve");
+		WRITE_STR("-A");
+		WRITE_STR("-H");
+		WRITE_STR("-u");
+		WRITE_STR("-w");
+		WRITE_STR("-c");
+		WRITE_STR(conf->ncpu);
+		WRITE_STR("-m");
+		WRITE_STR(conf->memory);
 		if (conf->comport != NULL) {
-			p = "-l";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "com1,%s", conf->comport);
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-l");
+			WRITE_FMT("com1,%s", conf->comport);
 		}
 
 		if (strcasecmp(conf->loader, "uefi") == 0) {
-			p = "-l";
-			fwrite(&p, sizeof(char*), 1, fp);
-			p = "bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd";
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-l");
+			WRITE_STR("bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd");
 		}
-		p = "-s";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "0,hostbridge";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "-s";
-		fwrite(&p, sizeof(char*), 1, fp);
-		p = "1,lpc";
-		fwrite(&p, sizeof(char*), 1, fp);
+		WRITE_STR("-s");
+		WRITE_STR("0,hostbridge");
+		WRITE_STR("-s");
+		WRITE_STR("1,lpc");
 
 		pcid = 2;
 		STAILQ_FOREACH(dc, &conf->disks, next) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "%d,%s,%s", pcid++, dc->type, dc->path);
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-s");
+			WRITE_FMT("%d,%s,%s", pcid++, dc->type, dc->path);
 		}
 		STAILQ_FOREACH(ic, &conf->isoes, next) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "%d,%s,%s", pcid++, ic->type, ic->path);
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-s");
+			WRITE_FMT("%d,%s,%s", pcid++, ic->type, ic->path);
 		}
 		STAILQ_FOREACH(nc, &vm->taps, next) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "%d,%s,%s", pcid++, nc->type, nc->tap);
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-s");
+			WRITE_FMT("%d,%s,%s", pcid++, nc->type, nc->tap);
 		}
 		if (conf->fbuf->enable) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			p = get_fbuf_option(pcid++, conf->fbuf);
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-s");
+			WRITE_STR(get_fbuf_option(pcid++, conf->fbuf));
 		}
 		if (conf->mouse) {
-			p = "-s";
-			fwrite(&p, sizeof(char*), 1, fp);
-			asprintf(&p, "%d,xhci,tablet", pcid++);
-			fwrite(&p, sizeof(char*), 1, fp);
+			WRITE_STR("-s");
+			WRITE_FMT("%d,xhci,tablet", pcid++);
 		}
-		fwrite(&conf->name, sizeof(char*), 1, fp);
-		p = NULL;
-		fwrite(&p, sizeof(char*), 1, fp);
+		WRITE_STR(conf->name);
+		WRITE_STR(NULL);
 
-		fflush(fp);
+		fclose(fp);
 		args = (char **)buf;
 		execv(args[0], args);
 		ERR("can not exec %s\n", args[0]);
