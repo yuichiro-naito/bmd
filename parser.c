@@ -135,8 +135,6 @@ loop_end:
 	return 0;
 }
 
-typedef int (*pfunc)(struct vm_conf *conf, char *val);
-
 static int
 parse_int(int *val, char *value)
 {
@@ -420,80 +418,60 @@ parse_xhci_mouse(struct vm_conf *conf, char *val)
 	return set_mouse(conf, parse_boolean(val));
 }
 
+typedef int (*pfunc)(struct vm_conf *conf, char *val);
+
+struct parser_entry {
+	char *name;
+	pfunc func;
+};
+
+/* must be sorted by name */
+struct parser_entry parser_list[] = {
+	{"boot", &parse_boot},
+	{"boot_delay", &parse_boot_delay},
+	{"comport", &parse_comport},
+	{"disk", &parse_disk},
+	{"err_logfile", &parse_err_logfile},
+	{"graphics", &parse_graphics},
+	{"graphics_listen", &parse_graphics_listen},
+	{"graphics_password", &parse_graphics_password},
+	{"graphics_port", &parse_graphics_port},
+	{"graphics_res", &parse_graphics_res},
+	{"graphics_vga", &parse_graphics_vga},
+	{"graphics_wait", &parse_graphics_wait},
+	{"hookcmd", &parse_hookcmd},
+	{"installcmd", &parse_installcmd},
+	{"iso", &parse_iso},
+	{"loadcmd", &parse_loadcmd},
+	{"loader", &parse_loader},
+	{"loader_timeout", &parse_loader_timeout},
+	{"memory", &parse_memory},
+	{"name", &parse_name},
+	{"ncpu", &parse_ncpu},
+	{"network", &parse_net},
+	{"xhci_mouse", &parse_xhci_mouse},
+};
+
+static int
+compare_parser_entry(const void *a, const void *b)
+{
+	const char *name = a;
+	const struct parser_entry *ent = b;
+	return strcasecmp(name, ent->name);
+}
+
 static pfunc
 get_parser(char *name)
 {
-	switch (name[0]) {
-	case 'b':
-		if (strcasecmp(name, "boot") == 0)
-			return &parse_boot;
-		else if (strcasecmp(name, "boot_delay") == 0)
-			return &parse_boot_delay;
-		break;
-	case 'c':
-		if (strcasecmp(name, "comport") == 0)
-			return &parse_comport;
-		break;
-	case 'd':
-		if (strcasecmp(name, "disk") == 0)
-			return &parse_disk;
-		break;
-	case 'e':
-		if (strcasecmp(name, "err_logfile") == 0)
-			return &parse_err_logfile;
-		break;
-	case 'g':
-		if (strcasecmp(name, "graphics") == 0)
-			return &parse_graphics;
-		else if (strcasecmp(name, "graphics_port") == 0)
-			return &parse_graphics_port;
-		else if (strcasecmp(name, "graphics_listen") == 0)
-			return &parse_graphics_listen;
-		else if (strcasecmp(name, "graphics_res") == 0)
-			return &parse_graphics_res;
-		else if (strcasecmp(name, "graphics_vga") == 0)
-			return &parse_graphics_vga;
-		else if (strcasecmp(name, "graphics_wait") == 0)
-			return &parse_graphics_wait;
-		else if (strcasecmp(name, "graphics_password") == 0)
-			return &parse_graphics_password;
-		break;
-	case 'h':
-		if (strcasecmp(name, "hookcmd") == 0)
-			return &parse_hookcmd;
-		break;
-	case 'i':
-		if (strcasecmp(name, "installcmd") == 0)
-			return &parse_installcmd;
-		else if (strcasecmp(name, "iso") == 0)
-			return &parse_iso;
-		break;
-	case 'l':
-		if (strcasecmp(name, "loader") == 0)
-			return &parse_loader;
-		else if (strcasecmp(name, "loader_timeout") == 0)
-			return &parse_loader_timeout;
-		else if (strcasecmp(name, "loadcmd") == 0)
-			return &parse_loadcmd;
-		break;
-	case 'n':
-		if (strcasecmp(name, "name") == 0)
-			return &parse_name;
-		else if (strcasecmp(name, "ncpu") == 0)
-			return &parse_ncpu;
-		else if (strcasecmp(name, "network") == 0)
-			return &parse_net;
-		break;
-	case 'm':
-		if (strcasecmp(name, "memory") == 0)
-			return &parse_memory;
-		break;
-	case 'x':
-		if (strcasecmp(name, "xhci_mouse") == 0)
-			return &parse_xhci_mouse;
-		break;
-	}
-	return NULL;
+
+	struct parser_entry *p;
+
+	p = bsearch(name, parser_list,
+		    sizeof(parser_list)/sizeof(parser_list[0]),
+		    sizeof(parser_list[0]),
+		    compare_parser_entry);
+
+	return ((p != NULL) ? p->func : NULL);
 }
 
 static int
