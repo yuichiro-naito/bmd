@@ -99,9 +99,7 @@ destroy_tap(int s, char *name)
 	memset(&ifr, 0, sizeof(struct ifreq));
 	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
-	if (ioctl(s, SIOCIFDESTROY, &ifr) < 0)
-		return -1;
-	return 0;
+	return (ioctl(s, SIOCIFDESTROY, &ifr));
 }
 
 int
@@ -120,8 +118,5 @@ set_tap_description(int s, char *tap, char *desc)
 		ifr.ifr_buffer.buffer = desc;
 
 
-	if (ioctl(s, SIOCSIFDESCR, (caddr_t)&ifr) < 0)
-		return -1;
-
-	return 0;
+	return (ioctl(s, SIOCSIFDESCR, (caddr_t)&ifr));
 }
