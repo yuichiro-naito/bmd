@@ -26,6 +26,9 @@ get_token(FILE *fp, char **token)
 		return 1;
 
 	t = open_memstream(&buf, &len);
+	flockfile(t);
+
+#define FPUTC  fputc_unlocked
 
 	f = BEGIN;
 	while ((c = fgetc(fp)) != EOF) {
@@ -34,11 +37,13 @@ get_token(FILE *fp, char **token)
 			switch (f) {
 			case TOKEN:
 			case QUOTE:
-				fputc(c, t);
+				FPUTC(c, t);
 				continue;
 			default:
-				while (fgetc(fp) != '\n');
-				fputc('\n', t);
+				flockfile(fp);
+				while ((getc_unlocked(fp)) != '\n');
+				funlockfile(fp);
+				FPUTC('\n', t);
 				goto loop_end;
 			}
 		case '"':
@@ -47,7 +52,7 @@ get_token(FILE *fp, char **token)
 				f = BEGIN;
 				goto loop_end;
 			case TOKEN:
-				fputc(c, t);
+				FPUTC(c, t);
 				continue;
 			default:
 				f = QUOTE;
@@ -57,40 +62,40 @@ get_token(FILE *fp, char **token)
 		case '\n':
 			switch (f) {
 			case QUOTE:
-				fputc(c, t);
+				FPUTC(c, t);
 				continue;
 			case TOKEN:
 				ungetc(c, fp);
 				break;
 			default:
-				fputc(c, t);
+				FPUTC(c, t);
 			}
 			goto loop_end;
 		case '\\':
 			c = fgetc(fp);
 			switch (c) {
 			case 'f':
-				fputc('\f', t);
+				FPUTC('\f', t);
 				break;
 			case 't':
-				fputc('\t', t);
+				FPUTC('\t', t);
 				break;
 			case 'n':
-				fputc('\n', t);
+				FPUTC('\n', t);
 				break;
 			case 'r':
-				fputc('\r', t);
+				FPUTC('\r', t);
 				break;
 			case 'v':
-				fputc('\v', t);
+				FPUTC('\v', t);
 				break;
 			case '\r':
 			case '\n':
 				if (f == QUOTE)
-					fputc(c, t);
+					FPUTC(c, t);
 				continue;
 			default:
-				fputc(c, t);
+				FPUTC(c, t);
 			}
 			break;
 		case ' ':
@@ -100,7 +105,7 @@ get_token(FILE *fp, char **token)
 		case '\f':
 			switch(f) {
 			case QUOTE:
-				fputc(c, t);
+				FPUTC(c, t);
 				continue;
 			case TOKEN:
 				goto loop_end;
@@ -111,11 +116,12 @@ get_token(FILE *fp, char **token)
 		default:
 			if (f == BEGIN)
 				f = TOKEN;
-			fputc(c, t);
+			FPUTC(c, t);
 		}
 	}
 
 loop_end:
+	funlockfile(t);
 
 	if (ftell(t) == 0) {
 		fclose(t);
@@ -155,10 +161,9 @@ parse_name(struct vm_conf *conf, char *val)
 static int
 parse_ncpu(struct vm_conf *conf, char *val)
 {
-	long n;
-	char *p;
-	n = strtol(val, &p, 10);
-	if (*p != '\0')
+	int n;
+
+	if (parse_int(&n, val) < 0)
 		return -1;
 
 	set_ncpu(conf, n);
@@ -511,19 +516,16 @@ parse(struct vm_conf *conf, FILE *fp)
 		}
 		if (val[0] != '=') {
 			ERR("value not found for %s\n", key);
-			free(key);
-			free(val);
 			goto bad;
 		}
 
 		parser = get_parser(key);
 		if (parser == NULL) {
 			ERR("unknown key %s\n", key);
-			free(key);
-			free(val);
 			goto bad;
 		}
 		free(key);
+		key = NULL;
 		free(val);
 		while (1) {
 			if (get_token(fp, &val) == 1)
@@ -535,7 +537,6 @@ parse(struct vm_conf *conf, FILE *fp)
 
 			if ((*parser)(conf, val) < 0) {
 				ERR("invalid value %s\n", val);
-				free(val);
 				goto bad;
 			}
 			free(val);
@@ -544,6 +545,8 @@ parse(struct vm_conf *conf, FILE *fp)
 
 	return 0;
 bad:
+	free(key);
+	free(val);
 	return -1;
 }
 
@@ -586,8 +589,10 @@ parse_file(int fd, char *name)
 		return NULL;
 
 	c = create_vm_conf(name);
-	if (c == NULL)
+	if (c == NULL) {
+		fclose(fp);
 		return NULL;
+	}
 
 	ret = parse(c, fp);
 
