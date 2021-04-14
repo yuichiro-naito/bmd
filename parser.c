@@ -290,6 +290,17 @@ parse_loader(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_loader_timeout(struct vm_conf *conf, char *val)
+{
+	int timeout;
+
+	if (parse_int(&timeout, val) < 0)
+		return -1;
+
+	return set_loader_timeout(conf, timeout);
+}
+
+static int
 parse_boot(struct vm_conf *conf, char *val)
 {
 	enum BOOT b;
@@ -455,6 +466,8 @@ get_parser(char *name)
 	case 'l':
 		if (strcasecmp(name, "loader") == 0)
 			return &parse_loader;
+		else if (strcasecmp(name, "loader_timeout") == 0)
+			return &parse_loader_timeout;
 		else if (strcasecmp(name, "loadcmd") == 0)
 			return &parse_loadcmd;
 		break;

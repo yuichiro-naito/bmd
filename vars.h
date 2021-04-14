@@ -68,6 +68,7 @@ struct vm_conf {
 	char *hookcmd;
 	char *err_logfile;
 	struct fbuf *fbuf;
+	int loader_timeout;
 	bool mouse;
 	int ndisks;
 	int nisoes;

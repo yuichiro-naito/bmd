@@ -228,6 +228,15 @@ set_loader(struct vm_conf *conf, char *loader)
 }
 
 int
+set_loader_timeout(struct vm_conf *conf, int timeout)
+{
+	if (conf == NULL) return 0;
+
+	conf->loader_timeout = timeout;
+	return 0;
+}
+
+int
 set_memory_size(struct vm_conf *conf, char *memory)
 {
 	if (conf == NULL) return 0;
@@ -411,6 +420,7 @@ create_vm_conf(char *name)
 	ret->fbuf = fbuf;
 	ret->name = name;
 	ret->nmdm = -1;
+	ret->loader_timeout = 3;
 
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
@@ -442,6 +452,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, "comport: %s\n", conf->comport);
 	fprintf(fp, "boot: %s\n", btype[conf->boot]);
 	fprintf(fp, "loader: %s\n", conf->loader);
+	fprintf(fp, "loader_timeout: %d\n", conf->loader_timeout);
 	fprintf(fp, "loadcmd: %s\n", conf->loadcmd);
 	fprintf(fp, "installcmd: %s\n", conf->installcmd);
 	i = 0;
@@ -550,6 +561,7 @@ compare_vm_conf(struct vm_conf *a, struct vm_conf *b)
 	CMP_STR(comport);
 	CMP_NUM(boot);
 	CMP_STR(loader);
+	CMP_NUM(loader_timeout);
 	CMP_STR(loadcmd);
 	CMP_STR(installcmd);
 	CMP_STR(hookcmd);
