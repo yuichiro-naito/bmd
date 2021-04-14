@@ -473,22 +473,19 @@ err:
 void
 cleanup_vm(struct vm *vm)
 {
-	if (vm->infd != -1) {
-		close(vm->infd);
-		vm->infd = -1;
-	}
-	if (vm->outfd != -1) {
-		close(vm->outfd);
-		vm->outfd = -1;
-	}
-	if (vm->errfd != -1) {
-		close(vm->errfd);
-		vm->errfd = -1;
-	}
-	if (vm->logfd != -1) {
-		close(vm->logfd);
-		vm->logfd = -1;
-	}
+#define VM_CLOSE_FD(fd)				\
+	do {					\
+		if (vm->fd != -1) {		\
+			close(vm->fd);		\
+			vm->fd = -1;		\
+		}				\
+	} while (0)
+
+	VM_CLOSE_FD(infd);
+	VM_CLOSE_FD(outfd);
+	VM_CLOSE_FD(errfd);
+	VM_CLOSE_FD(logfd);
+
 	remove_taps(vm);
 	destroy_vm(vm);
 	if (vm->mapfile) {
