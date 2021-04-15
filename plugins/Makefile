@@ -1,7 +1,7 @@
 LOCALBASE?= /usr/local
 PLUGINDIR=$(LOCALBASE)/libexec/bhyved
 TARGET= libavahiplugin.so libhookcmdplugin.so
-CFLAGS+=-fPIC
+CFLAGS+=-Wall -fPIC
 
 .PHONY: clean install installconfig installdirs
 
