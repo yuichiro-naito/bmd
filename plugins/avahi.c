@@ -37,23 +37,24 @@ static int
 exec_avahi_publish(struct vm *vm)
 {
 	pid_t pid;
-	char *port;
-	char *args[9];
+	char buf[12];
+	char *args[6];
 	sigset_t mask;
+
+	args[0] = AVAHI_PUBLISH;
+	args[1] = "-s";
+	args[2] = vm->conf->name;
+	args[3] = "_rfb._tcp";
+	snprintf(buf,sizeof(buf), "%d", vm->conf->fbuf->port);
+	args[4] = buf;
+	args[5] = NULL;
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGINT);
 
 	pid = fork();
 	if (pid == 0) {
-		sigemptyset(&mask);
-		sigaddset(&mask, SIGINT);
 		sigprocmask(SIG_UNBLOCK, &mask, NULL);
-
-		args[0] = AVAHI_PUBLISH;
-		args[1] = "-s";
-		args[2] = vm->conf->name;
-		args[3] = "_rfb._tcp";
-		asprintf(&port, "%d", vm->conf->fbuf->port);
-		args[4] = port;
-		args[5] = NULL;
 		execv(args[0], args);
 		exit(1);
 	}
