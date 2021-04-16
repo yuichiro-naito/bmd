@@ -155,9 +155,8 @@ copy_net_conf(struct net_conf *nc)
 	y = strdup(nc->type);
 	b = strdup(nc->bridge);
 	t = (nc->tap) ? strdup(nc->tap) : NULL;
-	if (ret == NULL || y == NULL || b == NULL)
-		goto err;
-	if (nc->tap != NULL && t == NULL)
+	if (ret == NULL || y == NULL || b == NULL ||
+	    (nc->tap != NULL && t == NULL))
 		goto err;
 
 	ret->type = y;
