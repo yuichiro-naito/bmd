@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "vars.h"
+#include "conf.h"
 
 void
 free_disk_conf(struct disk_conf *c)
@@ -70,7 +70,7 @@ free_vm_conf(struct vm_conf *vc)
 }
 
 int
-add_disk_conf(struct vm_conf *conf, char *type, char *path)
+add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
 {
 	struct disk_conf *t;
 	char *y, *p;
@@ -95,7 +95,7 @@ err:
 }
 
 int
-add_iso_conf(struct vm_conf *conf, char *type, char *path)
+add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
 {
 	struct iso_conf *t;
 	char *y, *p;
@@ -120,7 +120,7 @@ err:
 }
 
 int
-add_net_conf(struct vm_conf *conf, char *type, char *bridge)
+add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
 {
 	struct net_conf *t;
 	char *y, *b;
@@ -146,7 +146,7 @@ err:
 }
 
 struct net_conf*
-copy_net_conf(struct net_conf *nc)
+copy_net_conf(const struct net_conf *nc)
 {
 	struct net_conf *ret;
 	char *y, *b, *t;
@@ -172,7 +172,7 @@ err:
 }
 
 static int
-set_string(char **var, char *value)
+set_string(char **var, const char *value)
 {
 	char *new;
 
@@ -185,42 +185,42 @@ set_string(char **var, char *value)
 }
 
 int
-set_name(struct vm_conf *conf, char *name)
+set_name(struct vm_conf *conf, const char *name)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->name, name);
 }
 
 int
-set_loadcmd(struct vm_conf *conf, char *cmd)
+set_loadcmd(struct vm_conf *conf, const char *cmd)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->loadcmd, cmd);
 }
 
 int
-set_installcmd(struct vm_conf *conf, char *cmd)
+set_installcmd(struct vm_conf *conf, const char *cmd)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->installcmd, cmd);
 }
 
 int
-set_hookcmd(struct vm_conf *conf, char *cmd)
+set_hookcmd(struct vm_conf *conf, const char *cmd)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->hookcmd, cmd);
 }
 
 int
-set_err_logfile(struct vm_conf *conf, char *name)
+set_err_logfile(struct vm_conf *conf, const char *name)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->err_logfile, name);
 }
 
 int
-set_loader(struct vm_conf *conf, char *loader)
+set_loader(struct vm_conf *conf, const char *loader)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->loader, loader);
@@ -236,14 +236,14 @@ set_loader_timeout(struct vm_conf *conf, int timeout)
 }
 
 int
-set_memory_size(struct vm_conf *conf, char *memory)
+set_memory_size(struct vm_conf *conf, const char *memory)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->memory, memory);
 }
 
 int
-set_comport(struct vm_conf *conf, char *com)
+set_comport(struct vm_conf *conf, const char *com)
 {
 	if (conf == NULL) return 0;
 	return set_string(&conf->comport, com);
@@ -307,7 +307,7 @@ set_fbuf_enable(struct fbuf *fb, bool enable)
 }
 
 int
-set_fbuf_ipaddr(struct fbuf *fb, char *ipaddr)
+set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr)
 {
 	int ret;
 	if (fb == NULL) return 0;
@@ -340,7 +340,7 @@ set_fbuf_res(struct fbuf *fb, int width, int height)
 }
 
 int
-set_fbuf_vgaconf(struct fbuf *fb, char *vga)
+set_fbuf_vgaconf(struct fbuf *fb, const char *vga)
 {
 	int ret;
 	if (fb == NULL) return 0;
@@ -359,7 +359,7 @@ set_fbuf_wait(struct fbuf *fb, int wait)
 }
 
 int
-set_fbuf_password(struct fbuf *fb, char *pass)
+set_fbuf_password(struct fbuf *fb, const char *pass)
 {
 	int ret;
 	if (fb == NULL) return 0;
@@ -489,7 +489,7 @@ compare_string(const char *a, const char *b)
 	if ((rc = compare_string((a)->t, (b)->t)) != 0) return rc
 
 int
-compare_fbuf(struct fbuf *a, struct fbuf *b)
+compare_fbuf(const struct fbuf *a, const struct fbuf *b)
 {
 	int rc;
 
@@ -506,7 +506,7 @@ compare_fbuf(struct fbuf *a, struct fbuf *b)
 }
 
 int
-compare_disk_conf(struct disk_conf *a, struct disk_conf *b)
+compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 {
 	int rc;
 
@@ -517,7 +517,7 @@ compare_disk_conf(struct disk_conf *a, struct disk_conf *b)
 }
 
 int
-compare_iso_conf(struct iso_conf *a, struct iso_conf *b)
+compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b)
 {
 	int rc;
 
@@ -528,7 +528,7 @@ compare_iso_conf(struct iso_conf *a, struct iso_conf *b)
 }
 
 int
-compare_net_conf(struct net_conf *a, struct net_conf *b)
+compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 {
 	int rc;
 
@@ -546,7 +546,7 @@ compare_net_conf(struct net_conf *a, struct net_conf *b)
 }
 
 int
-compare_vm_conf(struct vm_conf *a, struct vm_conf *b)
+compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 {
 	int rc;
 	struct disk_conf *da, *db;
