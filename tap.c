@@ -44,7 +44,7 @@ setifflags(int s, const char *name, int value)
 }
 
 int
-add_to_bridge(int s, char *bridge, char *tap)
+add_to_bridge(int s, const char *bridge, const char *tap)
 {
         struct ifdrv ifd;
         struct ifbreq req;
@@ -63,7 +63,7 @@ add_to_bridge(int s, char *bridge, char *tap)
 }
 
 int
-activate_tap(int s, char *name)
+activate_tap(int s, const char *name)
 {
 	return setifflags(s, name, IFF_UP);
 }
@@ -93,7 +93,7 @@ create_tap(int s, char **name)
 }
 
 int
-destroy_tap(int s, char *name)
+destroy_tap(int s, const char *name)
 {
         struct ifreq ifr;
 	memset(&ifr, 0, sizeof(struct ifreq));
@@ -103,7 +103,7 @@ destroy_tap(int s, char *name)
 }
 
 int
-set_tap_description(int s, char *tap, char *desc)
+set_tap_description(int s, const char *tap, char *desc)
 {
         struct ifreq ifr;
 
