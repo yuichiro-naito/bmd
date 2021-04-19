@@ -61,7 +61,8 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 struct global_conf gl_conf = {
 	"/usr/local/etc/bhyved.d",
 	"/usr/local/libexec/bhyved",
-	"/var/run/bhyved.pid"
+	"/var/run/bhyved.pid",
+	NULL
 };
 
 int
@@ -751,8 +752,15 @@ parse_opt(int argc, char *argv[])
 	FILE *fp;
 	int fg = 0;
 
-	while ((ch = getopt(argc, argv, "Ff:p:")) != -1) {
+	while ((ch = getopt(argc, argv, "b:iFf:p:")) != -1) {
 		switch(ch) {
+		case 'b':
+			gl_conf.vm_name = strdup(optarg);
+			fg = 1;
+			break;
+		case 'i':
+			gl_conf.install = 1;
+			break;
 		case 'F':
 			fg = 1;
 			break;
@@ -767,7 +775,7 @@ parse_opt(int argc, char *argv[])
 			break;
 		default:
 			fprintf(stderr,
-				"usage: %s [-F] [-f pid file] "
+				"usage: %s [-b vm name] [-F] [-f pid file] "
 				"[-p plugin directory] \n"
 				"\t[-c vm config directory]\n",
 				argv[0]);
@@ -775,16 +783,85 @@ parse_opt(int argc, char *argv[])
 		}
 	}
 
-	if ((gl_conf.foreground = fg) == 0)
+	if ((gl_conf.foreground = fg) == 0) {
 		daemon(0, 0);
 
-	fp = fopen(gl_conf.pid_path, "w");
-	if (fp) {
-		fprintf(fp, "%d\n", getpid());
-		fclose(fp);
+		fp = fopen(gl_conf.pid_path, "w");
+		if (fp) {
+			fprintf(fp, "%d\n", getpid());
+			fclose(fp);
+		}
 	}
 
 	return 0;
+}
+
+int
+direct_run()
+{
+	int fd;
+	char *path;
+	int status;
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
+	struct vm_entry *vm_ent;
+	struct vm *vm;
+
+	if (asprintf(&path, "%s/%s", gl_conf.config_dir, gl_conf.vm_name) < 0)
+		return 1;
+	fd = open(path, O_RDONLY);
+	free(path);
+	if (fd < 0) {
+		fprintf(stderr, "can not open %s/%s\n",
+			gl_conf.config_dir, gl_conf.vm_name);
+		return 1;
+	}
+	conf = parse_file(fd, gl_conf.vm_name);
+	close(fd);
+	if (conf == NULL)
+		return 1;
+	free(conf->comport);
+	conf->comport = strdup("stdio");
+	if (gl_conf.install)
+		conf->boot = INSTALL;
+
+	conf_ent = realloc(conf, sizeof(*conf_ent));
+	if (conf_ent == NULL) {
+		free_vm_conf(conf);
+		return 1;
+	}
+
+	vm_ent = create_vm_entry(conf_ent);
+	if (vm_ent == NULL) {
+		free_vm_conf(conf);
+		return 1;
+	}
+	vm = &vm_ent->vm;
+
+	if (start_vm(vm) < 0)
+		goto err;
+	call_plugins(vm_ent);
+	if (waitpid(vm->pid, &status, 0) < 0)
+		goto err;
+
+	if (vm->state == LOAD) {
+		if (exec_bhyve(vm) < 0)
+			goto err;
+		call_plugins(vm_ent);
+		if (waitpid(vm->pid, &status, 0) < 0)
+			goto err;
+	}
+
+	cleanup_vm(vm);
+	call_plugins(vm_ent);
+	free_vm_entry(vm_ent);
+	return 0;
+err:
+	cleanup_vm(vm);
+	call_plugins(vm_ent);
+	free_vm_entry(vm_ent);
+	return 1;
+
 }
 
 int
@@ -795,6 +872,9 @@ main(int argc, char *argv[])
 
 	if (parse_opt(argc, argv) < 0)
 		return 1;
+
+	if (gl_conf.vm_name != NULL)
+		return direct_run();
 
 	if (gl_conf.foreground)
 		LOG_OPEN_PERROR();

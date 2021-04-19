@@ -112,6 +112,8 @@ grub_load(struct vm *vm)
 	struct vm_conf *conf = vm->conf;
 	int len;
 	char *cmd;
+	bool doredirect = (conf->comport == NULL) ||
+		(strcasecmp(conf->comport, "stdio") != 0);
 
 	if ((len = asprintf(&cmd, "%s\nboot\n",
 			    (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd)) < 0)
@@ -136,7 +138,8 @@ grub_load(struct vm *vm)
 	} else if (pid == 0) {
 		close(ifd[0]);
 		dup2(ifd[1], 0);
-		redirect_to_com(vm);
+		if (doredirect)
+			redirect_to_com(vm);
 
 		setenv("TERM", "vt100", 1);
 		args[0] = "/usr/local/sbin/grub-bhyve";
@@ -167,34 +170,41 @@ bhyve_load(struct vm *vm)
 	char *args[9];
 	int outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
+	bool dopipe = (conf->comport == NULL) ||
+		(strcasecmp(conf->comport, "stdio") != 0);
 
-	if (pipe(outfd) < 0) {
-		ERR("can not create pipe (%s)\n", strerror(errno));
-		return -1;
-	}
+	if (dopipe) {
+		if (pipe(outfd) < 0) {
+			ERR("can not create pipe (%s)\n", strerror(errno));
+			return -1;
+		}
 
-	if (pipe(errfd) < 0) {
-		close(outfd[0]);
-		close(outfd[1]);
-		ERR("can not create pipe (%s)\n", strerror(errno));
-		return -1;
+		if (pipe(errfd) < 0) {
+			close(outfd[0]);
+			close(outfd[1]);
+			ERR("can not create pipe (%s)\n", strerror(errno));
+			return -1;
+		}
 	}
 
 	pid = fork();
 	if (pid > 0) {
-		close(outfd[1]);
-		close(errfd[1]);
-		vm->outfd = outfd[0];
-		vm->errfd = errfd[0];
+		if (dopipe) {
+			close(outfd[1]);
+			close(errfd[1]);
+			vm->outfd = outfd[0];
+			vm->errfd = errfd[0];
+		}
 		vm->pid = pid;
 		vm->state = LOAD;
 		return 0;
 	} else if (pid == 0) {
-		close(outfd[0]);
-		close(errfd[0]);
-		dup2(outfd[1], 1);
-		dup2(errfd[1], 2);
-
+		if (dopipe) {
+			close(outfd[0]);
+			close(errfd[0]);
+			dup2(outfd[1], 1);
+			dup2(errfd[1], 2);
+		}
 		args[0] = "/usr/sbin/bhyveload";
 		args[1] = "-c";
 		args[2] = (conf->comport != NULL) ? conf->comport : "stdio";
@@ -312,34 +322,42 @@ exec_bhyve(struct vm *vm)
 	char *buf = NULL;
 	size_t buf_size;
 	FILE *fp;
+	bool dopipe = ((conf->comport == NULL) ||
+		       (strcasecmp(conf->comport, "stdio") != 0));
 
-	if (pipe(outfd) < 0) {
-		ERR("can not create pipe (%s)\n", strerror(errno));
-		return -1;
-	}
+	if (dopipe) {
+		if (pipe(outfd) < 0) {
+			ERR("can not create pipe (%s)\n", strerror(errno));
+			return -1;
+		}
 
-	if (pipe(errfd) < 0) {
-		close(outfd[0]);
-		close(outfd[1]);
-		ERR("can not create pipe (%s)\n", strerror(errno));
-		return -1;
+		if (pipe(errfd) < 0) {
+			close(outfd[0]);
+			close(outfd[1]);
+			ERR("can not create pipe (%s)\n", strerror(errno));
+			return -1;
+		}
 	}
 
 	pid = fork();
 	if (pid > 0) {
 		/* parent process */
-		close(outfd[1]);
-		close(errfd[1]);
-		vm->outfd = outfd[0];
-		vm->errfd = errfd[0];
+		if (dopipe) {
+			close(outfd[1]);
+			close(errfd[1]);
+			vm->outfd = outfd[0];
+			vm->errfd = errfd[0];
+		}
 		vm->pid = pid;
 		vm->state = RUN;
 	} else if (pid == 0) {
 		/* child process */
-		close(outfd[0]);
-		close(errfd[0]);
-		dup2(outfd[1], 1);
-		dup2(errfd[1], 2);
+		if (dopipe) {
+			close(outfd[0]);
+			close(errfd[0]);
+			dup2(outfd[1], 1);
+			dup2(errfd[1], 2);
+		}
 
 		fp = open_memstream(&buf, &buf_size);
 		if (fp == NULL) {
