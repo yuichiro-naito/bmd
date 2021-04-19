@@ -365,9 +365,9 @@ exec_bhyve(struct vm *vm)
 		WRITE_STR("-A");
 		WRITE_STR("-H");
 		WRITE_STR("-w");
-		if (vm->conf->utctime == true)
+		if (conf->utctime == true)
 			WRITE_STR("-u");
-		if (vm->conf->wired_memory == true)
+		if (conf->wired_memory == true)
 			WRITE_STR("-S");
 		WRITE_STR("-c");
 		WRITE_STR(conf->ncpu);
