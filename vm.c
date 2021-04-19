@@ -364,8 +364,11 @@ exec_bhyve(struct vm *vm)
 		WRITE_STR("/usr/sbin/bhyve");
 		WRITE_STR("-A");
 		WRITE_STR("-H");
-		WRITE_STR("-u");
 		WRITE_STR("-w");
+		if (vm->conf->utctime == true)
+			WRITE_STR("-u");
+		if (vm->conf->wired_memory == true)
+			WRITE_STR("-S");
 		WRITE_STR("-c");
 		WRITE_STR(conf->ncpu);
 		WRITE_STR("-m");

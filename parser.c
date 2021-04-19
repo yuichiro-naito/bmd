@@ -418,6 +418,18 @@ parse_xhci_mouse(struct vm_conf *conf, char *val)
 	return set_mouse(conf, parse_boolean(val));
 }
 
+static int
+parse_wired_memory(struct vm_conf *conf, char *val)
+{
+	return set_wired_memory(conf, parse_boolean(val));
+}
+
+static int
+parse_utctime(struct vm_conf *conf, char *val)
+{
+	return set_utctime(conf, parse_boolean(val));
+}
+
 typedef int (*pfunc)(struct vm_conf *conf, char *val);
 
 struct parser_entry {
@@ -449,6 +461,8 @@ struct parser_entry parser_list[] = {
 	{"name", &parse_name},
 	{"ncpu", &parse_ncpu},
 	{"network", &parse_net},
+	{"utctime", &parse_utctime},
+	{"wired_memory", &parse_wired_memory},
 	{"xhci_mouse", &parse_xhci_mouse},
 };
 

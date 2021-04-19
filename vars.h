@@ -70,6 +70,8 @@ struct vm_conf {
 	struct fbuf *fbuf;
 	int loader_timeout;
 	bool mouse;
+	bool wired_memory;
+	bool utctime;
 	int ndisks;
 	int nisoes;
 	int nnets;

@@ -377,6 +377,22 @@ set_mouse(struct vm_conf *conf, bool use)
 	return 0;
 }
 
+int
+set_wired_memory(struct vm_conf *conf, bool val)
+{
+	if (conf == NULL) return 0;
+	conf->wired_memory = val;
+	return 0;
+}
+
+int
+set_utctime(struct vm_conf *conf, bool val)
+{
+	if (conf == NULL) return 0;
+	conf->utctime = val;
+	return 0;
+}
+
 struct fbuf *
 create_fbuf()
 {
@@ -420,6 +436,7 @@ create_vm_conf(char *name)
 	ret->name = name;
 	ret->nmdm = -1;
 	ret->loader_timeout = 3;
+	ret->utctime = true;
 
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
