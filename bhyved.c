@@ -775,9 +775,10 @@ parse_opt(int argc, char *argv[])
 			break;
 		default:
 			fprintf(stderr,
-				"usage: %s [-b vm name] [-F] [-f pid file] "
+				"usage: %s [-F] [-f pid file] "
 				"[-p plugin directory] \n"
-				"\t[-c vm config directory]\n",
+				"\t[-c vm config directory]\n"
+				"\t[-b vm name] [-i]\n",
 				argv[0]);
 			return -1;
 		}
