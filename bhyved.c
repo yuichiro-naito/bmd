@@ -59,8 +59,8 @@ SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
 struct global_conf gl_conf = {
-	"/usr/local/etc/bhyved.d",
-	"/usr/local/libexec/bhyved",
+	LOCALBASE "/etc/bhyved.d",
+	LOCALBASE "/libexec/bhyved",
 	"/var/run/bhyved.pid",
 	NULL
 };

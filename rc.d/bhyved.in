@@ -10,7 +10,7 @@
 name="bhyved"
 desc="bhyve management daemon"
 rcvar="bhyved_enable"
-command="/usr/local/sbin/${name}"
+command="%%LOCALBASE%%/sbin/${name}"
 pidfile="/var/run/bhyved.pid"
 extra_commands="reload"
 required_modules="vmm"
