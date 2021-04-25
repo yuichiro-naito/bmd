@@ -1,18 +1,20 @@
-#include <errno.h>
 #include <sys/queue.h>
-#include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
+#include <sys/wait.h>
+
+#include <errno.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "vars.h"
+#include <unistd.h>
+
 #include "conf.h"
-#include "tap.h"
 #include "log.h"
+#include "tap.h"
+#include "vars.h"
 #include "vm.h"
 
 static int
@@ -24,7 +26,7 @@ redirect_to_com(struct vm *vm)
 	if ((com = vm->conf->comport) == NULL)
 		com = "/dev/null";
 
-	fd = open(com, O_WRONLY|O_NONBLOCK);
+	fd = open(com, O_WRONLY | O_NONBLOCK);
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
 		return -1;
@@ -40,9 +42,8 @@ get_fbuf_option(int pcid, struct fbuf *fb)
 {
 	char *ret;
 	if (asprintf(&ret, "%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s,password=%s",
-		     pcid, fb->ipaddr, fb->port, fb->width, fb->height,
-		     fb->vgaconf, fb->wait ? ",wait" : "",
-		     fb->password) < 0)
+		pcid, fb->ipaddr, fb->port, fb->width, fb->height, fb->vgaconf,
+		fb->wait ? ",wait" : "", fb->password) < 0)
 		return NULL;
 	return ret;
 }
@@ -57,8 +58,8 @@ write_mapfile(struct vm *vm)
 	struct iso_conf *ic;
 	struct vm_conf *conf;
 
-	if (asprintf(&fn, "/tmp/bhyved.%s.%d.XXXXXX",
-		     vm->conf->name, getpid()) < 0)
+	if (asprintf(&fn, "/tmp/bhyved.%s.%d.XXXXXX", vm->conf->name,
+		getpid()) < 0)
 		return -1;
 
 	fd = mkstemp(fn);
@@ -83,12 +84,12 @@ write_mapfile(struct vm *vm)
 	conf = vm->conf;
 
 	i = 0;
-	STAILQ_FOREACH(dc, &conf->disks, next)
+	STAILQ_FOREACH (dc, &conf->disks, next)
 		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
 			goto err;
 
 	i = 0;
-	STAILQ_FOREACH(ic, &conf->isoes, next)
+	STAILQ_FOREACH (ic, &conf->isoes, next)
 		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
 			goto err;
 
@@ -100,7 +101,6 @@ err:
 	unlink(fn);
 	free(fn);
 	return -1;
-
 }
 
 int
@@ -113,10 +113,11 @@ grub_load(struct vm *vm)
 	int len;
 	char *cmd;
 	bool doredirect = (conf->comport == NULL) ||
-		(strcasecmp(conf->comport, "stdio") != 0);
+	    (strcasecmp(conf->comport, "stdio") != 0);
 
 	if ((len = asprintf(&cmd, "%s\nboot\n",
-			    (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd)) < 0)
+		 (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd)) <
+	    0)
 		return -1;
 
 	if (pipe(ifd) < 0) {
@@ -133,7 +134,7 @@ grub_load(struct vm *vm)
 		vm->infd = ifd[0];
 		vm->outfd = -1;
 		vm->errfd = -1;
-		write(ifd[0], cmd, len+1);
+		write(ifd[0], cmd, len + 1);
 		free(cmd);
 	} else if (pid == 0) {
 		close(ifd[0]);
@@ -152,7 +153,7 @@ grub_load(struct vm *vm)
 		args[7] = conf->name;
 		args[8] = NULL;
 
-		execv(args[0],args);
+		execv(args[0], args);
 		ERR("can not exec %s\n", args[0]);
 		exit(1);
 	} else {
@@ -171,7 +172,7 @@ bhyve_load(struct vm *vm)
 	int outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
 	bool dopipe = (conf->comport == NULL) ||
-		(strcasecmp(conf->comport, "stdio") != 0);
+	    (strcasecmp(conf->comport, "stdio") != 0);
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -211,11 +212,13 @@ bhyve_load(struct vm *vm)
 		args[3] = "-m";
 		args[4] = conf->memory;
 		args[5] = "-d";
-		args[6] = (conf->boot == INSTALL) ? STAILQ_FIRST(&conf->isoes)->path : STAILQ_FIRST(&conf->disks)->path;
+		args[6] = (conf->boot == INSTALL) ?
+			  STAILQ_FIRST(&conf->isoes)->path :
+			  STAILQ_FIRST(&conf->disks)->path;
 		args[7] = conf->name;
 		args[8] = NULL;
 
-		execv(args[0],args);
+		execv(args[0], args);
 		ERR("can't exec %s\n", args[0]);
 		exit(1);
 	} else {
@@ -236,7 +239,7 @@ remove_taps(struct vm *vm)
 	if (s < 0)
 		return -1;
 
-	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc) {
+	STAILQ_FOREACH_SAFE (nc, &vm->taps, next, nnc) {
 		if (nc->tap != NULL)
 			destroy_tap(s, nc->tap);
 		free_net_conf(nc);
@@ -256,7 +259,7 @@ activate_taps(struct vm *vm)
 	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (s < 0)
 		return -1;
-	STAILQ_FOREACH(nc, &vm->taps, next)
+	STAILQ_FOREACH (nc, &vm->taps, next)
 		if (activate_tap(s, nc->tap) < 0)
 			ERR("failed to up %s\n", nc->tap);
 	close(s);
@@ -271,7 +274,7 @@ assign_taps(struct vm *vm)
 	char *desc;
 	struct vm_conf *conf = vm->conf;
 
-	STAILQ_FOREACH(nc, &conf->nets, next) {
+	STAILQ_FOREACH (nc, &conf->nets, next) {
 		nnc = copy_net_conf(nc);
 		if (nnc == NULL)
 			goto err;
@@ -283,8 +286,8 @@ assign_taps(struct vm *vm)
 		goto err;
 
 	i = 0;
-	STAILQ_FOREACH(nc, &vm->taps, next) {
-		if (asprintf(&desc,"vm-%s-%d", conf->name, i++) < 0)
+	STAILQ_FOREACH (nc, &vm->taps, next) {
+		if (asprintf(&desc, "vm-%s-%d", conf->name, i++) < 0)
 			continue;
 		if (create_tap(s, &nc->tap) < 0 ||
 		    set_tap_description(s, nc->tap, desc) < 0 ||
@@ -302,7 +305,7 @@ assign_taps(struct vm *vm)
 	return 0;
 err:
 	ERR("%s\n", "failed to create tap");
-	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc)
+	STAILQ_FOREACH_SAFE (nc, &vm->taps, next, nnc)
 		free_net_conf(nc);
 	STAILQ_INIT(&vm->taps);
 	return -1;
@@ -323,7 +326,7 @@ exec_bhyve(struct vm *vm)
 	size_t buf_size;
 	FILE *fp;
 	bool dopipe = ((conf->comport == NULL) ||
-		       (strcasecmp(conf->comport, "stdio") != 0));
+	    (strcasecmp(conf->comport, "stdio") != 0));
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -366,18 +369,18 @@ exec_bhyve(struct vm *vm)
 		}
 		flockfile(fp);
 
-#define WRITE_STR(str)						\
-		do {						\
-			char *p = (str);			\
-			fwrite_unlocked(&p, sizeof(char*), 1, fp);	\
-		} while(0)
+#define WRITE_STR(str)                                      \
+	do {                                                \
+		char *p = (str);                            \
+		fwrite_unlocked(&p, sizeof(char *), 1, fp); \
+	} while (0)
 
-#define WRITE_FMT(fmt, ...)					\
-		do {						\
-			char *p;				\
-			asprintf(&p, (fmt), __VA_ARGS__);	\
-			fwrite_unlocked(&p, sizeof(char*), 1, fp);	\
-		} while(0)
+#define WRITE_FMT(fmt, ...)                                 \
+	do {                                                \
+		char *p;                                    \
+		asprintf(&p, (fmt), __VA_ARGS__);           \
+		fwrite_unlocked(&p, sizeof(char *), 1, fp); \
+	} while (0)
 
 		WRITE_STR("/usr/sbin/bhyve");
 		WRITE_STR("-A");
@@ -398,7 +401,8 @@ exec_bhyve(struct vm *vm)
 
 		if (strcasecmp(conf->loader, "uefi") == 0) {
 			WRITE_STR("-l");
-			WRITE_STR("bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd");
+			WRITE_STR(
+			    "bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd");
 		}
 		WRITE_STR("-s");
 		WRITE_STR("0,hostbridge");
@@ -406,15 +410,15 @@ exec_bhyve(struct vm *vm)
 		WRITE_STR("1,lpc");
 
 		pcid = 2;
-		STAILQ_FOREACH(dc, &conf->disks, next) {
+		STAILQ_FOREACH (dc, &conf->disks, next) {
 			WRITE_STR("-s");
 			WRITE_FMT("%d,%s,%s", pcid++, dc->type, dc->path);
 		}
-		STAILQ_FOREACH(ic, &conf->isoes, next) {
+		STAILQ_FOREACH (ic, &conf->isoes, next) {
 			WRITE_STR("-s");
 			WRITE_FMT("%d,%s,%s", pcid++, ic->type, ic->path);
 		}
-		STAILQ_FOREACH(nc, &vm->taps, next) {
+		STAILQ_FOREACH (nc, &vm->taps, next) {
 			WRITE_STR("-s");
 			WRITE_FMT("%d,%s,%s", pcid++, nc->type, nc->tap);
 		}
@@ -455,8 +459,7 @@ start_vm(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
 
-	if (STAILQ_FIRST(&vm->taps) == NULL &&
-	    assign_taps(vm) < 0)
+	if (STAILQ_FIRST(&vm->taps) == NULL && assign_taps(vm) < 0)
 		return -1;
 
 	if (activate_taps(vm) < 0)
@@ -466,8 +469,7 @@ start_vm(struct vm *vm)
 		if (bhyve_load(vm) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "grub") == 0) {
-		if (write_mapfile(vm) < 0 ||
-		    (grub_load(vm)) < 0)
+		if (write_mapfile(vm) < 0 || (grub_load(vm)) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
 		if (exec_bhyve(vm) < 0)
@@ -486,12 +488,12 @@ err:
 void
 cleanup_vm(struct vm *vm)
 {
-#define VM_CLOSE_FD(fd)				\
-	do {					\
-		if (vm->fd != -1) {		\
-			close(vm->fd);		\
-			vm->fd = -1;		\
-		}				\
+#define VM_CLOSE_FD(fd)                \
+	do {                           \
+		if (vm->fd != -1) {    \
+			close(vm->fd); \
+			vm->fd = -1;   \
+		}                      \
 	} while (0)
 
 	VM_CLOSE_FD(infd);
@@ -506,5 +508,5 @@ cleanup_vm(struct vm *vm)
 		free(vm->mapfile);
 		vm->mapfile = NULL;
 	}
-	vm->state=TERMINATE;
+	vm->state = TERMINATE;
 }

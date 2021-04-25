@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+
 #include "vars.h"
 
 void free_disk_conf(struct disk_conf *c);

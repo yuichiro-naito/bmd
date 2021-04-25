@@ -1,14 +1,17 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/sockio.h>
-#include <net/if.h>
+
 #include <net/ethernet.h>
+#include <net/if.h>
 #include <net/if_bridgevar.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include "tap.h"
+
 #include "log.h"
+#include "tap.h"
 
 static int
 getifflags(int s, const char *ifname)
@@ -16,7 +19,7 @@ getifflags(int s, const char *ifname)
 	struct ifreq my_ifr;
 
 	memset(&my_ifr, 0, sizeof(my_ifr));
-	(void) strlcpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
+	(void)strlcpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
 	if (ioctl(s, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0) {
 		return -1;
 	}
@@ -37,7 +40,7 @@ setifflags(int s, const char *name, int value)
 	} else
 		flags |= value;
 	memset(&my_ifr, 0, sizeof(my_ifr));
-	(void) strlcpy(my_ifr.ifr_name, name, sizeof(my_ifr.ifr_name));
+	(void)strlcpy(my_ifr.ifr_name, name, sizeof(my_ifr.ifr_name));
 	my_ifr.ifr_flags = flags & 0xffff;
 	my_ifr.ifr_flagshigh = flags >> 16;
 	return (ioctl(s, SIOCSIFFLAGS, (caddr_t)&my_ifr));
@@ -46,13 +49,13 @@ setifflags(int s, const char *name, int value)
 int
 add_to_bridge(int s, const char *bridge, const char *tap)
 {
-        struct ifdrv ifd;
-        struct ifbreq req;
+	struct ifdrv ifd;
+	struct ifbreq req;
 
 	memset(&ifd, 0, sizeof(ifd));
 	memset(&req, 0, sizeof(req));
 
-        strlcpy(req.ifbr_ifsname, tap, sizeof(req.ifbr_ifsname));
+	strlcpy(req.ifbr_ifsname, tap, sizeof(req.ifbr_ifsname));
 
 	strlcpy(ifd.ifd_name, bridge, sizeof(ifd.ifd_name));
 	ifd.ifd_cmd = BRDGADD;
@@ -95,7 +98,7 @@ create_tap(int s, char **name)
 int
 destroy_tap(int s, const char *name)
 {
-        struct ifreq ifr;
+	struct ifreq ifr;
 	memset(&ifr, 0, sizeof(struct ifreq));
 	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
@@ -105,7 +108,7 @@ destroy_tap(int s, const char *name)
 int
 set_tap_description(int s, const char *tap, char *desc)
 {
-        struct ifreq ifr;
+	struct ifreq ifr;
 
 	memset(&ifr, 0, sizeof(struct ifreq));
 	strncpy(ifr.ifr_name, tap, sizeof(ifr.ifr_name));
@@ -116,7 +119,6 @@ set_tap_description(int s, const char *tap, char *desc)
 		ifr.ifr_buffer.length = 0;
 	} else
 		ifr.ifr_buffer.buffer = desc;
-
 
 	return (ioctl(s, SIOCSIFDESCR, (caddr_t)&ifr));
 }

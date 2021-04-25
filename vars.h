@@ -3,7 +3,12 @@
 
 #include <sys/types.h>
 #include <sys/queue.h>
+
 #include <stdbool.h>
+
+#ifndef LOCALBASE
+#define LOCALBASE "/usr/local"
+#endif
 
 struct global_conf {
 	char *config_dir;
@@ -36,14 +41,7 @@ struct net_conf {
 	char *tap;
 };
 
-enum BOOT {
-	NO,
-	YES,
-	ONESHOT,
-	INSTALL,
-	ALWAYS,
-	REBOOT
-};
+enum BOOT { NO, YES, ONESHOT, INSTALL, ALWAYS, REBOOT };
 
 struct fbuf {
 	bool enable;
@@ -83,13 +81,13 @@ struct vm_conf {
 };
 
 enum STATE {
-	INIT,         // initial state
-	LOAD,         // bhyveload or grub-bhyve
-	RUN,          // bhyve is running
-	TERMINATE,    // bhyve is terminated
-	STOP,         // send SIGTERM to stop bhyve
-	REMOVE,       // send SIGTERM to stop bhyve and remove vm_entry
-	RESTART       // send SIGTERM and need rebooting
+	INIT,	   // initial state
+	LOAD,	   // bhyveload or grub-bhyve
+	RUN,	   // bhyve is running
+	TERMINATE, // bhyve is terminated
+	STOP,	   // send SIGTERM to stop bhyve
+	REMOVE,	   // send SIGTERM to stop bhyve and remove vm_entry
+	RESTART	   // send SIGTERM and need rebooting
 };
 
 struct vm {
@@ -110,9 +108,9 @@ struct vm {
 typedef struct plugin_desc {
 	int version;
 	char *name;
-	int (*initialize)(struct global_conf*);
-	void (*finalize)(struct global_conf*);
-	void (*on_status_change)(struct vm*, void**);
+	int (*initialize)(struct global_conf *);
+	void (*finalize)(struct global_conf *);
+	void (*on_status_change)(struct vm *, void **);
 } PLUGIN_DESC;
 
 #endif

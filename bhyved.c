@@ -1,25 +1,26 @@
-#include <errno.h>
-#include <sys/wait.h>
-#include <sys/event.h>
 #include <sys/dirent.h>
+#include <sys/event.h>
 #include <sys/queue.h>
 #include <sys/signal.h>
+#include <sys/wait.h>
+
+#include <dirent.h>
+#include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
-#include <dlfcn.h>
+#include <unistd.h>
 
+#include "conf.h"
+#include "log.h"
+#include "parser.h"
 #include "vars.h"
 #include "vm.h"
-#include "conf.h"
-#include "parser.h"
-#include "log.h"
 
-#define MAX(x,y)      ((x) > (y) ? (x) : (y))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 struct plugin_entry {
 	struct plugin_desc desc;
@@ -53,17 +54,12 @@ struct vm_entry {
 	SLIST_ENTRY(vm_entry) next;
 };
 
-
 SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
-struct global_conf gl_conf = {
-	LOCALBASE "/etc/bhyved.d",
-	LOCALBASE "/libexec/bhyved",
-	"/var/run/bhyved.pid",
-	NULL
-};
+struct global_conf gl_conf = { LOCALBASE "/etc/bhyved.d",
+	LOCALBASE "/libexec/bhyved", "/var/run/bhyved.pid", NULL };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -72,11 +68,11 @@ wait_for_reading(struct vm_entry *vm_ent)
 	struct kevent ev[2];
 
 	if (vm_ent->vm.outfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.outfd, EVFILT_READ, EV_ADD,
-		       0, 0, vm_ent);
+		EV_SET(&ev[i++], vm_ent->vm.outfd, EVFILT_READ, EV_ADD, 0, 0,
+		    vm_ent);
 	if (vm_ent->vm.errfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_ADD,
-		       0, 0, vm_ent);
+		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_ADD, 0, 0,
+		    vm_ent);
 retry:
 	if (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0) {
 		if (errno == EINTR)
@@ -95,11 +91,11 @@ stop_waiting_fd(struct vm_entry *vm_ent)
 	struct kevent ev[2];
 
 	if (vm_ent->vm.outfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.outfd, EVFILT_READ, EV_DELETE,
-		       0, 0, vm_ent);
+		EV_SET(&ev[i++], vm_ent->vm.outfd, EVFILT_READ, EV_DELETE, 0, 0,
+		    vm_ent);
 	if (vm_ent->vm.errfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_DELETE,
-		       0, 0, vm_ent);
+		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_DELETE, 0, 0,
+		    vm_ent);
 retry:
 	if (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0) {
 		if (errno == EINTR)
@@ -122,8 +118,8 @@ set_timer(struct vm_entry *vm_ent, int second)
 	static int id = 1;
 	struct kevent ev;
 
-	EV_SET(&ev, id++, EVFILT_TIMER, EV_ADD|EV_ONESHOT,
-	       NOTE_SECONDS, second, vm_ent);
+	EV_SET(&ev, id++, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
+	    second, vm_ent);
 retry:
 	if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0) {
 		if (errno == EINTR)
@@ -139,8 +135,8 @@ wait_for_process(struct vm_entry *vm_ent)
 {
 	struct kevent ev;
 
-	EV_SET(&ev, vm_ent->vm.pid, EVFILT_PROC, EV_ADD|EV_ONESHOT,
-	       NOTE_EXIT, 0, vm_ent);
+	EV_SET(&ev, vm_ent->vm.pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	    0, vm_ent);
 retry:
 	if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0) {
 		if (errno == EINTR)
@@ -169,16 +165,15 @@ load_plugins()
 
 	while ((ent = readdir(d)) != NULL) {
 		fd = -1;
-		if (ent->d_namlen < 4 ||
-		    ent->d_name[0] == '.' ||
-		    strcmp(&ent->d_name[ent->d_namlen-3], ".so") != 0 ||
-		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) < 0 ||
+		if (ent->d_namlen < 4 || ent->d_name[0] == '.' ||
+		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0 ||
+		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) <
+			0 ||
 		    ((hdl = fdlopen(fd, RTLD_LAZY)) == NULL))
 			goto next;
 
 		desc = dlsym(hdl, "plugin_desc");
-		if (desc == NULL ||
-		    desc->version != PLUGIN_VERSION ||
+		if (desc == NULL || desc->version != PLUGIN_VERSION ||
 		    (desc->initialize && (*(desc->initialize))(&gl_conf) < 0) ||
 		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
 			dlclose(hdl);
@@ -201,7 +196,7 @@ remove_plugins()
 {
 	struct plugin_entry *pl_ent, *pln;
 
-	SLIST_FOREACH_SAFE(pl_ent, &plugin_list, next, pln) {
+	SLIST_FOREACH_SAFE (pl_ent, &plugin_list, next, pln) {
 		if (pl_ent->desc.finalize)
 			(*pl_ent->desc.finalize)(&gl_conf);
 		dlclose(pl_ent->handle);
@@ -217,9 +212,10 @@ call_plugins(struct vm_entry *vm_ent)
 	struct plugin_data *pl_data;
 	struct vm *vm = &vm_ent->vm;
 
-	SLIST_FOREACH(pl_data, &vm_ent->pl_data, next)
+	SLIST_FOREACH (pl_data, &vm_ent->pl_data, next)
 		if (pl_data->ent->desc.on_status_change)
-			(*(pl_data->ent->desc.on_status_change))(vm, &pl_data->data);
+			(*(pl_data->ent->desc.on_status_change))(vm,
+			    &pl_data->data);
 }
 
 void
@@ -228,9 +224,9 @@ free_vm_entry(struct vm_entry *vm_ent)
 	struct plugin_data *pl_data, *pln;
 	struct net_conf *nc, *nnc;
 
-	SLIST_FOREACH_SAFE(pl_data, &vm_ent->pl_data, next, pln)
+	SLIST_FOREACH_SAFE (pl_data, &vm_ent->pl_data, next, pln)
 		free(pl_data);
-	STAILQ_FOREACH_SAFE(nc, &vm_ent->vm.taps, next, nnc)
+	STAILQ_FOREACH_SAFE (nc, &vm_ent->vm.taps, next, nnc)
 		free_net_conf(nc);
 	free(vm_ent->vm.mapfile);
 	free_vm_conf(vm_ent->vm.conf);
@@ -242,7 +238,7 @@ free_vm_list()
 {
 	struct vm_entry *vm_ent, *vmn;
 
-	SLIST_FOREACH_SAFE(vm_ent, &vm_list, next, vmn)
+	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
 		free_vm_entry(vm_ent);
 	SLIST_INIT(&vm_list);
 }
@@ -265,8 +261,7 @@ load_config_files(struct vm_conf_head *list)
 	rewinddir(d);
 
 	while ((ent = readdir(d)) != NULL) {
-		if (ent->d_namlen > 0 &&
-		    ent->d_name[0] == '.')
+		if (ent->d_namlen > 0 && ent->d_name[0] == '.')
 			continue;
 		if ((fd = openat(gl_conf.config_fd, ent->d_name, O_RDONLY)) < 0)
 			continue;
@@ -287,7 +282,7 @@ load_config_files(struct vm_conf_head *list)
 	return 0;
 }
 
-struct vm_entry*
+struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
 	struct vm_entry *vm_ent;
@@ -310,7 +305,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	vm->logfd = -1;
 	SLIST_INIT(&vm_ent->pl_data);
 	STAILQ_INIT(&vm->taps);
-	SLIST_FOREACH(pl_ent, &plugin_list, next) {
+	SLIST_FOREACH (pl_ent, &plugin_list, next) {
 		pl_data = calloc(1, sizeof(*pl_data));
 		if (pl_data == NULL) {
 			free(vm_ent);
@@ -343,8 +338,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	if (wait_for_process(vm_ent) < 0 ||
-	    wait_for_reading(vm_ent) < 0) {
+	if (wait_for_process(vm_ent) < 0 || wait_for_reading(vm_ent) < 0) {
 		ERR("failed to set kevent for vm %s\n", name);
 		/*
 		 * Force to kill bhyve.
@@ -363,7 +357,8 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	vm->logfd = open(vm->conf->err_logfile, O_WRONLY|O_APPEND|O_CREAT, 0644);
+	vm->logfd = open(vm->conf->err_logfile, O_WRONLY | O_APPEND | O_CREAT,
+	    0644);
 
 	return 0;
 }
@@ -377,8 +372,8 @@ start_virtual_machines()
 	struct kevent sigev[3];
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
-	EV_SET(&sigev[1], SIGINT,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
-	EV_SET(&sigev[2], SIGHUP,  EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 retry:
 	if (kevent(gl_conf.kq, sigev, 3, NULL, 0, NULL) < 0) {
 		if (errno == EINTR)
@@ -386,7 +381,7 @@ retry:
 		return -1;
 	}
 
-	SLIST_FOREACH(conf_ent, &vm_conf_list, next) {
+	SLIST_FOREACH (conf_ent, &vm_conf_list, next) {
 		vm_ent = create_vm_entry(conf_ent);
 		if (vm_ent == NULL)
 			return -1;
@@ -395,7 +390,8 @@ retry:
 			continue;
 		if (conf->boot_delay > 0) {
 			if (set_timer(vm_ent, conf->boot_delay) < 0)
-				ERR("failed to set boot delay timer for vm %s\n", conf->name);
+				ERR("failed to set boot delay timer for vm %s\n",
+				    conf->name);
 			continue;
 		}
 		start_virtual_machine(vm_ent);
@@ -404,12 +400,12 @@ retry:
 	return 0;
 }
 
-struct vm_entry*
+struct vm_entry *
 lookup_vm(struct vm_conf *conf)
 {
 	struct vm_entry *vm_ent;
 
-	SLIST_FOREACH(vm_ent, &vm_list, next)
+	SLIST_FOREACH (vm_ent, &vm_list, next)
 		if (strcmp(vm_ent->vm.conf->name, conf->name) == 0)
 			return vm_ent;
 	return NULL;
@@ -428,10 +424,10 @@ reload_virtual_machines()
 		return -1;
 
 	/* make sure new_conf is NULL */
-	SLIST_FOREACH(vm_ent, &vm_list, next)
+	SLIST_FOREACH (vm_ent, &vm_list, next)
 		vm_ent->new_conf = NULL;
 
-	SLIST_FOREACH(conf_ent, &new_list, next) {
+	SLIST_FOREACH (conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
 		vm_ent = lookup_vm(conf);
 		if (vm_ent == NULL) {
@@ -450,17 +446,15 @@ reload_virtual_machines()
 			vm_ent->new_conf = conf;
 			continue;
 		} else if (vm_ent->vm.logfd != -1 &&
-			   vm_ent->vm.conf->err_logfile != NULL) {
+		    vm_ent->vm.conf->err_logfile != NULL) {
 			close(vm_ent->vm.logfd);
 			vm_ent->vm.logfd = open(vm_ent->vm.conf->err_logfile,
-						O_WRONLY|O_APPEND|O_CREAT,
-						0644);
+			    O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
 		vm = &vm_ent->vm;
 		switch (conf->boot) {
 		case NO:
-			if (vm->state == LOAD ||
-			    vm->state == RUN) {
+			if (vm->state == LOAD || vm->state == RUN) {
 				INFO("stop vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
 				vm->state = STOP;
@@ -469,8 +463,7 @@ reload_virtual_machines()
 			break;
 		case ALWAYS:
 		case YES:
-			if (vm->state == INIT ||
-			    vm->state == TERMINATE) {
+			if (vm->state == INIT || vm->state == TERMINATE) {
 				start_virtual_machine(vm_ent);
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
@@ -479,19 +472,16 @@ reload_virtual_machines()
 			// do nothing
 			break;
 		case INSTALL:
-			if (vm->state == INIT ||
-			    vm->state == TERMINATE) {
+			if (vm->state == INIT || vm->state == TERMINATE) {
 				INFO("install vm %s\n", conf->name);
 				start_virtual_machine(vm_ent);
 			}
 			break;
 		case REBOOT:
-			if (vm->state == INIT ||
-			    vm->state == TERMINATE) {
+			if (vm->state == INIT || vm->state == TERMINATE) {
 				start_virtual_machine(vm_ent);
-			} else if ((vm->state == LOAD ||
-				    vm->state == RUN) &&
-				   compare_vm_conf(conf, vm->conf) != 0) {
+			} else if ((vm->state == LOAD || vm->state == RUN) &&
+			    compare_vm_conf(conf, vm->conf) != 0) {
 				INFO("reboot vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
 				vm->state = RESTART;
@@ -502,10 +492,10 @@ reload_virtual_machines()
 		vm_ent->new_conf = conf;
 	}
 
-	SLIST_FOREACH(vm_ent, &vm_list, next)
+	SLIST_FOREACH (vm_ent, &vm_list, next)
 		if (vm_ent->new_conf == NULL) {
 			vm = &vm_ent->vm;
-			switch(vm->state) {
+			switch (vm->state) {
 			case LOAD:
 			case RUN:
 				INFO("stop vm %s\n", vm->conf->name);
@@ -519,18 +509,17 @@ reload_virtual_machines()
 				   to keep it until actually freed. */
 				if (SLIST_FIRST(&vm_conf_list))
 					SLIST_REMOVE(&vm_conf_list,
-						     (struct vm_conf_entry*)vm->conf,
-						     vm_conf_entry,
-						     next);
+					    (struct vm_conf_entry *)vm->conf,
+					    vm_conf_entry, next);
 				break;
 			default:
 				if (SLIST_FIRST(&vm_list))
-					SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+					SLIST_REMOVE(&vm_list, vm_ent, vm_entry,
+					    next);
 				if (SLIST_FIRST(&vm_conf_list))
 					SLIST_REMOVE(&vm_conf_list,
-						     (struct vm_conf_entry*)vm->conf,
-						     vm_conf_entry,
-						     next);
+					    (struct vm_conf_entry *)vm->conf,
+					    vm_conf_entry, next);
 				free_vm_entry(vm_ent);
 			}
 
@@ -539,7 +528,7 @@ reload_virtual_machines()
 			vm_ent->new_conf = NULL;
 		}
 
-	SLIST_FOREACH_SAFE(conf_ent, &vm_conf_list, next, cen)
+	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
 		free_vm_conf(&conf_ent->conf);
 
 	vm_conf_list = new_list;
@@ -547,7 +536,7 @@ reload_virtual_machines()
 	return 0;
 }
 
-#define BUFSIZE (4*1024)
+#define BUFSIZE (4 * 1024)
 
 int
 event_loop()
@@ -565,7 +554,8 @@ event_loop()
 
 wait:
 	if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
-		if (errno == EINTR) goto wait;
+		if (errno == EINTR)
+			goto wait;
 		ERR("kevent failure (%s)\n", strerror(errno));
 		free(buf);
 		return -1;
@@ -580,7 +570,8 @@ wait:
 				break;
 		if (size == 0) {
 			close(ev.ident);
-			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
+			    NULL);
 			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
 			if (vm->outfd == ev.ident)
 				vm->outfd = -1;
@@ -590,7 +581,8 @@ wait:
 		} else if (size > 0 && vm->logfd != -1) {
 			n = 0;
 			while (n < size) {
-				if ((rc = write(vm->logfd, buf + n, size - n)) < 0)
+				if ((rc = write(vm->logfd, buf + n, size - n)) <
+				    0)
 					if (errno != EINTR && errno != EAGAIN)
 						break;
 				if (rc > 0)
@@ -602,10 +594,8 @@ wait:
 		if (vm->state == INIT) {
 			/* delayed boot */
 			start_virtual_machine(vm_ent);
-		} else if (vm->state == LOAD ||
-			   vm->state == STOP ||
-			   vm->state == REMOVE ||
-			   vm->state == RESTART) {
+		} else if (vm->state == LOAD || vm->state == STOP ||
+		    vm->state == REMOVE || vm->state == RESTART) {
 			/* loader timout or stop timeout */
 			/* force to kill process */
 			ERR("timeout kill vm %s\n", vm->conf->name);
@@ -632,13 +622,11 @@ wait:
 				close(vm->errfd);
 				vm->errfd = -1;
 			}
-			if (WIFEXITED(status) &&
-			    WEXITSTATUS(status) == 0)
+			if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 				start_virtual_machine(vm_ent);
 			else {
 				ERR("failed loading vm %s (status:%d)\n",
-				    vm->conf->name,
-				    WEXITSTATUS(status));
+				    vm->conf->name, WEXITSTATUS(status));
 				stop_waiting_fd(vm_ent);
 				cleanup_vm(vm);
 				call_plugins(vm_ent);
@@ -653,10 +641,9 @@ wait:
 			set_timer(vm_ent, MAX(vm->conf->boot_delay, 3));
 			break;
 		case RUN:
-			if (vm->conf->boot != INSTALL &&
-			    WIFEXITED(status) &&
+			if (vm->conf->boot != INSTALL && WIFEXITED(status) &&
 			    (vm->conf->boot == ALWAYS ||
-			     WEXITSTATUS(status) == 0)) {
+				WEXITSTATUS(status) == 0)) {
 				start_virtual_machine(vm_ent);
 				break;
 			}
@@ -711,7 +698,7 @@ stop_virtual_machines()
 	struct vm_entry *vm_ent;
 	int status, count = 0;
 
-	SLIST_FOREACH(vm_ent, &vm_list, next) {
+	SLIST_FOREACH (vm_ent, &vm_list, next) {
 		vm = &vm_ent->vm;
 		if (vm->state == LOAD || vm->state == RUN) {
 			count++;
@@ -721,7 +708,8 @@ stop_virtual_machines()
 
 	while (count > 0) {
 		if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
-			if (errno == EINTR) continue;
+			if (errno == EINTR)
+				continue;
 			return -1;
 		}
 		if (ev.filter == EVFILT_PROC) {
@@ -753,7 +741,7 @@ parse_opt(int argc, char *argv[])
 	int fg = 0;
 
 	while ((ch = getopt(argc, argv, "b:iFf:p:")) != -1) {
-		switch(ch) {
+		switch (ch) {
 		case 'b':
 			gl_conf.vm_name = strdup(optarg);
 			fg = 1;
@@ -775,11 +763,11 @@ parse_opt(int argc, char *argv[])
 			break;
 		default:
 			fprintf(stderr,
-				"usage: %s [-F] [-f pid file] "
-				"[-p plugin directory] \n"
-				"\t[-c vm config directory]\n"
-				"\t[-b vm name] [-i]\n",
-				argv[0]);
+			    "usage: %s [-F] [-f pid file] "
+			    "[-p plugin directory] \n"
+			    "\t[-c vm config directory]\n"
+			    "\t[-b vm name] [-i]\n",
+			    argv[0]);
 			return -1;
 		}
 	}
@@ -813,8 +801,8 @@ direct_run()
 	fd = open(path, O_RDONLY);
 	free(path);
 	if (fd < 0) {
-		fprintf(stderr, "can not open %s/%s\n",
-			gl_conf.config_dir, gl_conf.vm_name);
+		fprintf(stderr, "can not open %s/%s\n", gl_conf.config_dir,
+		    gl_conf.vm_name);
 		return 1;
 	}
 	conf = parse_file(fd, gl_conf.vm_name);
@@ -862,7 +850,6 @@ err:
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	return 1;
-
 }
 
 int
@@ -896,14 +883,14 @@ main(int argc, char *argv[])
 	}
 	gl_conf.kq = fd;
 
-	fd = open(gl_conf.config_dir, O_DIRECTORY|O_RDONLY);
+	fd = open(gl_conf.config_dir, O_DIRECTORY | O_RDONLY);
 	if (fd < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
 		return 1;
 	}
 	gl_conf.config_fd = fd;
 
-	fd = open(gl_conf.plugin_dir, O_DIRECTORY|O_RDONLY);
+	fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY);
 	if (fd < 0) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return 1;
@@ -912,8 +899,7 @@ main(int argc, char *argv[])
 
 	INFO("%s\n", "start daemon");
 
-	if (load_plugins() < 0 ||
-	    load_config_files(&vm_conf_list) < 0 ||
+	if (load_plugins() < 0 || load_config_files(&vm_conf_list) < 0 ||
 	    start_virtual_machines())
 		return 1;
 

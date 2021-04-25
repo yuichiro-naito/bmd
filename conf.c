@@ -1,14 +1,17 @@
 #include <sys/queue.h>
+
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
 #include "conf.h"
 
 void
 free_disk_conf(struct disk_conf *c)
 {
-	if (c == NULL) return;
+	if (c == NULL)
+		return;
 	free(c->type);
 	free(c->path);
 	free(c);
@@ -17,7 +20,8 @@ free_disk_conf(struct disk_conf *c)
 void
 free_iso_conf(struct iso_conf *c)
 {
-	if (c == NULL) return;
+	if (c == NULL)
+		return;
 	free(c->type);
 	free(c->path);
 	free(c);
@@ -26,7 +30,8 @@ free_iso_conf(struct iso_conf *c)
 void
 free_net_conf(struct net_conf *c)
 {
-	if (c == NULL) return;
+	if (c == NULL)
+		return;
 	free(c->type);
 	free(c->bridge);
 	free(c->tap);
@@ -36,7 +41,8 @@ free_net_conf(struct net_conf *c)
 void
 free_fbuf(struct fbuf *f)
 {
-	if (f == NULL) return;
+	if (f == NULL)
+		return;
 	free(f->ipaddr);
 	free(f->vgaconf);
 	free(f->password);
@@ -50,7 +56,8 @@ free_vm_conf(struct vm_conf *vc)
 	struct iso_conf *ic, *in;
 	struct net_conf *nc, *nn;
 
-	if (vc == NULL) return;
+	if (vc == NULL)
+		return;
 	free(vc->name);
 	free(vc->ncpu);
 	free(vc->memory);
@@ -60,11 +67,11 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->installcmd);
 	free(vc->hookcmd);
 	free_fbuf(vc->fbuf);
-	STAILQ_FOREACH_SAFE(dc, &vc->disks, next, dn)
+	STAILQ_FOREACH_SAFE (dc, &vc->disks, next, dn)
 		free_disk_conf(dc);
-	STAILQ_FOREACH_SAFE(ic, &vc->isoes, next, in)
+	STAILQ_FOREACH_SAFE (ic, &vc->isoes, next, in)
 		free_iso_conf(ic);
-	STAILQ_FOREACH_SAFE(nc, &vc->nets, next, nn)
+	STAILQ_FOREACH_SAFE (nc, &vc->nets, next, nn)
 		free_net_conf(nc);
 	free(vc);
 }
@@ -74,7 +81,8 @@ add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
 {
 	struct disk_conf *t;
 	char *y, *p;
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	t = malloc(sizeof(struct disk_conf));
 	y = strdup(type);
@@ -99,7 +107,8 @@ add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
 {
 	struct iso_conf *t;
 	char *y, *p;
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	t = malloc(sizeof(struct iso_conf));
 	y = strdup(type);
@@ -124,7 +133,8 @@ add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
 {
 	struct net_conf *t;
 	char *y, *b;
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	t = malloc(sizeof(struct net_conf));
 	y = strdup(type);
@@ -145,7 +155,7 @@ err:
 	return -1;
 }
 
-struct net_conf*
+struct net_conf *
 copy_net_conf(const struct net_conf *nc)
 {
 	struct net_conf *ret;
@@ -187,49 +197,56 @@ set_string(char **var, const char *value)
 int
 set_name(struct vm_conf *conf, const char *name)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->name, name);
 }
 
 int
 set_loadcmd(struct vm_conf *conf, const char *cmd)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->loadcmd, cmd);
 }
 
 int
 set_installcmd(struct vm_conf *conf, const char *cmd)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->installcmd, cmd);
 }
 
 int
 set_hookcmd(struct vm_conf *conf, const char *cmd)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->hookcmd, cmd);
 }
 
 int
 set_err_logfile(struct vm_conf *conf, const char *name)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->err_logfile, name);
 }
 
 int
 set_loader(struct vm_conf *conf, const char *loader)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->loader, loader);
 }
 
 int
 set_loader_timeout(struct vm_conf *conf, int timeout)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	conf->loader_timeout = timeout;
 	return 0;
@@ -238,14 +255,16 @@ set_loader_timeout(struct vm_conf *conf, int timeout)
 int
 set_memory_size(struct vm_conf *conf, const char *memory)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->memory, memory);
 }
 
 int
 set_comport(struct vm_conf *conf, const char *com)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	return set_string(&conf->comport, com);
 }
 
@@ -254,7 +273,8 @@ set_ncpu(struct vm_conf *conf, int ncpu)
 {
 	char *new;
 
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	if ((asprintf(&new, "%d", ncpu)) < 0)
 		return -1;
@@ -267,9 +287,10 @@ set_ncpu(struct vm_conf *conf, int ncpu)
 int
 assign_nmdm(struct vm_conf *conf)
 {
-	static unsigned int max=0;
+	static unsigned int max = 0;
 
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	conf->nmdm = max++;
 
 	free(conf->comport);
@@ -283,7 +304,8 @@ assign_nmdm(struct vm_conf *conf)
 int
 set_boot(struct vm_conf *conf, enum BOOT boot)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	conf->boot = boot;
 	return 0;
@@ -292,7 +314,8 @@ set_boot(struct vm_conf *conf, enum BOOT boot)
 int
 set_boot_delay(struct vm_conf *conf, int delay)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 
 	conf->boot_delay = delay;
 	return 0;
@@ -301,7 +324,8 @@ set_boot_delay(struct vm_conf *conf, int delay)
 int
 set_fbuf_enable(struct fbuf *fb, bool enable)
 {
-	if (fb == NULL) return 0;
+	if (fb == NULL)
+		return 0;
 	fb->enable = enable;
 	return 0;
 }
@@ -310,7 +334,8 @@ int
 set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr)
 {
 	int ret;
-	if (fb == NULL) return 0;
+	if (fb == NULL)
+		return 0;
 
 	ret = set_string(&fb->ipaddr, ipaddr);
 	if (ret == 0)
@@ -321,7 +346,8 @@ set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr)
 int
 set_fbuf_port(struct fbuf *fb, int port)
 {
-	if (fb == NULL) return 0;
+	if (fb == NULL)
+		return 0;
 
 	fb->port = port;
 	fb->enable = 1;
@@ -331,7 +357,8 @@ set_fbuf_port(struct fbuf *fb, int port)
 int
 set_fbuf_res(struct fbuf *fb, int width, int height)
 {
-	if (fb == NULL) return 0;
+	if (fb == NULL)
+		return 0;
 
 	fb->width = width;
 	fb->height = height;
@@ -343,9 +370,10 @@ int
 set_fbuf_vgaconf(struct fbuf *fb, const char *vga)
 {
 	int ret;
-	if (fb == NULL) return 0;
+	if (fb == NULL)
+		return 0;
 
-	ret = set_string(&fb->vgaconf,vga);
+	ret = set_string(&fb->vgaconf, vga);
 	if (ret == 0)
 		fb->enable = 1;
 	return ret;
@@ -362,7 +390,8 @@ int
 set_fbuf_password(struct fbuf *fb, const char *pass)
 {
 	int ret;
-	if (fb == NULL) return 0;
+	if (fb == NULL)
+		return 0;
 
 	ret = set_string(&fb->password, pass);
 	if (ret == 0)
@@ -380,7 +409,8 @@ set_mouse(struct vm_conf *conf, bool use)
 int
 set_wired_memory(struct vm_conf *conf, bool val)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	conf->wired_memory = val;
 	return 0;
 }
@@ -388,7 +418,8 @@ set_wired_memory(struct vm_conf *conf, bool val)
 int
 set_utctime(struct vm_conf *conf, bool val)
 {
-	if (conf == NULL) return 0;
+	if (conf == NULL)
+		return 0;
 	conf->utctime = val;
 	return 0;
 }
@@ -458,9 +489,8 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	struct fbuf *fb;
-	static char *btype[] = {
-		"no", "yes", "oneshot", "install","always","reboot"
-	};
+	static char *btype[] = { "no", "yes", "oneshot", "install", "always",
+		"reboot" };
 
 	fprintf(fp, "name: %s\n", conf->name);
 	fprintf(fp, "ncpu: %s\n", conf->ncpu);
@@ -472,38 +502,43 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, "loadcmd: %s\n", conf->loadcmd);
 	fprintf(fp, "installcmd: %s\n", conf->installcmd);
 	i = 0;
-	STAILQ_FOREACH(dc, &conf->disks, next)
+	STAILQ_FOREACH (dc, &conf->disks, next)
 		fprintf(fp, "disk%d: %s,%s\n", i++, dc->type, dc->path);
 	i = 0;
-	STAILQ_FOREACH(ic, &conf->isoes, next)
+	STAILQ_FOREACH (ic, &conf->isoes, next)
 		fprintf(fp, "iso%d: %s,%s\n", i++, ic->type, ic->path);
 	i = 0;
-	STAILQ_FOREACH(nc, &conf->nets, next)
+	STAILQ_FOREACH (nc, &conf->nets, next)
 		fprintf(fp, "net%d: %s,%s\n", i++, nc->type, nc->bridge);
 
 	fb = conf->fbuf;
 	if (fb->enable) {
-		fprintf(fp, "graphics: %s:%d, %dx%d, %s, %s\n",
-		       fb->ipaddr,fb->port, fb->width, fb->height,
-		       fb->vgaconf, fb->wait ? "wait" : "nowait");
+		fprintf(fp, "graphics: %s:%d, %dx%d, %s, %s\n", fb->ipaddr,
+		    fb->port, fb->width, fb->height, fb->vgaconf,
+		    fb->wait ? "wait" : "nowait");
 	}
-	fprintf(fp, "xhci_mouse: %s\n", conf->mouse ? "true":"false");
+	fprintf(fp, "xhci_mouse: %s\n", conf->mouse ? "true" : "false");
 	return 0;
 }
 
 static int
 compare_string(const char *a, const char *b)
 {
-	if (a == NULL && b == NULL) return 0;
-	if (a == NULL) return -1;
-	if (b == NULL) return 1;
+	if (a == NULL && b == NULL)
+		return 0;
+	if (a == NULL)
+		return -1;
+	if (b == NULL)
+		return 1;
 	return strcmp(a, b);
 }
 
-#define CMP_NUM(t) \
-	if ((rc = (a)->t - (b)->t) != 0) return rc
-#define CMP_STR(t) \
-	if ((rc = compare_string((a)->t, (b)->t)) != 0) return rc
+#define CMP_NUM(t)                       \
+	if ((rc = (a)->t - (b)->t) != 0) \
+	return rc
+#define CMP_STR(t)                                      \
+	if ((rc = compare_string((a)->t, (b)->t)) != 0) \
+	return rc
 
 int
 compare_fbuf(const struct fbuf *a, const struct fbuf *b)

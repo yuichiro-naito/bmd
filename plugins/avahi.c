@@ -1,11 +1,13 @@
-#include <stdbool.h>
-#include <sys/unistd.h>
-#include <sys/signal.h>
 #include <sys/event.h>
+#include <sys/signal.h>
+#include <sys/unistd.h>
+
 #include <signal.h>
-#include <unistd.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
 #include "../vars.h"
 
 #define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"
@@ -22,7 +24,7 @@ avahi_initialize(struct global_conf *conf)
 {
 	gl_conf = conf;
 
-	if (access(AVAHI_PUBLISH, R_OK|X_OK) == 0)
+	if (access(AVAHI_PUBLISH, R_OK | X_OK) == 0)
 		avahi_enable = 1;
 
 	return 0;
@@ -45,7 +47,7 @@ exec_avahi_publish(struct vm *vm)
 	args[1] = "-s";
 	args[2] = vm->conf->name;
 	args[3] = "_rfb._tcp";
-	snprintf(buf,sizeof(buf), "%d", vm->conf->fbuf->port);
+	snprintf(buf, sizeof(buf), "%d", vm->conf->fbuf->port);
 	args[4] = buf;
 	args[5] = NULL;
 
@@ -68,8 +70,7 @@ avahi_status_change(struct vm *vm, void **data)
 	struct kevent ev;
 	struct avahi_data *ad;
 
-	if (avahi_enable == 0 ||
-	    vm->conf->fbuf->enable == false)
+	if (avahi_enable == 0 || vm->conf->fbuf->enable == false)
 		return;
 
 	if (*data == NULL) {
@@ -89,8 +90,8 @@ avahi_status_change(struct vm *vm, void **data)
 	case TERMINATE:
 		if (ad->pid > 0) {
 			kill(ad->pid, SIGINT);
-			EV_SET(&ev, ad->pid, EVFILT_PROC,
-			       EV_ADD|EV_ONESHOT, NOTE_EXIT, 0, NULL);
+			EV_SET(&ev, ad->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
+			    NOTE_EXIT, 0, NULL);
 			kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL);
 		}
 		free(ad);
@@ -101,10 +102,5 @@ avahi_status_change(struct vm *vm, void **data)
 	}
 }
 
-PLUGIN_DESC plugin_desc = {
-	PLUGIN_VERSION,
-	"avahi",
-	avahi_initialize,
-	avahi_finalize,
-	avahi_status_change
-};
+PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "avahi", avahi_initialize,
+	avahi_finalize, avahi_status_change };

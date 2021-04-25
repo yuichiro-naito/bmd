@@ -1,23 +1,19 @@
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include "vars.h"
 #include "conf.h"
-#include "parser.h"
 #include "log.h"
+#include "parser.h"
+#include "vars.h"
 
 static int
 get_token(FILE *fp, char **token)
 {
 	int c;
-	enum PSTATE {
-		BEGIN,
-		TOKEN,
-		QUOTE
-	} f;
+	enum PSTATE { BEGIN, TOKEN, QUOTE } f;
 	FILE *t;
 	char *buf;
 	size_t len;
@@ -28,7 +24,7 @@ get_token(FILE *fp, char **token)
 	t = open_memstream(&buf, &len);
 	flockfile(t);
 
-#define FPUTC  fputc_unlocked
+#define FPUTC fputc_unlocked
 
 	f = BEGIN;
 	while ((c = fgetc(fp)) != EOF) {
@@ -41,7 +37,8 @@ get_token(FILE *fp, char **token)
 				continue;
 			default:
 				flockfile(fp);
-				while ((getc_unlocked(fp)) != '\n');
+				while ((getc_unlocked(fp)) != '\n')
+					;
 				funlockfile(fp);
 				FPUTC('\n', t);
 				goto loop_end;
@@ -103,7 +100,7 @@ get_token(FILE *fp, char **token)
 		case '\r':
 		case '\v':
 		case '\f':
-			switch(f) {
+			switch (f) {
 			case QUOTE:
 				FPUTC(c, t);
 				continue;
@@ -186,7 +183,8 @@ parse_memory(struct vm_conf *conf, char *val)
 	case 'm':
 	case 'K':
 	case 'k':
-		if (p[1] != '\0') return -1;
+		if (p[1] != '\0')
+			return -1;
 		break;
 	default:
 		return -1;
@@ -206,13 +204,12 @@ parse_disk(struct vm_conf *conf, char *val)
 		return add_disk_conf(conf, "virtio-blk", val);
 
 	*c = '\0';
-	if (strcmp(val, "ahci-hd") != 0 &&
-	    strcmp(val, "virtio-blk") != 0) {
+	if (strcmp(val, "ahci-hd") != 0 && strcmp(val, "virtio-blk") != 0) {
 		*c = ':';
 		return -1;
 	}
 
-	return add_disk_conf(conf, val, c+1);
+	return add_disk_conf(conf, val, c + 1);
 }
 
 static int
@@ -230,7 +227,7 @@ parse_iso(struct vm_conf *conf, char *val)
 		return -1;
 	}
 
-	return add_iso_conf(conf, val, c+1);
+	return add_iso_conf(conf, val, c + 1);
 }
 
 static int
@@ -243,13 +240,12 @@ parse_net(struct vm_conf *conf, char *val)
 		return add_net_conf(conf, "virtio-net", val);
 
 	*c = '\0';
-	if (strcmp(val, "e1000") != 0 &&
-	    strcmp(val, "virtio-net") != 0) {
+	if (strcmp(val, "e1000") != 0 && strcmp(val, "virtio-net") != 0) {
 		*c = ':';
 		return -1;
 	}
 
-	return add_net_conf(conf, val, c+1);
+	return add_net_conf(conf, val, c + 1);
 }
 
 static int
@@ -283,8 +279,7 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	if (strcasecmp(val, "uefi") != 0 &&
-	    strcasecmp(val, "bhyveload") != 0 &&
+	if (strcasecmp(val, "uefi") != 0 && strcasecmp(val, "bhyveload") != 0 &&
 	    strcasecmp(val, "grub") != 0)
 		return -1;
 
@@ -308,8 +303,7 @@ parse_boot(struct vm_conf *conf, char *val)
 {
 	enum BOOT b;
 
-	if (strcasecmp(val, "yes") == 0 ||
-	    strcasecmp(val, "true") == 0)
+	if (strcasecmp(val, "yes") == 0 || strcasecmp(val, "true") == 0)
 		b = YES;
 	else if (strcasecmp(val, "oneshot") == 0)
 		b = ONESHOT;
@@ -347,8 +341,7 @@ parse_comport(struct vm_conf *conf, char *val)
 static bool
 parse_boolean(const char *value)
 {
-	if (strcasecmp(value, "yes") == 0 ||
-	    strcasecmp(value, "true") == 0)
+	if (strcasecmp(value, "yes") == 0 || strcasecmp(value, "true") == 0)
 		return true;
 	return false;
 }
@@ -383,12 +376,12 @@ parse_graphics_res(struct vm_conf *conf, char *val)
 	int width, height;
 
 	p = strchr(val, 'x');
-	if (p == NULL) return -1;
+	if (p == NULL)
+		return -1;
 
 	*p = '\0';
 
-	if (parse_int(&width, val) < 0 ||
-	    parse_int(&height, p+1) < 0)
+	if (parse_int(&width, val) < 0 || parse_int(&height, p + 1) < 0)
 		return -1;
 
 	return set_fbuf_res(conf->fbuf, width, height);
@@ -439,31 +432,31 @@ struct parser_entry {
 
 /* must be sorted by name */
 struct parser_entry parser_list[] = {
-	{"boot", &parse_boot},
-	{"boot_delay", &parse_boot_delay},
-	{"comport", &parse_comport},
-	{"disk", &parse_disk},
-	{"err_logfile", &parse_err_logfile},
-	{"graphics", &parse_graphics},
-	{"graphics_listen", &parse_graphics_listen},
-	{"graphics_password", &parse_graphics_password},
-	{"graphics_port", &parse_graphics_port},
-	{"graphics_res", &parse_graphics_res},
-	{"graphics_vga", &parse_graphics_vga},
-	{"graphics_wait", &parse_graphics_wait},
-	{"hookcmd", &parse_hookcmd},
-	{"installcmd", &parse_installcmd},
-	{"iso", &parse_iso},
-	{"loadcmd", &parse_loadcmd},
-	{"loader", &parse_loader},
-	{"loader_timeout", &parse_loader_timeout},
-	{"memory", &parse_memory},
-	{"name", &parse_name},
-	{"ncpu", &parse_ncpu},
-	{"network", &parse_net},
-	{"utctime", &parse_utctime},
-	{"wired_memory", &parse_wired_memory},
-	{"xhci_mouse", &parse_xhci_mouse},
+	{ "boot", &parse_boot },
+	{ "boot_delay", &parse_boot_delay },
+	{ "comport", &parse_comport },
+	{ "disk", &parse_disk },
+	{ "err_logfile", &parse_err_logfile },
+	{ "graphics", &parse_graphics },
+	{ "graphics_listen", &parse_graphics_listen },
+	{ "graphics_password", &parse_graphics_password },
+	{ "graphics_port", &parse_graphics_port },
+	{ "graphics_res", &parse_graphics_res },
+	{ "graphics_vga", &parse_graphics_vga },
+	{ "graphics_wait", &parse_graphics_wait },
+	{ "hookcmd", &parse_hookcmd },
+	{ "installcmd", &parse_installcmd },
+	{ "iso", &parse_iso },
+	{ "loadcmd", &parse_loadcmd },
+	{ "loader", &parse_loader },
+	{ "loader_timeout", &parse_loader_timeout },
+	{ "memory", &parse_memory },
+	{ "name", &parse_name },
+	{ "ncpu", &parse_ncpu },
+	{ "network", &parse_net },
+	{ "utctime", &parse_utctime },
+	{ "wired_memory", &parse_wired_memory },
+	{ "xhci_mouse", &parse_xhci_mouse },
 };
 
 static int
@@ -481,9 +474,8 @@ get_parser(char *name)
 	struct parser_entry *p;
 
 	p = bsearch(name, parser_list,
-		    sizeof(parser_list)/sizeof(parser_list[0]),
-		    sizeof(parser_list[0]),
-		    compare_parser_entry);
+	    sizeof(parser_list) / sizeof(parser_list[0]),
+	    sizeof(parser_list[0]), compare_parser_entry);
 
 	return ((p != NULL) ? p->func : NULL);
 }
@@ -496,7 +488,8 @@ parse(struct vm_conf *conf, FILE *fp)
 	pfunc parser;
 
 	while (1) {
-		if (get_token(fp, &key) == 1) break;
+		if (get_token(fp, &key) == 1)
+			break;
 		if (key[0] == '\n') {
 			free(key);
 			continue;
