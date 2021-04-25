@@ -22,12 +22,19 @@
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
+/*
+  Entry of plugins.
+  The individual entries refer to the installed plugin.
+ */
 struct plugin_entry {
 	struct plugin_desc desc;
 	void *handle;
 	SLIST_ENTRY(plugin_entry) next;
 };
 
+/*
+  Plugin data is for each plugin and virtual machine.
+ */
 struct plugin_data {
 	struct plugin_entry *ent;
 	void *data;
@@ -35,8 +42,9 @@ struct plugin_data {
 };
 
 /*
-  entry of vm_conf list.
-  make sure 'conf' is the first element of the structure.
+  Entry of vm_conf list.
+  The individual entories hold the VM configuration.
+  Make sure 'conf' is the first element of the structure.
  */
 struct vm_conf_entry {
 	struct vm_conf conf;
@@ -44,8 +52,9 @@ struct vm_conf_entry {
 };
 
 /*
-  entry of vm list.
-  make sure 'vm' is the first element of the structure.
+  Entry of vm list.
+  The individual entries indicate the virtual machine process.
+  Make sure 'vm' is the first element of the structure.
  */
 struct vm_entry {
 	struct vm vm;
@@ -54,10 +63,19 @@ struct vm_entry {
 	SLIST_ENTRY(vm_entry) next;
 };
 
+/*
+  List of VM configurations.
+ */
 SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
+/*
+  List of virtual machines.
+ */
 SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
+/*
+  Global configuration.
+ */
 struct global_conf gl_conf = { LOCALBASE "/etc/bhyved.d",
 	LOCALBASE "/libexec/bhyved", "/var/run/bhyved.pid", NULL };
 
