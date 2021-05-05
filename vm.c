@@ -370,10 +370,7 @@ exec_bhyve(struct vm *vm)
 		flockfile(fp);
 
 #define WRITE_STR(str)                                      \
-	do {                                                \
-		char *p = (str);                            \
-		fwrite_unlocked(&p, sizeof(char *), 1, fp); \
-	} while (0)
+		fwrite_unlocked(&(char *[]){(str)}[0], sizeof(char *), 1, fp)
 
 #define WRITE_FMT(fmt, ...)                                 \
 	do {                                                \
