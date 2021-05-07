@@ -582,7 +582,7 @@ parse_file(int fd, char *name)
 	ret = parse(c, fp);
 
 	fclose(fp);
-	if (ret < 0 || check_conf(c) < 0) {
+	if (ret < 0 || finalize_vm_conf(c) < 0 || check_conf(c) < 0) {
 		free_vm_conf(c);
 		return NULL;
 	}

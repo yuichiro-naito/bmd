@@ -42,6 +42,7 @@ int set_utctime(struct vm_conf *conf, bool val);
 
 struct fbuf *create_fbuf();
 struct vm_conf *create_vm_conf(char *name);
+int finalize_vm_conf(struct vm_conf *conf);
 int dump_vm_conf(struct vm_conf *conf, FILE *fp);
 
 int compare_fbuf(const struct fbuf *a, const struct fbuf *b);

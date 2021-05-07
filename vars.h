@@ -44,7 +44,7 @@ struct net_conf {
 enum BOOT { NO, YES, ONESHOT, INSTALL, ALWAYS, REBOOT };
 
 struct fbuf {
-	bool enable;
+	int enable;
 	char *ipaddr;
 	int port;
 	int width;

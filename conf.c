@@ -338,8 +338,8 @@ set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr)
 		return 0;
 
 	ret = set_string(&fb->ipaddr, ipaddr);
-	if (ret == 0)
-		fb->enable = 1;
+	if (ret == 0 && fb->enable < 0)
+		fb->enable = true;
 	return ret;
 }
 
@@ -350,7 +350,8 @@ set_fbuf_port(struct fbuf *fb, int port)
 		return 0;
 
 	fb->port = port;
-	fb->enable = 1;
+	if (fb->enable < 0)
+		fb->enable = true;
 	return 0;
 }
 
@@ -362,7 +363,8 @@ set_fbuf_res(struct fbuf *fb, int width, int height)
 
 	fb->width = width;
 	fb->height = height;
-	fb->enable = 1;
+	if (fb->enable < 0)
+		fb->enable = true;
 	return 0;
 }
 
@@ -374,7 +376,7 @@ set_fbuf_vgaconf(struct fbuf *fb, const char *vga)
 		return 0;
 
 	ret = set_string(&fb->vgaconf, vga);
-	if (ret == 0)
+	if (ret == 0 && fb->enable < 0)
 		fb->enable = 1;
 	return ret;
 }
@@ -394,8 +396,8 @@ set_fbuf_password(struct fbuf *fb, const char *pass)
 		return 0;
 
 	ret = set_string(&fb->password, pass);
-	if (ret == 0)
-		fb->enable = 1;
+	if (ret == 0 && fb->enable < 0)
+		fb->enable = true;
 	return ret;
 }
 
@@ -436,6 +438,7 @@ create_fbuf()
 	if (ret == NULL || addr == NULL || vga == NULL || pass == NULL)
 		goto err;
 
+	ret->enable = -1;
 	ret->ipaddr = addr;
 	ret->vgaconf = vga;
 	ret->port = 5900;
@@ -479,6 +482,18 @@ err:
 	free(fbuf);
 	free(name);
 	return NULL;
+}
+
+int
+finalize_vm_conf(struct vm_conf *conf)
+{
+	if (conf == NULL || conf->fbuf == NULL)
+		return -1;
+
+	if (conf->fbuf->enable < 0)
+		conf->fbuf->enable = false;
+
+	return 0;
 }
 
 int
