@@ -814,6 +814,18 @@ direct_run()
 	struct vm_entry *vm_ent;
 	struct vm *vm;
 
+	fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY);
+	if (fd < 0) {
+		ERR("can not open %s\n", gl_conf.plugin_dir);
+		return 1;
+	}
+	gl_conf.plugin_fd = fd;
+
+	INFO("%s\n", "start daemon");
+
+	if (load_plugins() < 0)
+		return 1;
+
 	if (asprintf(&path, "%s/%s", gl_conf.config_dir, gl_conf.vm_name) < 0)
 		return 1;
 	fd = open(path, O_RDONLY);
