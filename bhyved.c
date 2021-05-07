@@ -192,8 +192,8 @@ load_plugins()
 
 		desc = dlsym(hdl, "plugin_desc");
 		if (desc == NULL || desc->version != PLUGIN_VERSION ||
-		    (desc->initialize && (*(desc->initialize))(&gl_conf) < 0) ||
-		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
+		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL ||
+		    (desc->initialize && (*(desc->initialize))(&gl_conf) < 0)) {
 			dlclose(hdl);
 			goto next;
 		}
