@@ -874,11 +874,13 @@ direct_run()
 	cleanup_vm(vm);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
+	remove_plugins();
 	return 0;
 err:
 	cleanup_vm(vm);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
+	remove_plugins();
 	return 1;
 }
 
