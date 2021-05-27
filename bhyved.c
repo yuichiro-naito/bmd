@@ -483,7 +483,7 @@ reload_virtual_machines()
 		case ALWAYS:
 		case YES:
 			if (vm->state == INIT || vm->state == TERMINATE) {
-				vm->conf->boot = conf->boot;
+				vm->conf = conf;
 				start_virtual_machine(vm_ent);
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
@@ -494,13 +494,13 @@ reload_virtual_machines()
 		case INSTALL:
 			if (vm->state == INIT || vm->state == TERMINATE) {
 				INFO("install vm %s\n", conf->name);
-				vm->conf->boot = conf->boot;
+				vm->conf = conf;
 				start_virtual_machine(vm_ent);
 			}
 			break;
 		case REBOOT:
 			if (vm->state == INIT || vm->state == TERMINATE) {
-				vm->conf->boot = conf->boot;
+				vm->conf = conf;
 				start_virtual_machine(vm_ent);
 			} else if ((vm->state == LOAD || vm->state == RUN) &&
 			    compare_vm_conf(conf, vm->conf) != 0) {
