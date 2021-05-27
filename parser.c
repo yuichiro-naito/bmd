@@ -299,6 +299,17 @@ parse_loader_timeout(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_stop_timeout(struct vm_conf *conf, char *val)
+{
+	int timeout;
+
+	if (parse_int(&timeout, val) < 0)
+		return -1;
+
+	return set_stop_timeout(conf, timeout);
+}
+
+static int
 parse_boot(struct vm_conf *conf, char *val)
 {
 	enum BOOT b;
@@ -454,6 +465,7 @@ struct parser_entry parser_list[] = {
 	{ "name", &parse_name },
 	{ "ncpu", &parse_ncpu },
 	{ "network", &parse_net },
+	{ "stop_timeout", &parse_stop_timeout },
 	{ "utctime", &parse_utctime },
 	{ "wired_memory", &parse_wired_memory },
 	{ "xhci_mouse", &parse_xhci_mouse },

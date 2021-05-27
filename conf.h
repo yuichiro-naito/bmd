@@ -26,6 +26,7 @@ int set_hookcmd(struct vm_conf *conf, const char *cmd);
 int set_err_logfile(struct vm_conf *conf, const char *name);
 int set_loader(struct vm_conf *conf, const char *loader);
 int set_loader_timeout(struct vm_conf *conf, int timeout);
+int set_stop_timeout(struct vm_conf *conf, int timeout);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
 int set_boot_delay(struct vm_conf *conf, int delay);
 int set_comport(struct vm_conf *conf, const char *cmd);

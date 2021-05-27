@@ -57,6 +57,8 @@ struct fbuf {
 struct vm_conf {
 	unsigned int nmdm;
 	int boot_delay;
+	int loader_timeout;
+	int stop_timeout;
 	char *ncpu;
 	char *memory;
 	char *name;
@@ -68,7 +70,6 @@ struct vm_conf {
 	char *hookcmd;
 	char *err_logfile;
 	struct fbuf *fbuf;
-	int loader_timeout;
 	bool mouse;
 	bool wired_memory;
 	bool utctime;

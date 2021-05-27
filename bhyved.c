@@ -475,6 +475,7 @@ reload_virtual_machines()
 			if (vm->state == LOAD || vm->state == RUN) {
 				INFO("stop vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
+				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = STOP;
 			} else if (vm->state == RESTART)
 				vm->state = STOP;
@@ -482,6 +483,7 @@ reload_virtual_machines()
 		case ALWAYS:
 		case YES:
 			if (vm->state == INIT || vm->state == TERMINATE) {
+				vm->conf->boot = conf->boot;
 				start_virtual_machine(vm_ent);
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
@@ -492,16 +494,19 @@ reload_virtual_machines()
 		case INSTALL:
 			if (vm->state == INIT || vm->state == TERMINATE) {
 				INFO("install vm %s\n", conf->name);
+				vm->conf->boot = conf->boot;
 				start_virtual_machine(vm_ent);
 			}
 			break;
 		case REBOOT:
 			if (vm->state == INIT || vm->state == TERMINATE) {
+				vm->conf->boot = conf->boot;
 				start_virtual_machine(vm_ent);
 			} else if ((vm->state == LOAD || vm->state == RUN) &&
 			    compare_vm_conf(conf, vm->conf) != 0) {
 				INFO("reboot vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
+				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = RESTART;
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
@@ -518,6 +523,7 @@ reload_virtual_machines()
 			case RUN:
 				INFO("stop vm %s\n", vm->conf->name);
 				kill(vm->pid, SIGTERM);
+				set_timer(vm_ent, conf->stop_timeout);
 				/* GO THROUGH */
 			case STOP:
 			case REMOVE:
@@ -721,6 +727,7 @@ stop_virtual_machines()
 		if (vm->state == LOAD || vm->state == RUN) {
 			count++;
 			kill(vm->pid, SIGTERM);
+			set_timer(vm_ent, vm->conf->stop_timeout);
 		}
 	}
 
@@ -742,6 +749,12 @@ stop_virtual_machines()
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
 			count--;
+		} else if (ev.filter == EVFILT_TIMER) {
+			vm_ent = ev.udata;
+			vm = &vm_ent->vm;
+			/* force to kill process */
+			ERR("timeout kill vm %s\n", vm->conf->name);
+			kill(vm->pid, SIGKILL);
 		}
 	}
 

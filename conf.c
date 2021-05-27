@@ -253,6 +253,16 @@ set_loader_timeout(struct vm_conf *conf, int timeout)
 }
 
 int
+set_stop_timeout(struct vm_conf *conf, int timeout)
+{
+	if (conf == NULL)
+		return 0;
+
+	conf->stop_timeout = timeout;
+	return 0;
+}
+
+int
 set_memory_size(struct vm_conf *conf, const char *memory)
 {
 	if (conf == NULL)
@@ -470,6 +480,7 @@ create_vm_conf(char *name)
 	ret->name = name;
 	ret->nmdm = -1;
 	ret->loader_timeout = 3;
+	ret->stop_timeout = 300;
 	ret->utctime = true;
 
 	STAILQ_INIT(&ret->disks);
@@ -628,6 +639,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(boot);
 	CMP_STR(loader);
 	CMP_NUM(loader_timeout);
+	CMP_NUM(stop_timeout);
 	CMP_STR(loadcmd);
 	CMP_STR(installcmd);
 	CMP_STR(hookcmd);
