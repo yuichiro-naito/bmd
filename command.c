@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -11,6 +12,30 @@
 #include "log.h"
 #include "vars.h"
 #include "vm.h"
+
+int
+connect_to_server(const struct global_conf *gc)
+{
+	int s;
+	struct sockaddr_un addr;
+
+	addr.sun_family = PF_UNIX;
+	strncpy(addr.sun_path, gc->cmd_sock_path, sizeof(addr.sun_path));
+	addr.sun_len = SUN_LEN(&addr);
+
+	while ((s = socket(PF_UNIX, SOCK_STREAM, 0)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			return -1;
+
+	while (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err;
+
+	return s;
+err:
+	close(s);
+	return -1;
+}
 
 int
 create_command_server(const struct global_conf *gc)
@@ -34,9 +59,11 @@ create_command_server(const struct global_conf *gc)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
+	if (chmod(gc->cmd_sock_path, ACCESSPERMS) < 0)
+		goto err;
+
 	return s;
 err:
-	ERR("can not bind %s!", gc->cmd_sock_path);
 	close(s);
 	return -1;
 }

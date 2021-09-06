@@ -927,9 +927,91 @@ err:
 }
 
 int
+strendswith(const char *t, const char *s)
+{
+	const char *p = &t[strlen(t)];
+	const char *q = &s[strlen(s)];
+
+	while (p > t && q > s)
+		if (*--p != *--q)
+			return (*p) - (*q);
+
+	return (*p) - (*q);
+}
+
+int
+usage(int argc, char *argv[])
+{
+	printf("usage: %s boot <name>| install <vm name> | shutdown <vm name>| list\n", argv[0]);
+	return 1;
+}
+
+int
+do_command(int argc, char *argv[])
+{
+	int s, ret = 0;
+	nvlist_t *cmd, *res = NULL;
+
+	if (argc < 2)
+		return usage(argc, argv);
+
+	cmd = nvlist_create(0);
+
+	if (argc == 2 && strcmp(argv[1], "list") == 0) {
+		nvlist_add_string(cmd, "command", argv[1]);
+	} else if (argc == 3 && (strcmp(argv[1], "boot") == 0 ||
+				 strcmp(argv[1], "install") == 0 ||
+				 strcmp(argv[1], "shutdown") == 0)) {
+		nvlist_add_string(cmd, "command", argv[1]);
+		nvlist_add_string(cmd, "name", argv[2]);
+	} else {
+		return usage(argc, argv);
+	}
+
+	if ((s = connect_to_server(&gl_conf)) < 0) {
+		printf("can not connect to %s\n", gl_conf.cmd_sock_path);
+		return 1;
+	}
+
+	nvlist_send(s, cmd);
+
+	res = nvlist_recv(s, 0);
+	if (res == NULL) {
+		printf("server returns null\n");
+		goto end;
+	}
+
+	if (nvlist_get_bool(res, "error")) {
+		printf("error: %s\n", nvlist_get_string(res,"reson"));
+		goto end;
+	}
+
+	if (argc == 2 && strcmp(argv[1], "list") == 0) {
+		size_t i, count;
+		const struct nvlist * const *list;
+		list = nvlist_get_nvlist_array(res, "vm_list", &count);
+		for (i = 0; i < count ; i++) {
+			printf("%20s %s\n",
+			       nvlist_get_string(list[i], "name"),
+			       nvlist_get_string(list[i], "state")
+				);
+		}
+	}
+
+end:
+	close(s);
+	nvlist_destroy(cmd);
+	nvlist_destroy(res);
+	return ret;
+}
+
+int
 main(int argc, char *argv[])
 {
 	sigset_t nmask, omask;
+
+	if (strendswith(argv[0], "ctl") == 0)
+		return do_command(argc, argv);
 
 	if (parse_opt(argc, argv) < 0)
 		return 1;
@@ -967,7 +1049,7 @@ main(int argc, char *argv[])
 	}
 
 	if ((gl_conf.cmd_sock = create_command_server(&gl_conf)) < 0) {
-		ERR("can not listen %s\n", gl_conf.cmd_sock_path);
+		ERR("can not bind %s\n", gl_conf.cmd_sock_path);
 		return 1;
 	}
 
@@ -978,6 +1060,9 @@ main(int argc, char *argv[])
 		return 1;
 
 	event_loop();
+
+	unlink(gl_conf.cmd_sock_path);
+	close(gl_conf.cmd_sock);
 
 	stop_virtual_machines();
 	free_vm_list();
