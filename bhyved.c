@@ -3,6 +3,7 @@
 #include <sys/queue.h>
 #include <sys/signal.h>
 #include <sys/wait.h>
+#include <sys/nv.h>
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -19,6 +20,7 @@
 #include "parser.h"
 #include "vars.h"
 #include "vm.h"
+#include "command.h"
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
@@ -77,7 +79,8 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
   Global configuration.
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bhyved.d",
-	LOCALBASE "/libexec/bhyved", "/var/run/bhyved.pid", NULL };
+	LOCALBASE "/libexec/bhyved", "/var/run/bhyved.pid",
+	"/var/run/bhyved.sock",	NULL };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -419,6 +422,17 @@ retry:
 }
 
 struct vm_entry *
+lookup_vm_by_name(const char *name)
+{
+	struct vm_entry *vm_ent;
+
+	SLIST_FOREACH (vm_ent, &vm_list, next)
+		if (strcmp(vm_ent->vm.conf->name, name) == 0)
+			return vm_ent;
+	return NULL;
+}
+
+struct vm_entry *
 lookup_vm(struct vm_conf *conf)
 {
 	struct vm_entry *vm_ent;
@@ -576,6 +590,14 @@ event_loop()
 		return -1;
 	}
 
+	EV_SET(&ev, gl_conf.cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
+retry:
+	if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0) {
+		if (errno == EINTR)
+			goto retry;
+		return -1;
+	}
+
 wait:
 	if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
 		if (errno == EINTR)
@@ -589,6 +611,13 @@ wait:
 	vm = &vm_ent->vm;
 	switch (ev.filter) {
 	case EVFILT_READ:
+		if (ev.ident == gl_conf.cmd_sock) {
+			if ((n = accept_command_socket(ev.ident)) < 0)
+				break;
+			recv_command(n);
+			close(n);
+			break;
+		}
 		while ((size = read(ev.ident, buf, BUFSIZE)) < 0)
 			if (errno != EINTR && errno != EAGAIN)
 				break;
@@ -900,7 +929,6 @@ err:
 int
 main(int argc, char *argv[])
 {
-	int fd;
 	sigset_t nmask, omask;
 
 	if (parse_opt(argc, argv) < 0)
@@ -921,26 +949,27 @@ main(int argc, char *argv[])
 	sigaddset(&nmask, SIGHUP);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
-	fd = kqueue();
-	if (fd < 0) {
+	if ((gl_conf.kq = kqueue()) < 0) {
 		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
-	gl_conf.kq = fd;
 
-	fd = open(gl_conf.config_dir, O_DIRECTORY | O_RDONLY);
-	if (fd < 0) {
+	if ((gl_conf.config_fd = open(gl_conf.config_dir,
+				      O_DIRECTORY | O_RDONLY)) < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
 		return 1;
 	}
-	gl_conf.config_fd = fd;
 
-	fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY);
-	if (fd < 0) {
+	if ((gl_conf.plugin_fd = open(gl_conf.plugin_dir,
+				      O_DIRECTORY | O_RDONLY)) < 0) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return 1;
 	}
-	gl_conf.plugin_fd = fd;
+
+	if ((gl_conf.cmd_sock = create_command_server(&gl_conf)) < 0) {
+		ERR("can not listen %s\n", gl_conf.cmd_sock_path);
+		return 1;
+	}
 
 	INFO("%s\n", "start daemon");
 
@@ -958,5 +987,128 @@ main(int argc, char *argv[])
 	remove_plugins();
 	INFO("%s\n", "quit daemon");
 	LOG_CLOSE();
+	return 0;
+}
+
+static int
+boot0_command(int s, const nvlist_t *nv, bool install)
+{
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	nvlist_t *res;
+	bool error = false;
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "not found";
+		goto ret;
+	}
+
+	if (vm_ent->vm.state != INIT && vm_ent->vm.state != TERMINATE) {
+		error = true;
+		reason = "already running";
+		goto ret;
+	}
+
+	if (install)
+		vm_ent->vm.conf->boot = INSTALL;
+
+	if (start_virtual_machine(vm_ent) < 0) {
+		error = true;
+		reason = "failed to start";
+	}
+
+ret:
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	return 0;
+}
+
+int
+boot_command(int s, const nvlist_t *nv)
+{
+	return boot0_command(s, nv, false);
+}
+
+int
+install_command(int s, const nvlist_t *nv)
+{
+	return boot0_command(s, nv, true);
+}
+
+int
+list_command(int s, const nvlist_t *nv)
+{
+	size_t i, count=0;
+	const char *reason;
+	nvlist_t *res, *p;
+	const nvlist_t **list = NULL;
+	struct vm_entry *vm_ent;
+	bool error = false;
+
+	res = nvlist_create(0);
+
+	SLIST_FOREACH (vm_ent, &vm_list, next)
+		count++;
+
+	list = malloc(count * sizeof(nvlist_t *));
+	if (list == NULL) {
+		reason = "can not allocate memory";
+		goto ret;
+	}
+
+	i = 0;
+	SLIST_FOREACH (vm_ent, &vm_list, next) {
+		p = nvlist_create(0);
+		nvlist_add_string(p, "name", vm_ent->vm.conf->name);
+		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
+		list[i++] = p;
+	}
+
+	nvlist_add_nvlist_array(res, "vm_list", list, count);
+ret:
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	free(list);
+	return 0;
+}
+
+int
+shutdown_command(int s, const nvlist_t *nv)
+{
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	nvlist_t *res;
+	bool error = false;
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "not found";
+		goto ret;
+	}
+
+	if (vm_ent->vm.state != LOAD && vm_ent->vm.state != RUN)
+		goto ret;
+
+	kill(vm_ent->vm.pid, SIGTERM);
+	set_timer(vm_ent, vm_ent->vm.conf->stop_timeout);
+	vm_ent->vm.state = STOP;
+
+ret:
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
 	return 0;
 }

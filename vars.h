@@ -14,10 +14,12 @@ struct global_conf {
 	char *config_dir;
 	char *plugin_dir;
 	char *pid_path;
+	char *cmd_sock_path;
 	char *vm_name;
 	int install;
 	int config_fd;
 	int plugin_fd;
+	int cmd_sock;
 	int foreground;
 	int kq;
 };
@@ -90,6 +92,8 @@ enum STATE {
 	REMOVE,	   // send SIGTERM to stop bhyve and remove vm_entry
 	RESTART	   // send SIGTERM and need rebooting
 };
+
+extern char const *state_string[];
 
 struct vm {
 	struct vm_conf *conf;
