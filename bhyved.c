@@ -957,6 +957,11 @@ do_command(int argc, char *argv[])
 
 	cmd = nvlist_create(0);
 
+	if (strcmp(argv[1], "start") == 0)
+		argv[1] = "boot";
+	else if (strcmp(argv[1], "stop") == 0)
+		argv[1] = "shutdown";
+
 	if (argc == 2 && strcmp(argv[1], "list") == 0) {
 		nvlist_add_string(cmd, "command", argv[1]);
 	} else if (argc == 3 && (strcmp(argv[1], "boot") == 0 ||
