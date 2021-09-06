@@ -17,12 +17,6 @@
 #include "vars.h"
 #include "vm.h"
 
-char const *state_string[] =
-{
-	"INIT", "LOAD", "RUN", "TERMINATE",
-	"STOP", "REMOVE", "RESTART"
-};
-
 static int
 redirect_to_com(struct vm *vm)
 {

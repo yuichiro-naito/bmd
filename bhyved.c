@@ -1135,6 +1135,11 @@ list_command(int s, const nvlist_t *nv)
 	const nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
 	bool error = false;
+	static char *state_string[] = {
+		"STOP", "LOAD", "RUN", "STOP",
+		"TERMINATING", "TERMINATING", "REBOOTING"
+	};
+
 
 	res = nvlist_create(0);
 

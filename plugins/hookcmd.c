@@ -8,12 +8,6 @@
 
 static struct global_conf *gl_conf;
 
-char const *state_string[] =
-{
-	"INIT", "LOAD", "RUN", "TERMINATE",
-	"STOP", "REMOVE", "RESTART"
-};
-
 static int
 hookcmd_initialize(struct global_conf *conf)
 {
@@ -32,6 +26,8 @@ hookcmd_status_change(struct vm *vm, void **data)
 	pid_t pid;
 	struct kevent ev;
 	char *args[4];
+	static char *state_name[] = { "INIT", "LOAD", "RUN", "TERMINATE",
+		"STOP", "REMOVE", "RESTART" };
 
 	if (vm->conf->hookcmd == NULL)
 		return;
@@ -42,7 +38,7 @@ hookcmd_status_change(struct vm *vm, void **data)
 	if (pid == 0) {
 		args[0] = vm->conf->hookcmd;
 		args[1] = vm->conf->name;
-		args[2] = (char *)state_string[vm->state];
+		args[2] = state_name[vm->state];
 		args[3] = NULL;
 		execv(args[0], args);
 		exit(1);

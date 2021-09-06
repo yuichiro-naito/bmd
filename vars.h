@@ -93,8 +93,6 @@ enum STATE {
 	RESTART	   // send SIGTERM and need rebooting
 };
 
-extern char const *state_string[];
-
 struct vm {
 	struct vm_conf *conf;
 	pid_t pid;
