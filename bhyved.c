@@ -78,9 +78,9 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 /*
   Global configuration.
  */
-struct global_conf gl_conf = { LOCALBASE "/etc/bhyved.d",
-	LOCALBASE "/libexec/bhyved", "/var/run/bhyved.pid",
-	"/var/run/bhyved.sock",	NULL };
+struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d",
+	LOCALBASE "/libexec/bmd", "/var/run/bmd.pid",
+	"/var/run/bmd.sock",	NULL };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)

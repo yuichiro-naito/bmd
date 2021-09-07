@@ -1,5 +1,5 @@
 LOCALBASE?= /usr/local
-PLUGINDIR=$(LOCALBASE)/libexec/bhyved
+PLUGINDIR=$(LOCALBASE)/libexec/bmd
 TARGET= libavahiplugin.so libhookcmdplugin.so
 CFLAGS+=-Wall -fPIC -DLOCALBASE=\"$(LOCALBASE)\"
 

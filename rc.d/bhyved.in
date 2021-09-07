@@ -1,17 +1,17 @@
 #!/bin/sh
 
-# PROVIDE: bhyved
+# PROVIDE: bmd
 # REQUIRE: DAEMON syslogd
 # BEFORE: LOGIN
 # KEYWORD: nojail shutdown
 
 . /etc/rc.subr
 
-name="bhyved"
+name="bmd"
 desc="bhyve management daemon"
-rcvar="bhyved_enable"
+rcvar="bmd_enable"
 command="%%LOCALBASE%%/sbin/${name}"
-pidfile="/var/run/bhyved.pid"
+pidfile="/var/run/bmd.pid"
 extra_commands="reload"
 required_modules="vmm"
 

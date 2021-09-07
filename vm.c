@@ -58,7 +58,7 @@ write_mapfile(struct vm *vm)
 	struct iso_conf *ic;
 	struct vm_conf *conf;
 
-	if (asprintf(&fn, "/tmp/bhyved.%s.%d.XXXXXX", vm->conf->name,
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", vm->conf->name,
 		getpid()) < 0)
 		return -1;
 

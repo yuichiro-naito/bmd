@@ -1,7 +1,7 @@
-bhyved
-bhyved.debug
-bhyved.full
-bhyved.1.gz
+bmd
+bmd.debug
+bmd.full
+bmd.1.gz
 .depend*
 *.o
 *.so
