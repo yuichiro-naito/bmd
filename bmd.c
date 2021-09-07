@@ -466,6 +466,7 @@ reload_virtual_machines()
 			vm_ent = create_vm_entry(conf_ent);
 			if (vm_ent == NULL)
 				return -1;
+			vm_ent->new_conf = conf;
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
@@ -475,7 +476,6 @@ reload_virtual_machines()
 				continue;
 			}
 			start_virtual_machine(vm_ent);
-			vm_ent->new_conf = conf;
 			continue;
 		} else if (vm_ent->vm.logfd != -1 &&
 		    vm_ent->vm.conf->err_logfile != NULL) {
