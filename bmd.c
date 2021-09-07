@@ -539,10 +539,11 @@ reload_virtual_machines()
 	SLIST_FOREACH (vm_ent, &vm_list, next)
 		if (vm_ent->new_conf == NULL) {
 			vm = &vm_ent->vm;
+			conf = vm->conf;
 			switch (vm->state) {
 			case LOAD:
 			case RUN:
-				INFO("stop vm %s\n", vm->conf->name);
+				INFO("stop vm %s\n", conf->name);
 				kill(vm->pid, SIGTERM);
 				set_timer(vm_ent, conf->stop_timeout);
 				/* GO THROUGH */
@@ -554,7 +555,7 @@ reload_virtual_machines()
 				   to keep it until actually freed. */
 				if (SLIST_FIRST(&vm_conf_list))
 					SLIST_REMOVE(&vm_conf_list,
-					    (struct vm_conf_entry *)vm->conf,
+					    (struct vm_conf_entry *)conf,
 					    vm_conf_entry, next);
 				break;
 			default:
@@ -563,7 +564,7 @@ reload_virtual_machines()
 					    next);
 				if (SLIST_FIRST(&vm_conf_list))
 					SLIST_REMOVE(&vm_conf_list,
-					    (struct vm_conf_entry *)vm->conf,
+					    (struct vm_conf_entry *)conf,
 					    vm_conf_entry, next);
 				free_vm_entry(vm_ent);
 			}
