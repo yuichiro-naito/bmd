@@ -273,6 +273,13 @@ load_config_files(struct vm_conf_head *list)
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 
+	close(gl_conf.config_fd);
+	if ((gl_conf.config_fd = open(gl_conf.config_dir,
+				      O_DIRECTORY | O_RDONLY)) < 0) {
+		ERR("can not open %s\n", gl_conf.config_dir);
+		return -1;
+	}
+
 	d = fdopendir(gl_conf.config_fd);
 	if (d == NULL) {
 		ERR("can not open %s\n", gl_conf.config_dir);
@@ -1139,6 +1146,14 @@ reload_command(int s, const nvlist_t *nv)
 		goto ret;
 	}
 	vm = &vm_ent->vm;
+
+	close(gl_conf.config_fd);
+	if ((gl_conf.config_fd = open(gl_conf.config_dir,
+				      O_DIRECTORY | O_RDONLY)) < 0) {
+		error = true;
+		reason = "failed to open config directory";
+		goto ret;
+	}
 
 	if ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) < 0) {
 		error = true;
