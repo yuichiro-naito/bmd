@@ -82,6 +82,7 @@ accept_command_socket(int s0)
 
 int boot_command(int s, const nvlist_t *nv);
 int install_command(int s, const nvlist_t *nv);
+int reload_command(int s, const nvlist_t *nv);
 int list_command(int s, const nvlist_t *nv);
 int shutdown_command(int s, const nvlist_t *nv);
 
@@ -97,6 +98,7 @@ struct command_entry command_list[] = {
 	{ "boot", &boot_command },
 	{ "install", &install_command },
 	{ "list", &list_command },
+	{ "reload", &reload_command },
 	{ "shutdown", &shutdown_command },
 };
 

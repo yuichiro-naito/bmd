@@ -576,7 +576,7 @@ check_conf(struct vm_conf *conf)
 }
 
 struct vm_conf *
-parse_file(int fd, char *name)
+parse_file(int fd, char *filename)
 {
 	int ret;
 	struct vm_conf *c;
@@ -585,7 +585,7 @@ parse_file(int fd, char *name)
 	if (fp == NULL)
 		return NULL;
 
-	c = create_vm_conf(name);
+	c = create_vm_conf(filename);
 	if (c == NULL) {
 		fclose(fp);
 		return NULL;

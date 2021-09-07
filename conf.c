@@ -465,19 +465,22 @@ err:
 }
 
 struct vm_conf *
-create_vm_conf(char *name)
+create_vm_conf(char *filename)
 {
+	char *name, *fname;
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
 
 	ret = calloc(1, sizeof(typeof(*ret)));
 	fbuf = create_fbuf();
-	name = strdup(name);
-	if (ret == NULL || fbuf == NULL || name == NULL)
+	name = strdup(filename);
+	fname = strdup(filename);
+	if (ret == NULL || fbuf == NULL || name == NULL || fname == NULL)
 		goto err;
 
 	ret->fbuf = fbuf;
 	ret->name = name;
+	ret->filename = fname;
 	ret->nmdm = -1;
 	ret->loader_timeout = 3;
 	ret->stop_timeout = 300;
@@ -492,6 +495,7 @@ err:
 	free(ret);
 	free(fbuf);
 	free(name);
+	free(fname);
 	return NULL;
 }
 

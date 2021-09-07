@@ -61,6 +61,7 @@ struct vm_conf {
 	int boot_delay;
 	int loader_timeout;
 	int stop_timeout;
+	char *filename;
 	char *ncpu;
 	char *memory;
 	char *name;

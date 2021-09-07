@@ -942,7 +942,7 @@ strendswith(const char *t, const char *s)
 int
 usage(int argc, char *argv[])
 {
-	printf("usage: %s boot <name>| install <vm name> | shutdown <vm name>| list\n", argv[0]);
+	printf("usage: %s boot <name>| install <vm name> | shutdown <vm name>| reload <name> | list\n", argv[0]);
 	return 1;
 }
 
@@ -966,6 +966,7 @@ do_command(int argc, char *argv[])
 		nvlist_add_string(cmd, "command", argv[1]);
 	} else if (argc == 3 && (strcmp(argv[1], "boot") == 0 ||
 				 strcmp(argv[1], "install") == 0 ||
+				 strcmp(argv[1], "reload") == 0 ||
 				 strcmp(argv[1], "shutdown") == 0)) {
 		nvlist_add_string(cmd, "command", argv[1]);
 		nvlist_add_string(cmd, "name", argv[2]);
@@ -987,7 +988,7 @@ do_command(int argc, char *argv[])
 	}
 
 	if (nvlist_get_bool(res, "error")) {
-		printf("error: %s\n", nvlist_get_string(res,"reson"));
+		printf("%s\n", nvlist_get_string(res, "reason"));
 		goto end;
 	}
 
@@ -1091,7 +1092,7 @@ boot0_command(int s, const nvlist_t *nv, bool install)
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
 		error = true;
-		reason = "not found";
+		reason = "VM not found";
 		goto ret;
 	}
 
@@ -1107,6 +1108,85 @@ boot0_command(int s, const nvlist_t *nv, bool install)
 	if (start_virtual_machine(vm_ent) < 0) {
 		error = true;
 		reason = "failed to start";
+	}
+
+ret:
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	return 0;
+}
+
+int
+reload_command(int s, const nvlist_t *nv)
+{
+	int fd;
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	struct vm *vm;
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
+	nvlist_t *res;
+	bool error = false;
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "VM not found";
+		goto ret;
+	}
+	vm = &vm_ent->vm;
+
+	if ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) < 0) {
+		error = true;
+		reason = "failed to load config file";
+		goto ret;
+	}
+
+	conf = parse_file(fd, vm->conf->filename);
+	close(fd);
+
+	if (conf == NULL) {
+		error = true;
+		reason = "failed to load config file";
+		goto ret;
+	}
+	conf_ent = realloc(conf, sizeof(*conf_ent));
+	if (conf_ent == NULL) {
+		free_vm_conf(conf);
+		error = true;
+		reason = "failed to load config file";
+		goto ret;
+	}
+
+	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry*)vm->conf,
+		     vm_conf_entry, next);
+	SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
+	free_vm_conf(vm->conf);
+	vm->conf = conf = &conf_ent->conf;
+
+	switch (vm->state) {
+	case LOAD:
+	case RUN:
+		INFO("stop vm %s\n", conf->name);
+		kill(vm->pid, SIGTERM);
+		set_timer(vm_ent, conf->stop_timeout);
+		vm->state = RESTART;
+		break;
+	case INIT:
+	case TERMINATE:
+		start_virtual_machine(vm_ent);
+		INFO("start vm %s\n", conf->name);
+		break;
+	case STOP:
+	case REMOVE:
+		vm->state = RESTART;
+		break;
+	default:
+		break;
 	}
 
 ret:
@@ -1187,7 +1267,7 @@ shutdown_command(int s, const nvlist_t *nv)
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
 		error = true;
-		reason = "not found";
+		reason = "VM not found";
 		goto ret;
 	}
 
