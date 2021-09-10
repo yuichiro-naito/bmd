@@ -1,3 +1,4 @@
+MK_DEBUG_FILES?= no
 LOCALBASE?= /usr/local
 SUBDIR=	plugins rc.d
 BINDIR=	$(LOCALBASE)/sbin
