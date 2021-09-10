@@ -41,7 +41,9 @@ int
 create_command_server(const struct global_conf *gc)
 {
 	int s;
+	void *set = NULL;
 	struct sockaddr_un addr;
+	struct stat st;
 
 	addr.sun_family = PF_UNIX;
 	strncpy(addr.sun_path, gc->cmd_sock_path, sizeof(addr.sun_path));
@@ -59,11 +61,18 @@ create_command_server(const struct global_conf *gc)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
-	if (chmod(gc->cmd_sock_path, ACCESSPERMS) < 0)
+	if (gc->unix_domain_socket_mode == NULL ||
+	    stat(gc->cmd_sock_path, &st) < 0 ||
+	    (set = setmode(gc->unix_domain_socket_mode)) == NULL)
+		return s;
+
+	if (chmod(gc->cmd_sock_path, getmode(set, st.st_mode)) < 0)
 		goto err;
 
+	free(set);
 	return s;
 err:
+	free(set);
 	close(s);
 	return -1;
 }

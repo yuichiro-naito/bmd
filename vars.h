@@ -15,6 +15,7 @@ struct global_conf {
 	char *plugin_dir;
 	char *pid_path;
 	char *cmd_sock_path;
+	char *unix_domain_socket_mode;
 	char *vm_name;
 	int install;
 	int config_fd;

@@ -80,7 +80,7 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d",
 	LOCALBASE "/libexec/bmd", "/var/run/bmd.pid",
-	"/var/run/bmd.sock",	NULL };
+	"/var/run/bmd.sock", NULL, NULL };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -808,7 +808,7 @@ parse_opt(int argc, char *argv[])
 	FILE *fp;
 	int fg = 0;
 
-	while ((ch = getopt(argc, argv, "b:iFf:p:")) != -1) {
+	while ((ch = getopt(argc, argv, "b:iFf:p:m:")) != -1) {
 		switch (ch) {
 		case 'b':
 			gl_conf.vm_name = strdup(optarg);
@@ -829,10 +829,14 @@ parse_opt(int argc, char *argv[])
 		case 'p':
 			gl_conf.plugin_dir = strdup(optarg);
 			break;
+		case 'm':
+			gl_conf.unix_domain_socket_mode = strdup(optarg);
+			break;
 		default:
 			fprintf(stderr,
 			    "usage: %s [-F] [-f pid file] "
 			    "[-p plugin directory] \n"
+			    "[-m unix domain socket permission] \n"
 			    "\t[-c vm config directory]\n"
 			    "\t[-b vm name] [-i]\n",
 			    argv[0]);
