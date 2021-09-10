@@ -387,6 +387,10 @@ exec_bhyve(struct vm *vm)
 			WRITE_STR("-u");
 		if (conf->wired_memory == true)
 			WRITE_STR("-S");
+		if (conf->debug_port != NULL) {
+			WRITE_STR("-G");
+			WRITE_STR(conf->debug_port);
+		}
 		WRITE_STR("-c");
 		WRITE_STR(conf->ncpu);
 		WRITE_STR("-m");

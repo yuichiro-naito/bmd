@@ -310,6 +310,12 @@ parse_stop_timeout(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_debug_port(struct vm_conf *conf, char *val)
+{
+	return set_debug_port(conf, val);
+}
+
+static int
 parse_boot(struct vm_conf *conf, char *val)
 {
 	enum BOOT b;
@@ -446,6 +452,7 @@ struct parser_entry parser_list[] = {
 	{ "boot", &parse_boot },
 	{ "boot_delay", &parse_boot_delay },
 	{ "comport", &parse_comport },
+	{ "debug_port", &parse_debug_port },
 	{ "disk", &parse_disk },
 	{ "err_logfile", &parse_err_logfile },
 	{ "graphics", &parse_graphics },

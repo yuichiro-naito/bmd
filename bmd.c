@@ -835,7 +835,7 @@ parse_opt(int argc, char *argv[])
 			fprintf(stderr,
 			    "usage: %s [-F] [-f pid file] "
 			    "[-p plugin directory] \n"
-			    "[-m unix domain socket permission] \n"
+			    "\t[-m unix domain socket permission] \n"
 			    "\t[-c vm config directory]\n"
 			    "\t[-b vm name] [-i]\n",
 			    argv[0]);

@@ -263,6 +263,15 @@ set_stop_timeout(struct vm_conf *conf, int timeout)
 }
 
 int
+set_debug_port(struct vm_conf *conf, char *port)
+{
+	if (conf == NULL)
+		return 0;
+
+	return set_string(&conf->debug_port, port);
+}
+
+int
 set_memory_size(struct vm_conf *conf, const char *memory)
 {
 	if (conf == NULL)
@@ -526,6 +535,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, "ncpu: %s\n", conf->ncpu);
 	fprintf(fp, "memory: %s\n", conf->memory);
 	fprintf(fp, "comport: %s\n", conf->comport);
+	fprintf(fp, "debug_port: %s\n", conf->debug_port);
 	fprintf(fp, "boot: %s\n", btype[conf->boot]);
 	fprintf(fp, "loader: %s\n", conf->loader);
 	fprintf(fp, "loader_timeout: %d\n", conf->loader_timeout);
