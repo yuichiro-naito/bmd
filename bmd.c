@@ -1,9 +1,9 @@
 #include <sys/dirent.h>
 #include <sys/event.h>
+#include <sys/nv.h>
 #include <sys/queue.h>
 #include <sys/signal.h>
 #include <sys/wait.h>
-#include <sys/nv.h>
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -15,12 +15,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "command.h"
 #include "conf.h"
 #include "log.h"
 #include "parser.h"
 #include "vars.h"
 #include "vm.h"
-#include "command.h"
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
@@ -78,9 +78,8 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 /*
   Global configuration.
  */
-struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d",
-	LOCALBASE "/libexec/bmd", "/var/run/bmd.pid",
-	"/var/run/bmd.sock", NULL, NULL };
+struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NULL };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -275,7 +274,7 @@ load_config_files(struct vm_conf_head *list)
 
 	close(gl_conf.config_fd);
 	if ((gl_conf.config_fd = open(gl_conf.config_dir,
-				      O_DIRECTORY | O_RDONLY)) < 0) {
+		 O_DIRECTORY | O_RDONLY)) < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
 		return -1;
 	}
@@ -954,7 +953,9 @@ strendswith(const char *t, const char *s)
 int
 usage(int argc, char *argv[])
 {
-	printf("usage: %s boot <name>| install <vm name> | shutdown <vm name>| reload <name> | list\n", argv[0]);
+	printf(
+	    "usage: %s boot <name>| install <vm name> | shutdown <vm name>| reload <name> | list\n",
+	    argv[0]);
 	return 1;
 }
 
@@ -1006,13 +1007,11 @@ do_command(int argc, char *argv[])
 
 	if (argc == 2 && strcmp(argv[1], "list") == 0) {
 		size_t i, count;
-		const struct nvlist * const *list;
+		const struct nvlist *const *list;
 		list = nvlist_get_nvlist_array(res, "vm_list", &count);
-		for (i = 0; i < count ; i++) {
-			printf("%20s %s\n",
-			       nvlist_get_string(list[i], "name"),
-			       nvlist_get_string(list[i], "state")
-				);
+		for (i = 0; i < count; i++) {
+			printf("%20s %s\n", nvlist_get_string(list[i], "name"),
+			    nvlist_get_string(list[i], "state"));
 		}
 	}
 
@@ -1055,13 +1054,13 @@ main(int argc, char *argv[])
 	}
 
 	if ((gl_conf.config_fd = open(gl_conf.config_dir,
-				      O_DIRECTORY | O_RDONLY)) < 0) {
+		 O_DIRECTORY | O_RDONLY)) < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
 		return 1;
 	}
 
 	if ((gl_conf.plugin_fd = open(gl_conf.plugin_dir,
-				      O_DIRECTORY | O_RDONLY)) < 0) {
+		 O_DIRECTORY | O_RDONLY)) < 0) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return 1;
 	}
@@ -1154,13 +1153,14 @@ reload_command(int s, const nvlist_t *nv)
 
 	close(gl_conf.config_fd);
 	if ((gl_conf.config_fd = open(gl_conf.config_dir,
-				      O_DIRECTORY | O_RDONLY)) < 0) {
+		 O_DIRECTORY | O_RDONLY)) < 0) {
 		error = true;
 		reason = "failed to open config directory";
 		goto ret;
 	}
 
-	if ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) < 0) {
+	if ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) <
+	    0) {
 		error = true;
 		reason = "failed to load config file";
 		goto ret;
@@ -1182,8 +1182,8 @@ reload_command(int s, const nvlist_t *nv)
 		goto ret;
 	}
 
-	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry*)vm->conf,
-		     vm_conf_entry, next);
+	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry *)vm->conf,
+	    vm_conf_entry, next);
 	SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
 	free_vm_conf(vm->conf);
 	vm->conf = conf = &conf_ent->conf;
@@ -1234,17 +1234,14 @@ install_command(int s, const nvlist_t *nv)
 int
 list_command(int s, const nvlist_t *nv)
 {
-	size_t i, count=0;
+	size_t i, count = 0;
 	const char *reason;
 	nvlist_t *res, *p;
 	const nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
 	bool error = false;
-	static char *state_string[] = {
-		"STOP", "LOAD", "RUN", "STOP",
-		"TERMINATING", "TERMINATING", "REBOOTING"
-	};
-
+	static char *state_string[] = { "STOP", "LOAD", "RUN", "STOP",
+		"TERMINATING", "TERMINATING", "REBOOTING" };
 
 	res = nvlist_create(0);
 

@@ -58,8 +58,8 @@ write_mapfile(struct vm *vm)
 	struct iso_conf *ic;
 	struct vm_conf *conf;
 
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", vm->conf->name,
-		getpid()) < 0)
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", vm->conf->name, getpid()) <
+	    0)
 		return -1;
 
 	fd = mkstemp(fn);
@@ -369,8 +369,8 @@ exec_bhyve(struct vm *vm)
 		}
 		flockfile(fp);
 
-#define WRITE_STR(str)                                      \
-		fwrite_unlocked(&(char *[]){(str)}[0], sizeof(char *), 1, fp)
+#define WRITE_STR(str) \
+	fwrite_unlocked(&(char *[]) { (str) }[0], sizeof(char *), 1, fp)
 
 #define WRITE_FMT(fmt, ...)                                 \
 	do {                                                \

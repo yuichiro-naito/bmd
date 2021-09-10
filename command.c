@@ -1,13 +1,14 @@
 #include <sys/types.h>
-#include <sys/stat.h>
+#include <sys/nv.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
-#include <sys/nv.h>
-#include <unistd.h>
+
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
+#include <unistd.h>
 
 #include "log.h"
 #include "vars.h"
@@ -27,7 +28,7 @@ connect_to_server(const struct global_conf *gc)
 		if (errno != EAGAIN && errno != EINTR)
 			return -1;
 
-	while (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+	while (connect(s, (struct sockaddr *)&addr, sizeof(addr)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
@@ -53,7 +54,7 @@ create_command_server(const struct global_conf *gc)
 		if (errno != EAGAIN && errno != EINTR)
 			return -1;
 
-	while (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+	while (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
