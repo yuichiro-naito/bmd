@@ -263,7 +263,7 @@ set_stop_timeout(struct vm_conf *conf, int timeout)
 }
 
 int
-set_debug_port(struct vm_conf *conf, char *port)
+set_debug_port(struct vm_conf *conf, const char *port)
 {
 	if (conf == NULL)
 		return 0;
