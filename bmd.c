@@ -79,7 +79,8 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
   Global configuration.
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NULL };
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NULL, 0, -1, -1, -1, 0,
+	-1 };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -953,8 +954,61 @@ int
 usage(int argc, char *argv[])
 {
 	printf(
-	    "usage: %s boot <name>| install <vm name> | shutdown <vm name>| reload <name> | list\n",
+	    "usage: %s boot <name> | install <vm name> | shutdown <vm name>| reload <name> | console <name> | list \n",
 	    argv[0]);
+	return 1;
+}
+
+int
+do_console(char *name)
+{
+	struct vm_conf_entry *conf_ent;
+	struct vm_conf *conf = NULL;
+	int i;
+	char *port;
+
+	if (load_config_files(&vm_conf_list) < 0) {
+		printf("failed to load VM config files\n");
+		return 1;
+	}
+
+	SLIST_FOREACH (conf_ent, &vm_conf_list, next)
+		if (strcmp(conf_ent->conf.name, name) == 0) {
+			conf = &conf_ent->conf;
+			break;
+		}
+
+	if (conf == NULL) {
+		printf("no such VM %s\n", name);
+		return 1;
+	}
+
+	/* A null modem device has at least 6 characters. */
+	if (conf->comport == NULL ||
+	    (i = strlen(conf->comport) - 1 ) < 5) {
+		printf("VM %s doesn't have com port\n", name);
+		return 1;
+	}
+
+	port = strdup(conf->comport);
+	if (port == NULL) {
+		printf("failed to allocate memory\n");
+		return 1;
+	}
+
+	switch (port[i]) {
+	case 'A':
+		port[i] = 'B';
+		break;
+	case 'B':
+		port[i] = 'A';
+		break;
+	default:
+		break;
+	}
+
+	execlp("/usr/bin/cu", "cu", "-l", port, NULL);
+	printf("failed to execute cu\n");
 	return 1;
 }
 
@@ -966,6 +1020,9 @@ do_command(int argc, char *argv[])
 
 	if (argc < 2)
 		return usage(argc, argv);
+
+	if (strcmp(argv[1], "console") == 0)
+		return do_console(argv[2]);
 
 	cmd = nvlist_create(0);
 
