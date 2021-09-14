@@ -328,8 +328,6 @@ parse_boot(struct vm_conf *conf, char *val)
 		b = INSTALL;
 	else if (strcasecmp(val, "always") == 0)
 		b = ALWAYS;
-	else if (strcasecmp(val, "reboot") == 0)
-		b = REBOOT;
 	else
 		b = NO;
 
@@ -361,6 +359,12 @@ parse_boolean(const char *value)
 	if (strcasecmp(value, "yes") == 0 || strcasecmp(value, "true") == 0)
 		return true;
 	return false;
+}
+
+static int
+parse_reboot_on_change(struct vm_conf *conf, char *val)
+{
+	return set_reboot_on_change(conf, parse_boolean(val));
 }
 
 static int
@@ -472,6 +476,7 @@ struct parser_entry parser_list[] = {
 	{ "name", &parse_name },
 	{ "ncpu", &parse_ncpu },
 	{ "network", &parse_net },
+	{ "reboot_on_change", &parse_reboot_on_change },
 	{ "stop_timeout", &parse_stop_timeout },
 	{ "utctime", &parse_utctime },
 	{ "wired_memory", &parse_wired_memory },

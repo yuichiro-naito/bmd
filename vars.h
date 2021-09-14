@@ -44,7 +44,7 @@ struct net_conf {
 	char *tap;
 };
 
-enum BOOT { NO, YES, ONESHOT, INSTALL, ALWAYS, REBOOT };
+enum BOOT { NO, YES, ONESHOT, INSTALL, ALWAYS };
 
 struct fbuf {
 	int enable;
@@ -78,6 +78,7 @@ struct vm_conf {
 	bool mouse;
 	bool wired_memory;
 	bool utctime;
+	bool reboot_on_change;
 	int ndisks;
 	int nisoes;
 	int nnets;

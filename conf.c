@@ -341,6 +341,15 @@ set_boot_delay(struct vm_conf *conf, int delay)
 }
 
 int
+set_reboot_on_change(struct vm_conf *conf, bool enable)
+{
+	if (conf == NULL)
+		return 0;
+	conf->reboot_on_change = enable;
+	return 0;
+}
+
+int
 set_fbuf_enable(struct fbuf *fb, bool enable)
 {
 	if (fb == NULL)

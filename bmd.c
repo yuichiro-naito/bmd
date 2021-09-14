@@ -490,6 +490,18 @@ reload_virtual_machines()
 			    O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
 		vm = &vm_ent->vm;
+		if (conf->reboot_on_change) {
+			if ((vm->state == LOAD || vm->state == RUN) &&
+			    compare_vm_conf(conf, vm->conf) != 0) {
+				INFO("reboot vm %s\n", conf->name);
+				kill(vm->pid, SIGTERM);
+				set_timer(vm_ent, conf->stop_timeout);
+				vm->state = RESTART;
+			} else if (vm->state == STOP)
+				vm->state = RESTART;
+			vm_ent->new_conf = conf;
+			continue;
+		}
 		switch (conf->boot) {
 		case NO:
 			if (vm->state == LOAD || vm->state == RUN) {
@@ -517,19 +529,6 @@ reload_virtual_machines()
 				vm->conf = conf;
 				start_virtual_machine(vm_ent);
 			}
-			break;
-		case REBOOT:
-			if (vm->state == INIT || vm->state == TERMINATE) {
-				vm->conf = conf;
-				start_virtual_machine(vm_ent);
-			} else if ((vm->state == LOAD || vm->state == RUN) &&
-			    compare_vm_conf(conf, vm->conf) != 0) {
-				INFO("reboot vm %s\n", conf->name);
-				kill(vm->pid, SIGTERM);
-				set_timer(vm_ent, conf->stop_timeout);
-				vm->state = RESTART;
-			} else if (vm->state == STOP)
-				vm->state = RESTART;
 			break;
 		}
 		vm_ent->new_conf = conf;
