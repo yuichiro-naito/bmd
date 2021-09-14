@@ -190,7 +190,7 @@ load_plugins()
 		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0 ||
 		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) <
 			0 ||
-		    ((hdl = fdlopen(fd, RTLD_LAZY)) == NULL))
+		    ((hdl = fdlopen(fd, RTLD_NOW)) == NULL))
 			goto next;
 
 		desc = dlsym(hdl, "plugin_desc");
