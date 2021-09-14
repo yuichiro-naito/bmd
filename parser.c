@@ -510,6 +510,7 @@ parse(struct vm_conf *conf, FILE *fp)
 	char *key;
 	char *val;
 	pfunc parser;
+	char *name = conf->name;
 
 	while (1) {
 		if (get_token(fp, &key) == 1)
@@ -524,13 +525,13 @@ parse(struct vm_conf *conf, FILE *fp)
 			break;
 		}
 		if (val[0] != '=') {
-			ERR("value not found for %s\n", key);
+			ERR("value not found for %s in %s\n", key, name);
 			goto bad;
 		}
 
 		parser = get_parser(key);
 		if (parser == NULL) {
-			ERR("unknown key %s\n", key);
+			ERR("unknown key %s in %s\n", key, name);
 			goto bad;
 		}
 		free(key);
@@ -545,7 +546,7 @@ parse(struct vm_conf *conf, FILE *fp)
 			}
 
 			if ((*parser)(conf, val) < 0) {
-				ERR("invalid value %s\n", val);
+				ERR("invalid value %s in %s\n", val, name);
 				goto bad;
 			}
 			free(val);
