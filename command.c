@@ -1,4 +1,4 @@
-#include <sys/types.h>
+#include <sys/signal.h>
 #include <sys/nv.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
@@ -6,13 +6,23 @@
 #include <sys/un.h>
 
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "log.h"
+#include "conf.h"
 #include "vars.h"
-#include "vm.h"
+#include "parser.h"
+#include "bmd.h"
+
+extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
+extern SLIST_HEAD(, vm_entry) vm_list;
+extern struct global_conf gl_conf;
 
 int
 connect_to_server(const struct global_conf *gc)
@@ -90,11 +100,219 @@ accept_command_socket(int s0)
 	return s;
 }
 
-int boot_command(int s, const nvlist_t *nv);
-int install_command(int s, const nvlist_t *nv);
-int reload_command(int s, const nvlist_t *nv);
-int list_command(int s, const nvlist_t *nv);
-int shutdown_command(int s, const nvlist_t *nv);
+
+static int
+boot0_command(int s, const nvlist_t *nv, bool install)
+{
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	nvlist_t *res;
+	bool error = false;
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "VM not found";
+		goto ret;
+	}
+
+	if (vm_ent->vm.state != INIT && vm_ent->vm.state != TERMINATE) {
+		error = true;
+		reason = "already running";
+		goto ret;
+	}
+
+	if (install)
+		vm_ent->vm.conf->boot = INSTALL;
+
+	if (start_virtual_machine(vm_ent) < 0) {
+		error = true;
+		reason = "failed to start";
+	}
+
+ret:
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	return 0;
+}
+
+static int
+reload_command(int s, const nvlist_t *nv)
+{
+	int fd;
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	struct vm *vm;
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
+	nvlist_t *res;
+	bool error = false;
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "VM not found";
+		goto ret;
+	}
+	vm = &vm_ent->vm;
+
+	close(gl_conf.config_fd);
+	if ((gl_conf.config_fd = open(gl_conf.config_dir,
+		 O_DIRECTORY | O_RDONLY)) < 0) {
+		error = true;
+		reason = "failed to open config directory";
+		goto ret;
+	}
+
+	if ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) <
+	    0) {
+		error = true;
+		reason = "failed to load config file";
+		goto ret;
+	}
+
+	conf = parse_file(fd, vm->conf->filename);
+	close(fd);
+
+	if (conf == NULL) {
+		error = true;
+		reason = "failed to load config file";
+		goto ret;
+	}
+	conf_ent = realloc(conf, sizeof(*conf_ent));
+	if (conf_ent == NULL) {
+		free_vm_conf(conf);
+		error = true;
+		reason = "failed to load config file";
+		goto ret;
+	}
+
+	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry *)vm->conf,
+	    vm_conf_entry, next);
+	SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
+	free_vm_conf(vm->conf);
+	vm->conf = conf = &conf_ent->conf;
+
+	switch (vm->state) {
+	case LOAD:
+	case RUN:
+		INFO("stop vm %s\n", conf->name);
+		kill(vm->pid, SIGTERM);
+		set_timer(vm_ent, conf->stop_timeout);
+		vm->state = RESTART;
+		break;
+	case INIT:
+	case TERMINATE:
+		start_virtual_machine(vm_ent);
+		INFO("start vm %s\n", conf->name);
+		break;
+	case STOP:
+	case REMOVE:
+		vm->state = RESTART;
+		break;
+	default:
+		break;
+	}
+
+ret:
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	return 0;
+}
+
+static int
+boot_command(int s, const nvlist_t *nv)
+{
+	return boot0_command(s, nv, false);
+}
+
+static int
+install_command(int s, const nvlist_t *nv)
+{
+	return boot0_command(s, nv, true);
+}
+
+static int
+list_command(int s, const nvlist_t *nv)
+{
+	size_t i, count = 0;
+	const char *reason;
+	nvlist_t *res, *p;
+	const nvlist_t **list = NULL;
+	struct vm_entry *vm_ent;
+	bool error = false;
+	static char *state_string[] = { "STOP", "LOAD", "RUN", "STOP",
+		"TERMINATING", "TERMINATING", "REBOOTING" };
+
+	res = nvlist_create(0);
+
+	SLIST_FOREACH (vm_ent, &vm_list, next)
+		count++;
+
+	list = malloc(count * sizeof(nvlist_t *));
+	if (list == NULL) {
+		reason = "can not allocate memory";
+		goto ret;
+	}
+
+	i = 0;
+	SLIST_FOREACH (vm_ent, &vm_list, next) {
+		p = nvlist_create(0);
+		nvlist_add_string(p, "name", vm_ent->vm.conf->name);
+		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
+		list[i++] = p;
+	}
+
+	nvlist_add_nvlist_array(res, "vm_list", list, count);
+ret:
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	free(list);
+	return 0;
+}
+
+static int
+shutdown_command(int s, const nvlist_t *nv)
+{
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	nvlist_t *res;
+	bool error = false;
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "VM not found";
+		goto ret;
+	}
+
+	if (vm_ent->vm.state != LOAD && vm_ent->vm.state != RUN)
+		goto ret;
+
+	kill(vm_ent->vm.pid, SIGTERM);
+	set_timer(vm_ent, vm_ent->vm.conf->stop_timeout);
+	vm_ent->vm.state = STOP;
+
+ret:
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	nvlist_send(s, res);
+	nvlist_destroy(res);
+	return 0;
+}
 
 typedef int (*cfunc)(int s, const nvlist_t *nv);
 

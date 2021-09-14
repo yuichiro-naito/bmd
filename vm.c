@@ -1,7 +1,6 @@
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
-#include <sys/wait.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -10,6 +9,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "conf.h"
 #include "log.h"
