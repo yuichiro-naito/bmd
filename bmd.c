@@ -273,7 +273,9 @@ load_config_files(struct vm_conf_head *list)
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 
-	close(gl_conf.config_fd);
+	if (gl_conf.config_fd != -1)
+		close(gl_conf.config_fd);
+
 	if ((gl_conf.config_fd = open(gl_conf.config_dir,
 		 O_DIRECTORY | O_RDONLY)) < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
