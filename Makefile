@@ -7,7 +7,7 @@ DIRS=	VMCONFDIR
 VMCONFDIR=$(LOCALBASE)/etc/bmd.d
 PROG=	bmd
 LINKS=  ${BINDIR}/bmd ${BINDIR}/bmdctl
-SRCS=	bmd.c conf.c tap.c parser.c vm.c command.c
+SRCS=	bmd.c conf.c tap.c parser.c vm.c command.c control.c
 CFLAGS+=-Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LDADD=	-lnv
 

@@ -47,6 +47,15 @@ struct vm_entry {
 	SLIST_ENTRY(vm_entry) next;
 };
 
+struct vm_conf_head;
+
+int remove_plugins();
+void call_plugins(struct vm_entry *vm_ent);
+int load_plugins();
+void free_vm_entry(struct vm_entry *vm_ent);
+
+struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
+int load_config_files(struct vm_conf_head *list);
 struct vm_entry *lookup_vm_by_name(const char *name);
 int set_timer(struct vm_entry *vm_ent, int second);
 int start_virtual_machine(struct vm_entry *vm_ent);

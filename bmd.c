@@ -37,8 +37,7 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
   Global configuration.
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NULL, 0, -1, -1, -1, 0,
-	-1 };
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, 0, -1, -1, -1, 0, -1 };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -767,15 +766,8 @@ parse_opt(int argc, char *argv[])
 	FILE *fp;
 	int fg = 0;
 
-	while ((ch = getopt(argc, argv, "b:iFf:p:m:")) != -1) {
+	while ((ch = getopt(argc, argv, "Ff:p:m:")) != -1) {
 		switch (ch) {
-		case 'b':
-			gl_conf.vm_name = strdup(optarg);
-			fg = 1;
-			break;
-		case 'i':
-			gl_conf.install = 1;
-			break;
 		case 'F':
 			fg = 1;
 			break;
@@ -796,8 +788,7 @@ parse_opt(int argc, char *argv[])
 			    "usage: %s [-F] [-f pid file] "
 			    "[-p plugin directory] \n"
 			    "\t[-m unix domain socket permission] \n"
-			    "\t[-c vm config directory]\n"
-			    "\t[-b vm name] [-i]\n",
+			    "\t[-c vm config directory]\n",
 			    argv[0]);
 			return -1;
 		}
@@ -817,87 +808,6 @@ parse_opt(int argc, char *argv[])
 }
 
 int
-direct_run()
-{
-	int fd;
-	char *path;
-	int status;
-	struct vm_conf *conf;
-	struct vm_conf_entry *conf_ent;
-	struct vm_entry *vm_ent;
-	struct vm *vm;
-
-	LOG_OPEN_PERROR();
-
-	fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY);
-	if (fd < 0) {
-		ERR("can not open %s\n", gl_conf.plugin_dir);
-		return 1;
-	}
-	gl_conf.plugin_fd = fd;
-
-	if (load_plugins() < 0)
-		return 1;
-
-	if (asprintf(&path, "%s/%s", gl_conf.config_dir, gl_conf.vm_name) < 0)
-		return 1;
-	fd = open(path, O_RDONLY);
-	free(path);
-	if (fd < 0) {
-		ERR("can not open %s/%s\n", gl_conf.config_dir,
-		    gl_conf.vm_name);
-		return 1;
-	}
-	conf = parse_file(fd, gl_conf.vm_name);
-	close(fd);
-	if (conf == NULL)
-		return 1;
-	free(conf->comport);
-	conf->comport = strdup("stdio");
-	if (gl_conf.install)
-		conf->boot = INSTALL;
-
-	conf_ent = realloc(conf, sizeof(*conf_ent));
-	if (conf_ent == NULL) {
-		free_vm_conf(conf);
-		return 1;
-	}
-
-	vm_ent = create_vm_entry(conf_ent);
-	if (vm_ent == NULL) {
-		free_vm_conf(conf);
-		return 1;
-	}
-	vm = &vm_ent->vm;
-
-	if (start_vm(vm) < 0)
-		goto err;
-	call_plugins(vm_ent);
-	if (waitpid(vm->pid, &status, 0) < 0)
-		goto err;
-
-	if (vm->state == LOAD) {
-		if (exec_bhyve(vm) < 0)
-			goto err;
-		call_plugins(vm_ent);
-		if (waitpid(vm->pid, &status, 0) < 0)
-			goto err;
-	}
-
-	cleanup_vm(vm);
-	call_plugins(vm_ent);
-	free_vm_entry(vm_ent);
-	remove_plugins();
-	return 0;
-err:
-	cleanup_vm(vm);
-	call_plugins(vm_ent);
-	free_vm_entry(vm_ent);
-	remove_plugins();
-	return 1;
-}
-
-int
 strendswith(const char *t, const char *s)
 {
 	const char *p = &t[strlen(t)];
@@ -910,133 +820,7 @@ strendswith(const char *t, const char *s)
 	return (*p) - (*q);
 }
 
-int
-usage(int argc, char *argv[])
-{
-	printf(
-	    "usage: %s boot <name> | install <vm name> | shutdown <vm name>| reload <name> | console <name> | list \n",
-	    argv[0]);
-	return 1;
-}
-
-int
-do_console(char *name)
-{
-	struct vm_conf_entry *conf_ent;
-	struct vm_conf *conf = NULL;
-	int i;
-	char *port;
-
-	if (load_config_files(&vm_conf_list) < 0) {
-		printf("failed to load VM config files\n");
-		return 1;
-	}
-
-	SLIST_FOREACH (conf_ent, &vm_conf_list, next)
-		if (strcmp(conf_ent->conf.name, name) == 0) {
-			conf = &conf_ent->conf;
-			break;
-		}
-
-	if (conf == NULL) {
-		printf("no such VM %s\n", name);
-		return 1;
-	}
-
-	/* A null modem device has at least 6 characters. */
-	if (conf->comport == NULL ||
-	    (i = strlen(conf->comport) - 1 ) < 5) {
-		printf("VM %s doesn't have com port\n", name);
-		return 1;
-	}
-
-	port = strdup(conf->comport);
-	if (port == NULL) {
-		printf("failed to allocate memory\n");
-		return 1;
-	}
-
-	switch (port[i]) {
-	case 'A':
-		port[i] = 'B';
-		break;
-	case 'B':
-		port[i] = 'A';
-		break;
-	default:
-		break;
-	}
-
-	execlp("/usr/bin/cu", "cu", "-l", port, NULL);
-	printf("failed to execute cu\n");
-	return 1;
-}
-
-int
-do_command(int argc, char *argv[])
-{
-	int s, ret = 0;
-	nvlist_t *cmd, *res = NULL;
-
-	if (argc < 2)
-		return usage(argc, argv);
-
-	if (strcmp(argv[1], "console") == 0)
-		return do_console(argv[2]);
-
-	cmd = nvlist_create(0);
-
-	if (strcmp(argv[1], "start") == 0)
-		argv[1] = "boot";
-	else if (strcmp(argv[1], "stop") == 0)
-		argv[1] = "shutdown";
-
-	if (argc == 2 && strcmp(argv[1], "list") == 0) {
-		nvlist_add_string(cmd, "command", argv[1]);
-	} else if (argc == 3 && (strcmp(argv[1], "boot") == 0 ||
-				 strcmp(argv[1], "install") == 0 ||
-				 strcmp(argv[1], "reload") == 0 ||
-				 strcmp(argv[1], "shutdown") == 0)) {
-		nvlist_add_string(cmd, "command", argv[1]);
-		nvlist_add_string(cmd, "name", argv[2]);
-	} else {
-		return usage(argc, argv);
-	}
-
-	if ((s = connect_to_server(&gl_conf)) < 0) {
-		printf("can not connect to %s\n", gl_conf.cmd_sock_path);
-		return 1;
-	}
-
-	nvlist_send(s, cmd);
-
-	res = nvlist_recv(s, 0);
-	if (res == NULL) {
-		printf("server returns null\n");
-		goto end;
-	}
-
-	if (nvlist_get_bool(res, "error")) {
-		printf("%s\n", nvlist_get_string(res, "reason"));
-		goto end;
-	}
-
-	if (argc == 2 && strcmp(argv[1], "list") == 0) {
-		size_t i, count;
-		const struct nvlist *const *list;
-		list = nvlist_get_nvlist_array(res, "vm_list", &count);
-		for (i = 0; i < count; i++) {
-			printf("%20s %s\n", nvlist_get_string(list[i], "name"),
-			    nvlist_get_string(list[i], "state"));
-		}
-	}
-
-end:
-	close(s);
-	nvlist_destroy(cmd);
-	nvlist_destroy(res);
-	return ret;
-}
+int control(int argc, char *argv[]);
 
 int
 main(int argc, char *argv[])
@@ -1044,13 +828,10 @@ main(int argc, char *argv[])
 	sigset_t nmask, omask;
 
 	if (strendswith(argv[0], "ctl") == 0)
-		return do_command(argc, argv);
+		return control(argc, argv);
 
 	if (parse_opt(argc, argv) < 0)
 		return 1;
-
-	if (gl_conf.vm_name != NULL)
-		return direct_run();
 
 	if (gl_conf.foreground)
 		LOG_OPEN_PERROR();
