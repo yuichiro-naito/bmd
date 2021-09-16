@@ -23,13 +23,13 @@ usage(int argc, char *argv[])
 {
 	printf(
 	    "usage: %s <subcommand>\n"
-	    "  boot <name>         : boot VM\n"
-	    "  install <name>      : install VM from ISO image\n"
-	    "  shutdown <name>     : ACPI shutdown VM\n"
-	    "  reload <name>       : reload VM\n"
-	    "  console <name>      : connect to com port\n"
-	    "  run [-i] <name>     : directly run with serial console\n"
-	    "  list                : list VM name & status\n",
+	    "  boot <name>          : boot VM\n"
+	    "  install <name>       : install VM from ISO image\n"
+	    "  shutdown <name>      : ACPI shutdown VM\n"
+	    "  reload <name>        : reload VM\n"
+	    "  console <name>       : connect to com port\n"
+	    "  run [-i] [-s] <name> : directly run with serial console\n"
+	    "  list                 : list VM name & status\n",
 	    argv[0]);
 	return 1;
 }
@@ -55,7 +55,7 @@ lookup_vm_conf(const char *name)
 }
 
 int
-direct_run(const char *name)
+direct_run(const char *name, bool install, bool single)
 {
 	int fd;
 	int status;
@@ -84,8 +84,9 @@ direct_run(const char *name)
 
 	free(conf->comport);
 	conf->comport = strdup("stdio");
-	if (gl_conf.install)
+	if (install)
 		conf->boot = INSTALL;
+	set_single_user(conf, single);
 
 	conf_ent = realloc(conf, sizeof(*conf_ent));
 	if (conf_ent == NULL) {
@@ -181,13 +182,24 @@ control(int argc, char *argv[])
 		return do_console(argv[2]);
 
 	if (strcmp(argv[1], "run") == 0) {
-		if (argc == 3)
-			return direct_run(argv[2]);
-		if (argc > 3 && strcmp(argv[2], "-i") == 0) {
-			gl_conf.install = true;
-			return direct_run(argv[3]);
+		char c, *name;
+		bool install, single;
+		install = single = false;
+		while ((c = getopt(argc-1, argv+1, "is")) != -1) {
+			switch(c) {
+			case 'i':
+				install = true;
+				break;
+			case 's':
+				single = true;
+				break;
+			default:
+				return usage(argc, argv);
+			}
 		}
-		return usage(argc, argv);
+		if ((name = argv[optind+1]) == NULL)
+			return usage(argc, argv);
+		return direct_run(name, install, single);
 	}
 
 	cmd = nvlist_create(0);

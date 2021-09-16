@@ -16,7 +16,6 @@ struct global_conf {
 	char *pid_path;
 	char *cmd_sock_path;
 	char *unix_domain_socket_mode;
-	int install;
 	int config_fd;
 	int plugin_fd;
 	int cmd_sock;
@@ -78,6 +77,7 @@ struct vm_conf {
 	bool wired_memory;
 	bool utctime;
 	bool reboot_on_change;
+	bool single_user;
 	int ndisks;
 	int nisoes;
 	int nnets;

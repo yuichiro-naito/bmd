@@ -37,7 +37,7 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
   Global configuration.
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, 0, -1, -1, -1, 0, -1 };
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, -1, -1, -1, 0, -1 };
 
 int
 wait_for_reading(struct vm_entry *vm_ent)

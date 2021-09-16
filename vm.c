@@ -103,6 +103,41 @@ err:
 	return -1;
 }
 
+static char *
+create_load_command(struct vm_conf *conf, size_t *length)
+{
+	static char *repl[] = {
+		"kopenbsd ", "knetbsd "
+	};
+	int i;
+	size_t len;
+	char *cmd;
+	char *t = (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd;
+	if (t == NULL) {
+		len = 0;
+		cmd = NULL;
+		goto end;
+	}
+
+	if (conf->single_user) {
+		for (i = 0; i < sizeof(repl)/sizeof(repl[0]); i++) {
+			len = strlen(repl[i]);
+			if (strncmp(t, repl[i], len) == 0) {
+				len = asprintf(&cmd, "%s-s %s\nboot\n",
+					       repl[i], t + len);
+				goto end;
+			}
+		}
+	}
+	len = asprintf(&cmd, "%s\nboot\n", t);
+
+end:
+	if (length)
+		*length = len;
+
+	return cmd;
+}
+
 int
 grub_load(struct vm *vm)
 {
@@ -110,15 +145,12 @@ grub_load(struct vm *vm)
 	pid_t pid;
 	char *args[9];
 	struct vm_conf *conf = vm->conf;
-	int len;
+	size_t len;
 	char *cmd;
 	bool doredirect = (conf->comport == NULL) ||
 	    (strcasecmp(conf->comport, "stdio") != 0);
 
-	if ((len = asprintf(&cmd, "%s\nboot\n",
-		 (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd)) <
-	    0)
-		return -1;
+	cmd = create_load_command(conf, &len);
 
 	if (pipe(ifd) < 0) {
 		ERR("can not create pipe (%s)\n", strerror(errno));
@@ -134,7 +166,8 @@ grub_load(struct vm *vm)
 		vm->infd = ifd[0];
 		vm->outfd = -1;
 		vm->errfd = -1;
-		write(ifd[0], cmd, len + 1);
+		if (cmd != NULL)
+			write(ifd[0], cmd, len + 1);
 		free(cmd);
 	} else if (pid == 0) {
 		close(ifd[0]);
@@ -168,8 +201,8 @@ int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
-	char *args[9];
-	int outfd[2], errfd[2];
+	char *args[11];
+	int i, outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
 	bool dopipe = (conf->comport == NULL) ||
 	    (strcasecmp(conf->comport, "stdio") != 0);
@@ -206,17 +239,22 @@ bhyve_load(struct vm *vm)
 			dup2(outfd[1], 1);
 			dup2(errfd[1], 2);
 		}
-		args[0] = "/usr/sbin/bhyveload";
-		args[1] = "-c";
-		args[2] = (conf->comport != NULL) ? conf->comport : "stdio";
-		args[3] = "-m";
-		args[4] = conf->memory;
-		args[5] = "-d";
-		args[6] = (conf->boot == INSTALL) ?
+		i = 0;
+		args[i++] = "/usr/sbin/bhyveload";
+		if (conf->single_user) {
+			args[i++] = "-e";
+			args[i++] = "boot_single=YES";
+		}
+		args[i++] = "-c";
+		args[i++] = (conf->comport != NULL) ? conf->comport : "stdio";
+		args[i++] = "-m";
+		args[i++] = conf->memory;
+		args[i++] = "-d";
+		args[i++] = (conf->boot == INSTALL) ?
 			  STAILQ_FIRST(&conf->isoes)->path :
 			  STAILQ_FIRST(&conf->disks)->path;
-		args[7] = conf->name;
-		args[8] = NULL;
+		args[i++] = conf->name;
+		args[i++] = NULL;
 
 		execv(args[0], args);
 		ERR("can't exec %s\n", args[0]);

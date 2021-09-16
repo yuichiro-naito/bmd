@@ -350,6 +350,15 @@ set_reboot_on_change(struct vm_conf *conf, bool enable)
 }
 
 int
+set_single_user(struct vm_conf *conf, bool single)
+{
+	if (conf == NULL)
+		return 0;
+	conf->single_user = single;
+	return 0;
+}
+
+int
 set_fbuf_enable(struct fbuf *fb, bool enable)
 {
 	if (fb == NULL)
