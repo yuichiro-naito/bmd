@@ -122,8 +122,7 @@ boot0_command(int s, const nvlist_t *nv, bool install)
 		goto ret;
 	}
 
-	if (install)
-		vm_ent->vm.conf->boot = INSTALL;
+	vm_ent->vm.conf->install = install;
 
 	if (start_virtual_machine(vm_ent) < 0) {
 		error = true;

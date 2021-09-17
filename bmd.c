@@ -483,13 +483,6 @@ reload_virtual_machines()
 		case ONESHOT:
 			// do nothing
 			break;
-		case INSTALL:
-			if (vm->state == INIT || vm->state == TERMINATE) {
-				INFO("install vm %s\n", conf->name);
-				vm->conf = conf;
-				start_virtual_machine(vm_ent);
-			}
-			break;
 		}
 		vm_ent->new_conf = conf;
 	}
@@ -660,7 +653,7 @@ wait:
 			set_timer(vm_ent, MAX(vm->conf->boot_delay, 3));
 			break;
 		case RUN:
-			if (vm->conf->boot != INSTALL && WIFEXITED(status) &&
+			if (vm->conf->install == false && WIFEXITED(status) &&
 			    (vm->conf->boot == ALWAYS ||
 				WEXITSTATUS(status) == 0)) {
 				start_virtual_machine(vm_ent);
@@ -672,6 +665,7 @@ wait:
 			stop_waiting_fd(vm_ent);
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
+			vm->conf->install = false;
 			break;
 		case REMOVE:
 			stop_waiting_fd(vm_ent);

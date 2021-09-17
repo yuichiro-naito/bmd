@@ -33,6 +33,7 @@ int set_boot_delay(struct vm_conf *conf, int delay);
 int set_comport(struct vm_conf *conf, const char *cmd);
 int set_reboot_on_change(struct vm_conf *conf, bool enable);
 int set_single_user(struct vm_conf *conf, bool single);
+int set_install(struct vm_conf *conf, bool install);
 int set_fbuf_enable(struct fbuf *fb, bool enable);
 int set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr);
 int set_fbuf_port(struct fbuf *fb, int port);

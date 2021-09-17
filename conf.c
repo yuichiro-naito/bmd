@@ -359,6 +359,15 @@ set_single_user(struct vm_conf *conf, bool single)
 }
 
 int
+set_install(struct vm_conf *conf, bool install)
+{
+	if (conf == NULL)
+		return 0;
+	conf->install = install;
+	return 0;
+}
+
+int
 set_fbuf_enable(struct fbuf *fb, bool enable)
 {
 	if (fb == NULL)
@@ -687,6 +696,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(utctime);
 	CMP_NUM(reboot_on_change);
 	CMP_NUM(single_user);
+	CMP_NUM(install);
 	CMP_NUM(ndisks);
 	CMP_NUM(nisoes);
 	CMP_NUM(nnets);

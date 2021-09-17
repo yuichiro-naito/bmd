@@ -42,7 +42,7 @@ struct net_conf {
 	char *tap;
 };
 
-enum BOOT { NO, YES, ONESHOT, INSTALL, ALWAYS };
+enum BOOT { NO, YES, ONESHOT, ALWAYS };
 
 struct fbuf {
 	int enable;
@@ -78,6 +78,7 @@ struct vm_conf {
 	bool utctime;
 	bool reboot_on_change;
 	bool single_user;
+	bool install;
 	int ndisks;
 	int nisoes;
 	int nnets;

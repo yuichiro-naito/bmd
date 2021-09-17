@@ -112,7 +112,7 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	int i;
 	size_t len;
 	char *cmd;
-	char *t = (conf->boot == INSTALL) ? conf->installcmd : conf->loadcmd;
+	char *t = (conf->install) ? conf->installcmd : conf->loadcmd;
 	if (t == NULL) {
 		len = 0;
 		cmd = NULL;
@@ -178,7 +178,7 @@ grub_load(struct vm *vm)
 		setenv("TERM", "vt100", 1);
 		args[0] = "/usr/local/sbin/grub-bhyve";
 		args[1] = "-r";
-		args[2] = (conf->boot == INSTALL) ? "cd0" : "hdd0,msdos1";
+		args[2] = (conf->install) ? "cd0" : "hdd0,msdos1";
 		args[3] = "-M";
 		args[4] = conf->memory;
 		args[5] = "-m";
@@ -250,7 +250,7 @@ bhyve_load(struct vm *vm)
 		args[i++] = "-m";
 		args[i++] = conf->memory;
 		args[i++] = "-d";
-		args[i++] = (conf->boot == INSTALL) ?
+		args[i++] = (conf->install) ?
 			  STAILQ_FIRST(&conf->isoes)->path :
 			  STAILQ_FIRST(&conf->disks)->path;
 		args[i++] = conf->name;

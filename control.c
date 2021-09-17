@@ -84,8 +84,7 @@ direct_run(const char *name, bool install, bool single)
 
 	free(conf->comport);
 	conf->comport = strdup("stdio");
-	if (install)
-		conf->boot = INSTALL;
+	conf->install = install;
 	set_single_user(conf, single);
 
 	conf_ent = realloc(conf, sizeof(*conf_ent));

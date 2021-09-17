@@ -324,8 +324,6 @@ parse_boot(struct vm_conf *conf, char *val)
 		b = YES;
 	else if (strcasecmp(val, "oneshot") == 0)
 		b = ONESHOT;
-	else if (strcasecmp(val, "install") == 0)
-		b = INSTALL;
 	else if (strcasecmp(val, "always") == 0)
 		b = ALWAYS;
 	else
@@ -365,6 +363,12 @@ static int
 parse_reboot_on_change(struct vm_conf *conf, char *val)
 {
 	return set_reboot_on_change(conf, parse_boolean(val));
+}
+
+static int
+parse_install(struct vm_conf *conf, char *val)
+{
+	return set_install(conf, parse_boolean(val));
 }
 
 static int
@@ -467,6 +471,7 @@ struct parser_entry parser_list[] = {
 	{ "graphics_vga", &parse_graphics_vga },
 	{ "graphics_wait", &parse_graphics_wait },
 	{ "hookcmd", &parse_hookcmd },
+	{ "install", &parse_install },
 	{ "installcmd", &parse_installcmd },
 	{ "iso", &parse_iso },
 	{ "loadcmd", &parse_loadcmd },
