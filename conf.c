@@ -664,14 +664,16 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	struct net_conf *na, *nb;
 
 	CMP_NUM(boot_delay);
+	CMP_NUM(loader_timeout);
+	CMP_NUM(stop_timeout);
+	CMP_STR(debug_port);
+	CMP_STR(filename);
 	CMP_STR(ncpu);
 	CMP_STR(memory);
 	CMP_STR(name);
 	CMP_STR(comport);
 	CMP_NUM(boot);
 	CMP_STR(loader);
-	CMP_NUM(loader_timeout);
-	CMP_NUM(stop_timeout);
 	CMP_STR(loadcmd);
 	CMP_STR(installcmd);
 	CMP_STR(hookcmd);
@@ -681,6 +683,10 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 		return rc;
 
 	CMP_NUM(mouse);
+	CMP_NUM(wired_memory);
+	CMP_NUM(utctime);
+	CMP_NUM(reboot_on_change);
+	CMP_NUM(single_user);
 	CMP_NUM(ndisks);
 	CMP_NUM(nisoes);
 	CMP_NUM(nnets);
