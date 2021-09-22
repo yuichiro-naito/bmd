@@ -398,17 +398,6 @@ lookup_vm_by_name(const char *name)
 	return NULL;
 }
 
-struct vm_entry *
-lookup_vm(struct vm_conf *conf)
-{
-	struct vm_entry *vm_ent;
-
-	SLIST_FOREACH (vm_ent, &vm_list, next)
-		if (strcmp(vm_ent->vm.conf->name, conf->name) == 0)
-			return vm_ent;
-	return NULL;
-}
-
 int
 reload_virtual_machines()
 {
@@ -427,7 +416,7 @@ reload_virtual_machines()
 
 	SLIST_FOREACH (conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
-		vm_ent = lookup_vm(conf);
+		vm_ent = lookup_vm_by_name(conf->name);
 		if (vm_ent == NULL) {
 			vm_ent = create_vm_entry(conf_ent);
 			if (vm_ent == NULL)
