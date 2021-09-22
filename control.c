@@ -168,6 +168,14 @@ do_console(char *name)
 	return 1;
 }
 
+static int
+compare_by_name(const void *a, const void *b)
+{
+#define GETNAME(v) nvlist_get_string(*((nvlist_t **)v), "name")
+	return strcmp(GETNAME(a), GETNAME(b));
+#undef GETNAME
+}
+
 int
 control(int argc, char *argv[])
 {
@@ -242,6 +250,7 @@ control(int argc, char *argv[])
 		size_t i, count;
 		const struct nvlist *const *list;
 		list = nvlist_get_nvlist_array(res, "vm_list", &count);
+		qsort((void*)list, count, sizeof(nvlist_t *), compare_by_name);
 		for (i = 0; i < count; i++) {
 			printf("%20s %s\n", nvlist_get_string(list[i], "name"),
 			    nvlist_get_string(list[i], "state"));
