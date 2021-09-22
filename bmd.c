@@ -659,7 +659,7 @@ wait:
 				start_virtual_machine(vm_ent);
 				break;
 			}
-			/* RUN THROUGH */
+			/* FALLTHROUGH */
 		case STOP:
 			INFO("stop vm %s\n", vm->conf->name);
 			stop_waiting_fd(vm_ent);
