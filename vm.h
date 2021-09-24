@@ -11,6 +11,9 @@ int activate_taps(struct vm *vm);
 int assign_taps(struct vm *vm);
 int exec_bhyve(struct vm *vm);
 int destroy_vm(struct vm *vm);
+int reset_vm(struct vm *vm);
+int poweroff_vm(struct vm *vm);
+int acpi_poweroff_vm(struct vm *vm);
 int start_vm(struct vm *vm);
 void cleanup_vm(struct vm *vm);
 

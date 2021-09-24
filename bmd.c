@@ -2,7 +2,6 @@
 #include <sys/event.h>
 #include <sys/nv.h>
 #include <sys/queue.h>
-#include <sys/signal.h>
 #include <sys/wait.h>
 
 #include <dirent.h>
@@ -331,7 +330,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		 * Force to kill bhyve.
 		 * If this error happens, we can't manage bhyve process at all.
 		 */
-		kill(vm->pid, SIGKILL);
+		poweroff_vm(vm);
 		waitpid(vm->pid, NULL, 0);
 		cleanup_vm(vm);
 		return -1;
@@ -443,7 +442,7 @@ reload_virtual_machines()
 			if ((vm->state == LOAD || vm->state == RUN) &&
 			    compare_vm_conf(conf, vm->conf) != 0) {
 				INFO("reboot vm %s\n", conf->name);
-				kill(vm->pid, SIGTERM);
+				acpi_poweroff_vm(&vm_ent->vm);
 				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = RESTART;
 			} else if (vm->state == STOP)
@@ -455,7 +454,7 @@ reload_virtual_machines()
 		case NO:
 			if (vm->state == LOAD || vm->state == RUN) {
 				INFO("stop vm %s\n", conf->name);
-				kill(vm->pid, SIGTERM);
+				acpi_poweroff_vm(&vm_ent->vm);
 				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = STOP;
 			} else if (vm->state == RESTART)
@@ -484,7 +483,7 @@ reload_virtual_machines()
 			case LOAD:
 			case RUN:
 				INFO("stop vm %s\n", conf->name);
-				kill(vm->pid, SIGTERM);
+				acpi_poweroff_vm(&vm_ent->vm);
 				set_timer(vm_ent, conf->stop_timeout);
 				/* GO THROUGH */
 			case STOP:
@@ -598,9 +597,9 @@ wait:
 		} else if (vm->state == LOAD || vm->state == STOP ||
 		    vm->state == REMOVE || vm->state == RESTART) {
 			/* loader timout or stop timeout */
-			/* force to kill process */
+			/* force to poweroff */
 			ERR("timeout kill vm %s\n", vm->conf->name);
-			kill(vm->pid, SIGKILL);
+			poweroff_vm(vm);
 		}
 		break;
 	case EVFILT_PROC:
@@ -704,7 +703,7 @@ stop_virtual_machines()
 		vm = &vm_ent->vm;
 		if (vm->state == LOAD || vm->state == RUN) {
 			count++;
-			kill(vm->pid, SIGTERM);
+			acpi_poweroff_vm(&vm_ent->vm);
 			set_timer(vm_ent, vm->conf->stop_timeout);
 		}
 	}
@@ -730,9 +729,9 @@ stop_virtual_machines()
 		} else if (ev.filter == EVFILT_TIMER) {
 			vm_ent = ev.udata;
 			vm = &vm_ent->vm;
-			/* force to kill process */
+			/* force to poweroff VM */
 			ERR("timeout kill vm %s\n", vm->conf->name);
-			kill(vm->pid, SIGKILL);
+			poweroff_vm(vm);
 		}
 	}
 

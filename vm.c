@@ -1,8 +1,12 @@
+#include <sys/types.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
+#include <sys/ioctl.h>
+#include <machine/vmm.h>
 
 #include <errno.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +14,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <vmmapi.h>
 
 #include "conf.h"
 #include "log.h"
@@ -491,6 +496,43 @@ destroy_vm(struct vm *vm)
 {
 	char *name = vm->conf->name;
 	return sysctlbyname("hw.vmm.destroy", NULL, 0, name, strlen(name));
+}
+
+static int
+suspend_vm(struct vm *vm, enum vm_suspend_how how)
+{
+	int rc, fd;
+	char *path;
+	struct vm_suspend vmsuspend;
+
+	if ((asprintf(&path, "/dev/vmm/%s", vm->conf->name)) < 0 ||
+	    (fd = open(path, O_RDWR)) < 0) {
+		free(path);
+		return -1;
+	}
+
+	memset(&vmsuspend, 0, sizeof(vmsuspend));
+	vmsuspend.how = how;
+	rc = ioctl(fd, VM_SUSPEND, &vmsuspend);
+
+	close(fd);
+	free(path);
+	return rc;
+}
+
+int reset_vm(struct vm *vm)
+{
+	return suspend_vm(vm, VM_SUSPEND_RESET);
+}
+
+int poweroff_vm(struct vm *vm)
+{
+	return suspend_vm(vm, VM_SUSPEND_POWEROFF);
+}
+
+int acpi_poweroff_vm(struct vm *vm)
+{
+	return kill(vm->pid, SIGTERM);
 }
 
 int

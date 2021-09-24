@@ -26,6 +26,8 @@ usage(int argc, char *argv[])
 	    "  boot <name>          : boot VM\n"
 	    "  install <name>       : install VM from ISO image\n"
 	    "  shutdown <name>      : ACPI shutdown VM\n"
+	    "  poweroff <name>      : poweroff VM\n"
+	    "  reset <name>         : reset VM\n"
 	    "  reload <name>        : reload VM\n"
 	    "  console <name>       : connect to com port\n"
 	    "  run [-i] [-s] <name> : directly run with serial console\n"
@@ -221,6 +223,8 @@ control(int argc, char *argv[])
 	} else if (argc == 3 && (strcmp(argv[1], "boot") == 0 ||
 				 strcmp(argv[1], "install") == 0 ||
 				 strcmp(argv[1], "reload") == 0 ||
+				 strcmp(argv[1], "reset") == 0 ||
+				 strcmp(argv[1], "poweroff") == 0 ||
 				 strcmp(argv[1], "shutdown") == 0)) {
 		nvlist_add_string(cmd, "command", argv[1]);
 		nvlist_add_string(cmd, "name", argv[2]);

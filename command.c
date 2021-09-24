@@ -19,6 +19,7 @@
 #include "vars.h"
 #include "parser.h"
 #include "bmd.h"
+#include "vm.h"
 
 extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
@@ -200,7 +201,7 @@ reload_command(int s, const nvlist_t *nv)
 	case LOAD:
 	case RUN:
 		INFO("stop vm %s\n", conf->name);
-		kill(vm->pid, SIGTERM);
+		acpi_poweroff_vm(&vm_ent->vm);
 		set_timer(vm_ent, conf->stop_timeout);
 		vm->state = RESTART;
 		break;
@@ -282,10 +283,11 @@ ret:
 }
 
 static int
-shutdown_command(int s, const nvlist_t *nv)
+vm_down_command(int s, const nvlist_t *nv, int how)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
+	struct vm_conf *conf;
 	nvlist_t *res;
 	bool error = false;
 
@@ -299,9 +301,27 @@ shutdown_command(int s, const nvlist_t *nv)
 	if (vm_ent->vm.state != LOAD && vm_ent->vm.state != RUN)
 		goto ret;
 
-	kill(vm_ent->vm.pid, SIGTERM);
-	set_timer(vm_ent, vm_ent->vm.conf->stop_timeout);
-	vm_ent->vm.state = STOP;
+	conf = vm_ent->vm.conf;
+	switch (how) {
+	case 0:
+		INFO("stop vm %s\n", conf->name);
+		acpi_poweroff_vm(&vm_ent->vm);
+		set_timer(vm_ent, vm_ent->vm.conf->stop_timeout);
+		vm_ent->vm.state = STOP;
+		break;
+	case 1:
+		INFO("reset vm %s\n", conf->name);
+		reset_vm(&vm_ent->vm);
+		break;
+	case 2:
+		INFO("poweroff vm %s\n", conf->name);
+		poweroff_vm(&vm_ent->vm);
+		vm_ent->vm.state = STOP;
+		break;
+	default:
+		error = true;
+		reason = "Unknown command";
+	}
 
 ret:
 	res = nvlist_create(0);
@@ -311,6 +331,21 @@ ret:
 	nvlist_send(s, res);
 	nvlist_destroy(res);
 	return 0;
+}
+
+static int
+shutdown_command(int s, const nvlist_t *nv) {
+	return vm_down_command(s, nv, 0);
+}
+
+static int
+reset_command(int s, const nvlist_t *nv) {
+	return vm_down_command(s, nv, 1);
+}
+
+static int
+poweroff_command(int s, const nvlist_t *nv) {
+	return vm_down_command(s, nv, 2);
 }
 
 typedef int (*cfunc)(int s, const nvlist_t *nv);
@@ -325,7 +360,9 @@ struct command_entry command_list[] = {
 	{ "boot", &boot_command },
 	{ "install", &install_command },
 	{ "list", &list_command },
+	{ "poweroff", &poweroff_command },
 	{ "reload", &reload_command },
+	{ "reset", &reset_command },
 	{ "shutdown", &shutdown_command },
 };
 
