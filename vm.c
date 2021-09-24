@@ -5,6 +5,12 @@
 #include <sys/ioctl.h>
 #include <machine/vmm.h>
 
+#if __FreeBSD_version < 1300094
+#include <sys/param.h>
+#include <sys/cpuset.h>
+#include <machine/vmm_dev.h>
+#endif
+
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
