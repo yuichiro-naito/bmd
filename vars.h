@@ -75,6 +75,7 @@ struct vm_conf {
 	char *installcmd;
 	char *hookcmd;
 	char *err_logfile;
+	char *grub_run_partition;
 	struct fbuf *fbuf;
 	bool mouse;
 	bool wired_memory;

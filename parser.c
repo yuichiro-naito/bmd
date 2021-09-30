@@ -310,6 +310,13 @@ parse_stop_timeout(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_grub_run_partition(struct vm_conf *conf, char *val)
+{
+	set_grub_run_partition(conf, val);
+	return 0;
+}
+
+static int
 parse_debug_port(struct vm_conf *conf, char *val)
 {
 	return set_debug_port(conf, val);
@@ -489,6 +496,7 @@ struct parser_entry parser_list[] = {
 	{ "graphics_res", &parse_graphics_res },
 	{ "graphics_vga", &parse_graphics_vga },
 	{ "graphics_wait", &parse_graphics_wait },
+	{ "grub_run_partition", &parse_grub_run_partition },
 	{ "hookcmd", &parse_hookcmd },
 	{ "hostbridge", &parse_hostbridge },
 	{ "install", &parse_install },

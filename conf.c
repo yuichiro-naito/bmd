@@ -263,6 +263,15 @@ set_stop_timeout(struct vm_conf *conf, int timeout)
 }
 
 int
+set_grub_run_partition(struct vm_conf *conf, const char *partition)
+{
+	if (conf == NULL)
+		return 0;
+
+	return set_string(&conf->grub_run_partition, partition);
+}
+
+int
 set_debug_port(struct vm_conf *conf, const char *port)
 {
 	if (conf == NULL)

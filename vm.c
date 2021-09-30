@@ -189,7 +189,15 @@ grub_load(struct vm *vm)
 		setenv("TERM", "vt100", 1);
 		args[0] = "/usr/local/sbin/grub-bhyve";
 		args[1] = "-r";
-		args[2] = (conf->install) ? "cd0" : "hdd0,msdos1";
+		if (conf->install)
+			args[2] = "cd0";
+		else {
+			if (conf->grub_run_partition)
+				asprintf(&args[2], "hd0,%s",
+					 conf->grub_run_partition);
+			else
+				args[2] = "hd0,1";
+		}
 		args[3] = "-M";
 		args[4] = conf->memory;
 		args[5] = "-m";
