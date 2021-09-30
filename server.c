@@ -267,6 +267,9 @@ list_command(int s, const nvlist_t *nv)
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
 		p = nvlist_create(0);
 		nvlist_add_string(p, "name", vm_ent->vm.conf->name);
+		nvlist_add_string(p, "ncpu", vm_ent->vm.conf->ncpu);
+		nvlist_add_string(p, "memory", vm_ent->vm.conf->memory);
+		nvlist_add_string(p, "loader", vm_ent->vm.conf->loader);
 		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
 		list[i++] = p;
 	}

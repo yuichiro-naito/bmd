@@ -253,12 +253,24 @@ control(int argc, char *argv[])
 	if (argc == 2 && strcmp(argv[1], "list") == 0) {
 		size_t i, count;
 		const struct nvlist *const *list;
+
+#define FORMAT "%20s%5s%7s%10s%12s\n"
+
+		printf(FORMAT, "name", "ncpu", "memory", "loader", "state");
+		printf(FORMAT, "-------------------",
+		       "----", "------", "---------", "-----------");
+
 		list = nvlist_get_nvlist_array(res, "vm_list", &count);
 		qsort((void*)list, count, sizeof(nvlist_t *), compare_by_name);
 		for (i = 0; i < count; i++) {
-			printf("%20s %s\n", nvlist_get_string(list[i], "name"),
-			    nvlist_get_string(list[i], "state"));
+			printf(FORMAT,
+			       nvlist_get_string(list[i], "name"),
+			       nvlist_get_string(list[i], "ncpu"),
+			       nvlist_get_string(list[i], "memory"),
+			       nvlist_get_string(list[i], "loader"),
+			       nvlist_get_string(list[i], "state"));
 		}
+#undef FORMAT
 	}
 
 end:
