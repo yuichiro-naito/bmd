@@ -55,11 +55,14 @@ struct fbuf {
 	char *password;
 };
 
+enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
+
 struct vm_conf {
 	unsigned int nmdm;
 	int boot_delay;
 	int loader_timeout;
 	int stop_timeout;
+	enum HOSTBRIDGE_TYPE hostbridge;
 	char *debug_port;
 	char *filename;
 	char *ncpu;

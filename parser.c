@@ -334,6 +334,25 @@ parse_boot(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_hostbridge(struct vm_conf *conf, char *val)
+{
+	enum HOSTBRIDGE_TYPE t;
+
+	if (strcasecmp(val, "none") == 0)
+		t = NONE;
+	else if ((strcasecmp(val, "standard") == 0) ||
+		 (strcasecmp(val, "intel") == 0))
+		t = INTEL;
+	else if (strcasecmp(val, "amd") == 0)
+		t = AMD;
+	else
+		return -1;
+
+	set_hostbridge(conf, t);
+	return 0;
+}
+
+static int
 parse_boot_delay(struct vm_conf *conf, char *val)
 {
 	int delay;
@@ -471,6 +490,7 @@ struct parser_entry parser_list[] = {
 	{ "graphics_vga", &parse_graphics_vga },
 	{ "graphics_wait", &parse_graphics_wait },
 	{ "hookcmd", &parse_hookcmd },
+	{ "hostbridge", &parse_hostbridge },
 	{ "install", &parse_install },
 	{ "installcmd", &parse_installcmd },
 	{ "iso", &parse_iso },

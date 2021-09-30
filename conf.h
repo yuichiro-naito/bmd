@@ -29,6 +29,7 @@ int set_loader_timeout(struct vm_conf *conf, int timeout);
 int set_stop_timeout(struct vm_conf *conf, int timeout);
 int set_debug_port(struct vm_conf *conf, const char *port);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
+int set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type);
 int set_boot_delay(struct vm_conf *conf, int delay);
 int set_comport(struct vm_conf *conf, const char *cmd);
 int set_reboot_on_change(struct vm_conf *conf, bool enable);

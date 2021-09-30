@@ -331,6 +331,16 @@ set_boot(struct vm_conf *conf, enum BOOT boot)
 }
 
 int
+set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type)
+{
+	if (conf == NULL)
+		return 0;
+
+	conf->hostbridge = type;
+	return 0;
+}
+
+int
 set_boot_delay(struct vm_conf *conf, int delay)
 {
 	if (conf == NULL)
@@ -514,6 +524,7 @@ create_vm_conf(char *filename)
 	if (ret == NULL || fbuf == NULL || name == NULL || fname == NULL)
 		goto err;
 
+	ret->hostbridge = INTEL;
 	ret->fbuf = fbuf;
 	ret->name = name;
 	ret->filename = fname;

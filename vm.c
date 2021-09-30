@@ -455,7 +455,16 @@ exec_bhyve(struct vm *vm)
 			    "bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd");
 		}
 		WRITE_STR("-s");
-		WRITE_STR("0,hostbridge");
+		switch(conf->hostbridge) {
+		case NONE:
+			break;
+		case INTEL:
+			WRITE_STR("0,hostbridge");
+			break;
+		case AMD:
+			WRITE_STR("0,amd_hostbridge");
+			break;
+		}
 		WRITE_STR("-s");
 		WRITE_STR("1,lpc");
 
