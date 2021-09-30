@@ -197,56 +197,55 @@ parse_memory(struct vm_conf *conf, char *val)
 static int
 parse_disk(struct vm_conf *conf, char *val)
 {
-	char *c;
+	int i;
+	size_t n;
+	const char *types[] = {
+		"ahci-hd:", "virtio-blk:", "nvme:"
+	};
 
-	c = strchr(val, ':');
-	if (c == NULL)
-		return add_disk_conf(conf, "virtio-blk", val);
-
-	*c = '\0';
-	if (strcmp(val, "ahci-hd") != 0 && strcmp(val, "virtio-blk") != 0 &&
-	    strcmp(val, "nvme") != 0) {
-		*c = ':';
-		return -1;
+	for(i = 0; i < sizeof(types)/sizeof(types[0]); i++) {
+		n = strlen(types[i]);
+		if (strncmp(val, types[i], n) == 0) {
+			val[n-1] = '\0';
+			return add_disk_conf(conf, val, &val[n]);
+		}
 	}
 
-	return add_disk_conf(conf, val, c + 1);
+	return add_disk_conf(conf, "virtio-blk", val);
 }
 
 static int
 parse_iso(struct vm_conf *conf, char *val)
 {
-	char *c;
+	const char *type = "ahci-cd:";
+	size_t n = strlen(type);
 
-	c = strchr(val, ':');
-	if (c == NULL)
-		return add_iso_conf(conf, "ahci-cd", val);
-
-	*c = '\0';
-	if (strcmp(val, "ahci-cd") != 0) {
-		*c = ':';
-		return -1;
+	if (strncmp(val, type, n) == 0) {
+		val[n-1] = '\0';
+		return add_iso_conf(conf, val, &val[n]);
 	}
 
-	return add_iso_conf(conf, val, c + 1);
+	return add_iso_conf(conf, "ahci-cd", val);
 }
 
 static int
 parse_net(struct vm_conf *conf, char *val)
 {
-	char *c;
+	int i;
+	size_t n;
+	const char *types[] = {
+		"virtio-net:", "e1000:"
+	};
 
-	c = strchr(val, ':');
-	if (c == NULL)
-		return add_net_conf(conf, "virtio-net", val);
-
-	*c = '\0';
-	if (strcmp(val, "e1000") != 0 && strcmp(val, "virtio-net") != 0) {
-		*c = ':';
-		return -1;
+	for(i = 0; i< sizeof(types)/sizeof(types[0]); i++) {
+		n = strlen(types[i]);
+		if (strncmp(val, types[i], n) == 0) {
+			val[n-1] = '\0';
+			return add_net_conf(conf, val, &val[n]);
+		}
 	}
 
-	return add_net_conf(conf, val, c + 1);
+	return add_net_conf(conf, "virtio-net", val);
 }
 
 static int
