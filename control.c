@@ -12,7 +12,7 @@
 #include "conf.h"
 #include "parser.h"
 #include "vm.h"
-#include "command.h"
+#include "server.h"
 #include "bmd.h"
 
 extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;

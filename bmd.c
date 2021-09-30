@@ -14,7 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "command.h"
+#include "server.h"
 #include "conf.h"
 #include "log.h"
 #include "parser.h"
