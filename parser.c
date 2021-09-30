@@ -199,14 +199,14 @@ parse_disk(struct vm_conf *conf, char *val)
 {
 	char *c;
 
-	c = strchr(val, ',');
+	c = strchr(val, ':');
 	if (c == NULL)
 		return add_disk_conf(conf, "virtio-blk", val);
 
 	*c = '\0';
 	if (strcmp(val, "ahci-hd") != 0 && strcmp(val, "virtio-blk") != 0 &&
 	    strcmp(val, "nvme") != 0) {
-		*c = ',';
+		*c = ':';
 		return -1;
 	}
 
@@ -218,13 +218,13 @@ parse_iso(struct vm_conf *conf, char *val)
 {
 	char *c;
 
-	c = strchr(val, ',');
+	c = strchr(val, ':');
 	if (c == NULL)
 		return add_iso_conf(conf, "ahci-cd", val);
 
 	*c = '\0';
 	if (strcmp(val, "ahci-cd") != 0) {
-		*c = ',';
+		*c = ':';
 		return -1;
 	}
 
@@ -236,13 +236,13 @@ parse_net(struct vm_conf *conf, char *val)
 {
 	char *c;
 
-	c = strchr(val, ',');
+	c = strchr(val, ':');
 	if (c == NULL)
 		return add_net_conf(conf, "virtio-net", val);
 
 	*c = '\0';
 	if (strcmp(val, "e1000") != 0 && strcmp(val, "virtio-net") != 0) {
-		*c = ',';
+		*c = ':';
 		return -1;
 	}
 
