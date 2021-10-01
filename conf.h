@@ -6,6 +6,9 @@
 
 #include "vars.h"
 
+#define ARRAY_FOREACH(p, a) \
+	for (p = &a[0]; p < &a[sizeof(a)/sizeof(a[0])]; p++)
+
 void free_disk_conf(struct disk_conf *c);
 void free_iso_conf(struct iso_conf *c);
 void free_net_conf(struct net_conf *c);

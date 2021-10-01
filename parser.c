@@ -197,15 +197,14 @@ parse_memory(struct vm_conf *conf, char *val)
 static int
 parse_disk(struct vm_conf *conf, char *val)
 {
-	int i;
 	size_t n;
-	const char *types[] = {
+	const char **p, *types[] = {
 		"ahci-hd:", "virtio-blk:", "nvme:"
 	};
 
-	for(i = 0; i < sizeof(types)/sizeof(types[0]); i++) {
-		n = strlen(types[i]);
-		if (strncmp(val, types[i], n) == 0) {
+	ARRAY_FOREACH(p, types) {
+		n = strlen(*p);
+		if (strncmp(val, *p, n) == 0) {
 			val[n-1] = '\0';
 			return add_disk_conf(conf, val, &val[n]);
 		}
@@ -217,12 +216,17 @@ parse_disk(struct vm_conf *conf, char *val)
 static int
 parse_iso(struct vm_conf *conf, char *val)
 {
-	const char *type = "ahci-cd:";
-	size_t n = strlen(type);
+	size_t n;
+	const char **p, *types[] = {
+		"ahci-cd:"
+	};
 
-	if (strncmp(val, type, n) == 0) {
-		val[n-1] = '\0';
-		return add_iso_conf(conf, val, &val[n]);
+	ARRAY_FOREACH(p, types) {
+		n = strlen(*p);
+		if (strncmp(val, *p, n) == 0) {
+			val[n-1] = '\0';
+			return add_iso_conf(conf, val, &val[n]);
+		}
 	}
 
 	return add_iso_conf(conf, "ahci-cd", val);
@@ -231,15 +235,14 @@ parse_iso(struct vm_conf *conf, char *val)
 static int
 parse_net(struct vm_conf *conf, char *val)
 {
-	int i;
 	size_t n;
-	const char *types[] = {
+	const char **p, *types[] = {
 		"virtio-net:", "e1000:"
 	};
 
-	for(i = 0; i< sizeof(types)/sizeof(types[0]); i++) {
-		n = strlen(types[i]);
-		if (strncmp(val, types[i], n) == 0) {
+	ARRAY_FOREACH(p, types) {
+		n = strlen(*p);
+		if (strncmp(val, *p, n) == 0) {
 			val[n-1] = '\0';
 			return add_net_conf(conf, val, &val[n]);
 		}

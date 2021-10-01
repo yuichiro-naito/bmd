@@ -117,10 +117,9 @@ err:
 static char *
 create_load_command(struct vm_conf *conf, size_t *length)
 {
-	static char *repl[] = {
+	const char **p, *repl[] = {
 		"kopenbsd ", "knetbsd "
 	};
-	int i;
 	size_t len;
 	char *cmd;
 	char *t = (conf->install) ? conf->installcmd : conf->loadcmd;
@@ -130,16 +129,15 @@ create_load_command(struct vm_conf *conf, size_t *length)
 		goto end;
 	}
 
-	if (conf->single_user) {
-		for (i = 0; i < sizeof(repl)/sizeof(repl[0]); i++) {
-			len = strlen(repl[i]);
-			if (strncmp(t, repl[i], len) == 0) {
+	if (conf->single_user)
+		ARRAY_FOREACH(p, repl) {
+			len = strlen(*p);
+			if (strncmp(t, *p, len) == 0) {
 				len = asprintf(&cmd, "%s-s %s\nboot\n",
-					       repl[i], t + len);
+					       *p, t + len);
 				goto end;
 			}
 		}
-	}
 	len = asprintf(&cmd, "%s\nboot\n", t);
 
 end:
