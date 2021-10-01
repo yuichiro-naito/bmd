@@ -437,19 +437,21 @@ reload_virtual_machines()
 			vm_ent->vm.logfd = open(vm_ent->vm.conf->err_logfile,
 			    O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
+		vm_ent->new_conf = conf;
 		vm = &vm_ent->vm;
-		if (conf->reboot_on_change) {
-			if ((vm->state == LOAD || vm->state == RUN) &&
-			    compare_vm_conf(conf, vm->conf) != 0) {
+		if (conf->reboot_on_change &&
+		    compare_vm_conf(conf, vm->conf) != 0) {
+			if (vm->state == LOAD || vm->state == RUN) {
 				INFO("reboot vm %s\n", conf->name);
 				acpi_poweroff_vm(&vm_ent->vm);
 				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = RESTART;
 			} else if (vm->state == STOP)
 				vm->state = RESTART;
-			vm_ent->new_conf = conf;
 			continue;
 		}
+		if (vm_ent->new_conf->boot == vm_ent->vm.conf->boot)
+			continue;
 		switch (conf->boot) {
 		case NO:
 			if (vm->state == LOAD || vm->state == RUN) {
@@ -472,7 +474,6 @@ reload_virtual_machines()
 			// do nothing
 			break;
 		}
-		vm_ent->new_conf = conf;
 	}
 
 	SLIST_FOREACH (vm_ent, &vm_list, next)
