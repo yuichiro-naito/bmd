@@ -695,6 +695,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(boot_delay);
 	CMP_NUM(loader_timeout);
 	CMP_NUM(stop_timeout);
+	CMP_NUM(hostbridge);
 	CMP_STR(debug_port);
 	CMP_STR(filename);
 	CMP_STR(ncpu);
@@ -707,6 +708,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_STR(installcmd);
 	CMP_STR(hookcmd);
 	CMP_STR(err_logfile);
+	CMP_STR(grub_run_partition);
 
 	if ((rc = compare_fbuf(a->fbuf, b->fbuf)) != 0)
 		return rc;
