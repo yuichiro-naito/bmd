@@ -102,46 +102,14 @@ accept_command_socket(int s0)
 }
 
 
+/*
+ * The argument `style` must be one of followings.
+ *  -  0 = boot
+ *  -  1 = install
+ *  -  2 = reload
+ */
 static int
-boot0_command(int s, const nvlist_t *nv, bool install)
-{
-	const char *name, *reason;
-	struct vm_entry *vm_ent;
-	nvlist_t *res;
-	bool error = false;
-
-	if ((name = nvlist_get_string(nv, "name")) == NULL ||
-	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
-		error = true;
-		reason = "VM not found";
-		goto ret;
-	}
-
-	if (vm_ent->vm.state != INIT && vm_ent->vm.state != TERMINATE) {
-		error = true;
-		reason = "already running";
-		goto ret;
-	}
-
-	vm_ent->vm.conf->install = install;
-
-	if (start_virtual_machine(vm_ent) < 0) {
-		error = true;
-		reason = "failed to start";
-	}
-
-ret:
-	res = nvlist_create(0);
-	nvlist_add_bool(res, "error", error);
-	if (error)
-		nvlist_add_string(res, "reason", reason);
-	nvlist_send(s, res);
-	nvlist_destroy(res);
-	return 0;
-}
-
-static int
-reload_command(int s, const nvlist_t *nv)
+boot0_command(int s, const nvlist_t *nv, int style)
 {
 	int fd;
 	const char *name, *reason;
@@ -152,6 +120,11 @@ reload_command(int s, const nvlist_t *nv)
 	nvlist_t *res;
 	bool error = false;
 
+	if (style < 0) {
+		error = true;
+		reason = "internal error";
+	}
+
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
 		error = true;
@@ -159,6 +132,13 @@ reload_command(int s, const nvlist_t *nv)
 		goto ret;
 	}
 	vm = &vm_ent->vm;
+
+	if (style < 2 && vm_ent->vm.state != INIT &&
+	    vm_ent->vm.state != TERMINATE) {
+		error = true;
+		reason = "already running";
+		goto ret;
+	}
 
 	close(gl_conf.config_fd);
 	if ((gl_conf.config_fd = open(gl_conf.config_dir,
@@ -197,25 +177,23 @@ reload_command(int s, const nvlist_t *nv)
 	free_vm_conf(vm->conf);
 	vm->conf = conf = &conf_ent->conf;
 
-	switch (vm->state) {
-	case LOAD:
-	case RUN:
-		INFO("stop vm %s\n", conf->name);
-		acpi_poweroff_vm(&vm_ent->vm);
-		set_timer(vm_ent, conf->stop_timeout);
-		vm->state = RESTART;
+	switch (style) {
+	case 0:
 		break;
-	case INIT:
-	case TERMINATE:
-		start_virtual_machine(vm_ent);
-		INFO("start vm %s\n", conf->name);
+	case 1:
+		vm_ent->vm.conf->install = true;
 		break;
-	case STOP:
-	case REMOVE:
-		vm->state = RESTART;
-		break;
+	case 2:
+		goto ret;
 	default:
-		break;
+		error = true;
+		reason = "internal error";
+		goto ret;
+	}
+
+	if (start_virtual_machine(vm_ent) < 0) {
+		error = true;
+		reason = "failed to start";
 	}
 
 ret:
@@ -231,13 +209,19 @@ ret:
 static int
 boot_command(int s, const nvlist_t *nv)
 {
-	return boot0_command(s, nv, false);
+	return boot0_command(s, nv, 0);
 }
 
 static int
 install_command(int s, const nvlist_t *nv)
 {
-	return boot0_command(s, nv, true);
+	return boot0_command(s, nv, 1);
+}
+
+static int
+reload_command(int s, const nvlist_t *nv)
+{
+	return boot0_command(s, nv, 2);
 }
 
 static int
