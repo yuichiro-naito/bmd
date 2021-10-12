@@ -826,6 +826,7 @@ main(int argc, char *argv[])
 	if (gl_conf.foreground)
 		sigaddset(&nmask, SIGINT);
 	sigaddset(&nmask, SIGHUP);
+	sigaddset(&nmask, SIGPIPE);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
 	if ((gl_conf.kq = kqueue()) < 0) {
