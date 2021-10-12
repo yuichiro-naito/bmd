@@ -1,8 +1,7 @@
 #!/bin/sh
 
 # PROVIDE: bmd
-# REQUIRE: DAEMON syslogd
-# BEFORE: LOGIN
+# REQUIRE: DAEMON syslogd avahi_daemon
 # KEYWORD: nojail shutdown
 
 . /etc/rc.subr
