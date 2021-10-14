@@ -80,7 +80,10 @@ write_mapfile(struct vm *vm)
 		return -1;
 	}
 
-	free(vm->mapfile);
+	if (vm->mapfile) {
+		unlink(vm->mapfile);
+		free(vm->mapfile);
+	}
 	vm->mapfile = fn;
 
 	fp = fdopen(fd, "w+");
@@ -108,6 +111,7 @@ write_mapfile(struct vm *vm)
 	return 0;
 err:
 	ERR("can't write mapfile (%s)\n", strerror(errno));
+	fclose(fp);
 	vm->mapfile = NULL;
 	unlink(fn);
 	free(fn);
