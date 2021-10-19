@@ -124,7 +124,7 @@ comport=/dev/nmdm0B
 ncpu=2
 memory=2G
 disk=/dev/zvol/zpool/images/freebsd
-iso=/zpool/iso/FreeBSD-13.0-RELEASE-amd64-disc1.iso 
+iso=/zpool/iso/FreeBSD-13.0-RELEASE-amd64-disc1.iso
 network=bridge0
 loader=bhyveload
 ```
@@ -225,3 +225,7 @@ https://reviews.freebsd.org/D19976
 `disk`, `network` and `iso` keywords append values as a list.
 The other keys are override the previous value.
 The config parser should understand '+=' operator for appending values.
+
+## 3. Configuration keys are condensed compared to bhyve
+
+It's under development.
