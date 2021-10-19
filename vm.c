@@ -552,6 +552,8 @@ int reset_vm(struct vm *vm)
 
 int poweroff_vm(struct vm *vm)
 {
+	if (vm->state == LOAD)
+		return kill(vm->pid, SIGKILL);
 	return suspend_vm(vm, VM_SUSPEND_POWEROFF);
 }
 
