@@ -194,6 +194,45 @@ xhci_mouse=yes
 
 # plugins
 
+## hook command plugin
+
+Bmd invokes hook command when VM status is changed.
+The command line is as following.
+
+`${hookcmd} ${vm name} ${state}`
+
+${state} is one of followings.
+
+* LOAD
+
+  loader is invoked
+
+* RUN
+
+  bhyve starts to run
+
+* STOP
+
+  bmd stops bhyve
+
+* TERMINATE
+
+  bhyve terminated
+
+* REMOVE
+
+  bmd detects that VM config file is deleted.
+
+* RESTART
+
+  bmd restarts VM
+
+## avahi plugin
+
+If VM is set `graphics=yes` and `avahi-publish` command is installed,
+Bmd publish remote frame buffer service under the VM name and vnc port.
+The publishing is kept while VM is running.
+
 # bmdctl
 
 BMD control command via Unix Domain socket.
@@ -201,19 +240,19 @@ Following subcommands are available.
 
 | subcommand | parameter | description |
 |:-----------|:----------|:------------|
-| boot | VM name | boot VM |
+| boot<br>start | VM name | boot VM |
 | install | VM name | boot VM from ISO |
-| shutdown | VM name | ACPI shutdown VM |
+| shutdown<br>stop | VM name | ACPI shutdown VM |
 | poweroff | VM name | force to power off VM<br>***Warning: damage to disk image*** |
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
 | reload | VM name | reload VM config file |
 | console | VM name | get comport console via `cu -l` |
-| run | [-i] [-s] VM name | directory boot with serial console that is redirect to stdio.<br>VM booted from this subcommand is independent from bmd.<br>-i: install mode<br>-s: single user mode|
+| run | [-i] [-s] VM name | boot directly with serial console that is redirect to stdio.<br>VM booted from this subcommand is independent from bmd.<br>-i: install mode<br>-s: single user mode|
 | list | (none) | list VMs |
 
 # Known Issues
 
-## 1. Install mode doesn't work on UEFI boot
+## 1. Install mode doesn't boot from ISO image on UEFI boot
 
 There is no way to customize UEFI variables at boot for now.
 Following patch may allow us to choose boot disks.
@@ -223,7 +262,7 @@ https://reviews.freebsd.org/D19976
 ## 2. The second `disk` keyword doesn't override previous value
 
 `disk`, `network` and `iso` keywords append values as a list.
-The other keys are override the previous value.
+The other keys override the previous value.
 The config parser should understand '+=' operator for appending values.
 
 ## 3. Configuration keys are condensed compared to bhyve
