@@ -9,15 +9,16 @@ bhyve processes and wait for them and then quit the daemon.
 Sending SIGHUP to bmd triggers that bmd reloads all the VM configuration files.
 If boot parameter is changed, bmd boots or shutdown VM according to new boot parameter.
 If new VM config files are found, bmd boots VMs according to them.
-If bmd detects VM config files are deleted, bmd shutdown the VMs.
+If bmd detects that some VM config files are deleted, bmd shutdown the VMs.
 
 Bmd doesn't manage network environment to get avoid double management from FreeBSD rc scripts.
 All bridges must be created by the rc script.
-Bmd creates or destroys tap interfaces and assigns to bridge automatically.
-Uses need to specify bridge interfaces for each VM.
+Bmd creates and destroys tap interfaces automatically
+and also assigns to the bridges.
+Uses need to specify which bridge interfaces are used for each VM.
 
 Bmd doesn't manage disk images, neither.
-Most of administrators have disk management policy and tools.
+Most of administrators have their own disk management policy and tools.
 So, it is better that disk images are created to follow the policy.
 
 ## Installation
