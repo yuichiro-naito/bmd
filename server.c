@@ -106,7 +106,6 @@ accept_command_socket(int s0)
  * The argument `style` must be one of followings.
  *  -  0 = boot
  *  -  1 = install
- *  -  2 = reload
  */
 static int
 boot0_command(int s, const nvlist_t *nv, int style)
@@ -183,8 +182,6 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	case 1:
 		vm_ent->vm.conf->install = true;
 		break;
-	case 2:
-		goto ret;
 	default:
 		error = true;
 		reason = "internal error";
@@ -216,12 +213,6 @@ static int
 install_command(int s, const nvlist_t *nv)
 {
 	return boot0_command(s, nv, 1);
-}
-
-static int
-reload_command(int s, const nvlist_t *nv)
-{
-	return boot0_command(s, nv, 2);
 }
 
 static int
@@ -348,7 +339,6 @@ struct command_entry command_list[] = {
 	{ "install", &install_command },
 	{ "list", &list_command },
 	{ "poweroff", &poweroff_command },
-	{ "reload", &reload_command },
 	{ "reset", &reset_command },
 	{ "shutdown", &shutdown_command },
 };

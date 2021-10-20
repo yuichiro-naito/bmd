@@ -246,7 +246,6 @@ Following subcommands are available.
 | shutdown<br>stop | VM name | ACPI shutdown VM |
 | poweroff | VM name | force to power off VM<br>***Warning: damage to disk image*** |
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
-| reload | VM name | reload VM config file |
 | console | VM name | get comport console via `cu -l` |
 | run | [-i] [-s] VM name | boot directly with serial console that is redirect to stdio.<br>VM booted from this subcommand is independent from bmd.<br>-i: install mode<br>-s: single user mode|
 | list | (none) | list VMs |
