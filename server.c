@@ -13,6 +13,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <poll.h>
 
 #include "log.h"
 #include "conf.h"
@@ -367,9 +368,24 @@ get_command_function(const char *name)
 int
 recv_command(int s)
 {
+	int rc;
 	const char *cmd;
 	nvlist_t *nv;
 	cfunc func;
+	struct pollfd pfd[1];
+
+	pfd[0].fd = s;
+	pfd[0].events = POLLIN | POLLHUP | POLLERR;
+	pfd[0].revents = 0;
+
+retry:
+	if ((rc = poll(pfd, 1, 3)) < 0) {
+		if (errno == EINTR)
+			goto retry;
+		return -1;
+	}
+	if (rc == 0)
+		return -1;
 
 	if ((nv = nvlist_recv(s, 0)) == NULL)
 		return -1;
