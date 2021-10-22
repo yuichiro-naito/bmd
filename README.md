@@ -259,12 +259,6 @@ Following patch may allow us to choose boot disks.
 
 https://reviews.freebsd.org/D19976
 
-## 2. The second `disk` keyword doesn't override previous value
-
-`disk`, `network` and `iso` keywords append values as a list.
-The other keys override the previous value.
-The config parser should understand '+=' operator for appending values.
-
-## 3. Configuration keys are condensed compared to bhyve
+## 2. Configuration keys are condensed compared to bhyve
 
 It's under development.

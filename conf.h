@@ -14,6 +14,9 @@ void free_iso_conf(struct iso_conf *c);
 void free_net_conf(struct net_conf *c);
 void free_vm_conf(struct vm_conf *vc);
 void free_fbuf(struct fbuf *f);
+void clear_disk_conf(struct vm_conf *vc);
+void clear_iso_conf(struct vm_conf *vc);
+void clear_net_conf(struct vm_conf *vc);
 
 int add_disk_conf(struct vm_conf *conf, const char *type, const char *path);
 int add_iso_conf(struct vm_conf *conf, const char *type, const char *path);

@@ -478,45 +478,47 @@ parse_utctime(struct vm_conf *conf, char *val)
 }
 
 typedef int (*pfunc)(struct vm_conf *conf, char *val);
+typedef void (*cfunc)(struct vm_conf *conf);
 
 struct parser_entry {
 	char *name;
-	pfunc func;
+	pfunc parse;
+	cfunc clear;
 };
 
 /* must be sorted by name */
 struct parser_entry parser_list[] = {
-	{ "boot", &parse_boot },
-	{ "boot_delay", &parse_boot_delay },
-	{ "comport", &parse_comport },
-	{ "debug_port", &parse_debug_port },
-	{ "disk", &parse_disk },
-	{ "err_logfile", &parse_err_logfile },
-	{ "graphics", &parse_graphics },
-	{ "graphics_listen", &parse_graphics_listen },
-	{ "graphics_password", &parse_graphics_password },
-	{ "graphics_port", &parse_graphics_port },
-	{ "graphics_res", &parse_graphics_res },
-	{ "graphics_vga", &parse_graphics_vga },
-	{ "graphics_wait", &parse_graphics_wait },
-	{ "grub_run_partition", &parse_grub_run_partition },
-	{ "hookcmd", &parse_hookcmd },
-	{ "hostbridge", &parse_hostbridge },
-	{ "install", &parse_install },
-	{ "installcmd", &parse_installcmd },
-	{ "iso", &parse_iso },
-	{ "loadcmd", &parse_loadcmd },
-	{ "loader", &parse_loader },
-	{ "loader_timeout", &parse_loader_timeout },
-	{ "memory", &parse_memory },
-	{ "name", &parse_name },
-	{ "ncpu", &parse_ncpu },
-	{ "network", &parse_net },
-	{ "reboot_on_change", &parse_reboot_on_change },
-	{ "stop_timeout", &parse_stop_timeout },
-	{ "utctime", &parse_utctime },
-	{ "wired_memory", &parse_wired_memory },
-	{ "xhci_mouse", &parse_xhci_mouse },
+	{ "boot", &parse_boot, NULL},
+	{ "boot_delay", &parse_boot_delay, NULL},
+	{ "comport", &parse_comport, NULL},
+	{ "debug_port", &parse_debug_port, NULL},
+	{ "disk", &parse_disk, &clear_disk_conf},
+	{ "err_logfile", &parse_err_logfile, NULL},
+	{ "graphics", &parse_graphics, NULL},
+	{ "graphics_listen", &parse_graphics_listen, NULL},
+	{ "graphics_password", &parse_graphics_password, NULL},
+	{ "graphics_port", &parse_graphics_port, NULL},
+	{ "graphics_res", &parse_graphics_res, NULL},
+	{ "graphics_vga", &parse_graphics_vga, NULL},
+	{ "graphics_wait", &parse_graphics_wait, NULL},
+	{ "grub_run_partition", &parse_grub_run_partition, NULL},
+	{ "hookcmd", &parse_hookcmd, NULL},
+	{ "hostbridge", &parse_hostbridge, NULL},
+	{ "install", &parse_install, NULL},
+	{ "installcmd", &parse_installcmd, NULL},
+	{ "iso", &parse_iso, &clear_iso_conf},
+	{ "loadcmd", &parse_loadcmd, NULL},
+	{ "loader", &parse_loader, NULL},
+	{ "loader_timeout", &parse_loader_timeout, NULL},
+	{ "memory", &parse_memory, NULL},
+	{ "name", &parse_name, NULL},
+	{ "ncpu", &parse_ncpu, NULL},
+	{ "network", &parse_net, &clear_net_conf},
+	{ "reboot_on_change", &parse_reboot_on_change, NULL},
+	{ "stop_timeout", &parse_stop_timeout, NULL},
+	{ "utctime", &parse_utctime, NULL},
+	{ "wired_memory", &parse_wired_memory, NULL},
+	{ "xhci_mouse", &parse_xhci_mouse, NULL},
 };
 
 static int
@@ -527,7 +529,7 @@ compare_parser_entry(const void *a, const void *b)
 	return strcasecmp(name, ent->name);
 }
 
-static pfunc
+static struct parser_entry *
 get_parser(char *name)
 {
 
@@ -537,7 +539,7 @@ get_parser(char *name)
 	    sizeof(parser_list) / sizeof(parser_list[0]),
 	    sizeof(parser_list[0]), compare_parser_entry);
 
-	return ((p != NULL) ? p->func : NULL);
+	return p;
 }
 
 static int
@@ -545,7 +547,7 @@ parse(struct vm_conf *conf, FILE *fp)
 {
 	char *key;
 	char *val;
-	pfunc parser;
+	struct parser_entry *parser;
 	char *name = conf->name;
 
 	while (1) {
@@ -573,6 +575,8 @@ parse(struct vm_conf *conf, FILE *fp)
 		free(key);
 		key = NULL;
 		free(val);
+		if (parser->clear != NULL)
+			(*parser->clear)(conf);
 		while (1) {
 			if (get_token(fp, &val) == 1)
 				break;
@@ -581,7 +585,7 @@ parse(struct vm_conf *conf, FILE *fp)
 				break;
 			}
 
-			if ((*parser)(conf, val) < 0) {
+			if ((*parser->parse)(conf, val) < 0) {
 				ERR("invalid value %s in %s\n", val, name);
 				goto bad;
 			}

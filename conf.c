@@ -50,12 +50,35 @@ free_fbuf(struct fbuf *f)
 }
 
 void
-free_vm_conf(struct vm_conf *vc)
+clear_disk_conf(struct vm_conf *vc)
 {
 	struct disk_conf *dc, *dn;
-	struct iso_conf *ic, *in;
-	struct net_conf *nc, *nn;
+	STAILQ_FOREACH_SAFE (dc, &vc->disks, next, dn)
+		free_disk_conf(dc);
+	STAILQ_INIT(&vc->disks);
+}
 
+void
+clear_iso_conf(struct vm_conf *vc)
+{
+	struct iso_conf *ic, *in;
+	STAILQ_FOREACH_SAFE (ic, &vc->isoes, next, in)
+		free_iso_conf(ic);
+	STAILQ_INIT(&vc->isoes);
+}
+
+void
+clear_net_conf(struct vm_conf *vc)
+{
+	struct net_conf *nc, *nn;
+	STAILQ_FOREACH_SAFE (nc, &vc->nets, next, nn)
+		free_net_conf(nc);
+	STAILQ_INIT(&vc->nets);
+}
+
+void
+free_vm_conf(struct vm_conf *vc)
+{
 	if (vc == NULL)
 		return;
 	free(vc->name);
@@ -67,12 +90,9 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->installcmd);
 	free(vc->hookcmd);
 	free_fbuf(vc->fbuf);
-	STAILQ_FOREACH_SAFE (dc, &vc->disks, next, dn)
-		free_disk_conf(dc);
-	STAILQ_FOREACH_SAFE (ic, &vc->isoes, next, in)
-		free_iso_conf(ic);
-	STAILQ_FOREACH_SAFE (nc, &vc->nets, next, nn)
-		free_net_conf(nc);
+	clear_disk_conf(vc);
+	clear_iso_conf(vc);
+	clear_net_conf(vc);
 	free(vc);
 }
 
