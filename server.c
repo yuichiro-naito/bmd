@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <netinet/in.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -25,6 +26,136 @@
 extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
 extern struct global_conf gl_conf;
+
+struct sock_buf {
+	SLIST_ENTRY(sock_buf) next;
+	int fd;
+	int state;
+	size_t buf_size;
+	char size[4];
+	size_t read_size;
+	size_t read_bytes;
+	char *buf;
+};
+
+SLIST_HEAD(, sock_buf) sock_list = SLIST_HEAD_INITIALIZER();
+
+struct sock_buf *
+create_sock_buf(int fd)
+{
+	struct sock_buf *r;
+
+	if ((r = calloc(1, sizeof(*r))) == NULL)
+		return NULL;
+	r->fd = fd;
+	SLIST_INSERT_HEAD(&sock_list, r, next);
+	return r;
+}
+
+void
+destroy_sock_buf(struct sock_buf *p)
+{
+	if (p == NULL)
+		return;
+	close(p->fd);
+	free(p->buf);
+	SLIST_REMOVE(&sock_list, p, sock_buf, next);
+	free(p);
+}
+
+struct sock_buf *
+lookup_sock_buf(int fd)
+{
+	struct sock_buf *p;
+
+	SLIST_FOREACH (p, &sock_list, next)
+		if (p->fd == fd)
+			return p;
+	return NULL;
+}
+
+void
+clear_sock_buf(struct sock_buf *p)
+{
+	free(p->buf);
+	p->buf = NULL;
+	p->state = 0;
+	p->buf_size = 0;
+	p->read_size = 0;
+	p->read_bytes = 0;
+}
+
+/**
+ * return value:
+ * -1 : error
+ *  0 : closed
+ *  1 : continue
+ *  2 : finished reading
+ */
+int
+recv_sock_buf(struct sock_buf *sb)
+{
+	ssize_t n;
+	char *start;
+	size_t nread, size;
+	char buf[1];
+
+	if (sb->state == 0) {
+		start = sb->size;
+		nread = sb->read_size;
+		size = sizeof(sb->size);
+	} else {
+		start = sb->buf;
+		nread = sb->read_bytes;
+		size = sb->buf_size;
+	}
+
+	if (size == nread) {
+		/*
+		 * Prepare 1 byte buffer
+		 * to deletect the socket is closed.
+		 */
+		start = buf;
+		nread = 0;
+		size = sizeof(buf);
+	}
+
+retry:
+	n = recv(sb->fd, start + nread, size - nread, MSG_DONTWAIT);
+	if (n < 0) {
+		switch (errno) {
+		case EINTR:
+			goto retry;
+		case EAGAIN:
+			return 1;
+		default:
+			return -1;
+		}
+	}
+	if (n == 0)
+		return 0;
+	if (start == buf)
+		return -1;
+
+	nread += n;
+	if (sb->state == 0) {
+		sb->read_size = nread;
+		if (nread == size) {
+			sb->state = 1;
+			sb->buf_size = ntohl(*((int32_t *)sb->size));
+			if (sb->buf_size > 1024*1024)
+				return -1;
+			sb->buf = malloc(sb->buf_size);
+			if (sb->buf == NULL)
+				return -1;
+		}
+	} else {
+		sb->read_bytes = nread;
+		if (nread == size)
+			return 2;
+	}
+	return 1;
+}
 
 int
 connect_to_server(const struct global_conf *gc)
@@ -366,28 +497,13 @@ get_command_function(const char *name)
 }
 
 int
-recv_command(int s)
+recv_command(struct sock_buf *sb)
 {
-	int rc;
 	const char *cmd;
 	nvlist_t *nv;
 	cfunc func;
-	struct pollfd pfd[1];
 
-	pfd[0].fd = s;
-	pfd[0].events = POLLIN | POLLHUP | POLLERR;
-	pfd[0].revents = 0;
-
-retry:
-	if ((rc = poll(pfd, 1, 3)) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		return -1;
-	}
-	if (rc == 0)
-		return -1;
-
-	if ((nv = nvlist_recv(s, 0)) == NULL)
+	if ((nv = nvlist_unpack(sb->buf, sb->buf_size, 0)) == NULL)
 		return -1;
 
 	if ((cmd = nvlist_get_string(nv, "command")) == NULL)
@@ -396,7 +512,7 @@ retry:
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	if ((*func)(s, nv) < 0)
+	if ((*func)(sb->fd, nv) < 0)
 		goto err;
 
 	nvlist_destroy(nv);
@@ -406,7 +522,7 @@ err:
 	nv = nvlist_create(0);
 	nvlist_add_bool(nv, "error", true);
 	nvlist_add_string(nv, "reason", "unknown command");
-	nvlist_send(s, nv);
+	nvlist_send(sb->fd, nv);
 	nvlist_destroy(nv);
 	return -1;
 }

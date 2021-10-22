@@ -2,6 +2,7 @@
 #include <sys/event.h>
 #include <sys/nv.h>
 #include <sys/queue.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 
 #include <dirent.h>
@@ -50,13 +51,12 @@ wait_for_reading(struct vm_entry *vm_ent)
 	if (vm_ent->vm.errfd != -1)
 		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_ADD, 0, 0,
 		    vm_ent);
-retry:
-	if (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		ERR("failed to wait reading fd (%s)\n", strerror(errno));
-		return -1;
-	}
+	while (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("failed to wait reading fd (%s)\n",
+			    strerror(errno));
+			return -1;
+		}
 
 	return 0;
 }
@@ -73,13 +73,12 @@ stop_waiting_fd(struct vm_entry *vm_ent)
 	if (vm_ent->vm.errfd != -1)
 		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_DELETE, 0, 0,
 		    vm_ent);
-retry:
-	if (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		ERR("failed to delete waiting fd (%s)\n", strerror(errno));
-		return -1;
-	}
+	while (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("failed to delete waiting fd (%s)\n",
+			    strerror(errno));
+			return -1;
+		}
 
 	close(vm_ent->vm.outfd);
 	close(vm_ent->vm.errfd);
@@ -97,13 +96,11 @@ set_timer(struct vm_entry *vm_ent, int second)
 
 	EV_SET(&ev, id++, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
 	    second, vm_ent);
-retry:
-	if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		ERR("failed to set timer (%s)\n", strerror(errno));
-		return -1;
-	}
+	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("failed to set timer (%s)\n", strerror(errno));
+			return -1;
+		}
 	return 0;
 }
 
@@ -114,13 +111,11 @@ wait_for_process(struct vm_entry *vm_ent)
 
 	EV_SET(&ev, vm_ent->vm.pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	    0, vm_ent);
-retry:
-	if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		ERR("failed to wait process (%s)\n", strerror(errno));
-		return -1;
-	}
+	while(kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("failed to wait process (%s)\n", strerror(errno));
+			return -1;
+		}
 	return 0;
 }
 
@@ -360,12 +355,10 @@ start_virtual_machines()
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
-retry:
-	if (kevent(gl_conf.kq, sigev, 3, NULL, 0, NULL) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		return -1;
-	}
+
+	while (kevent(gl_conf.kq, sigev, 3, NULL, 0, NULL) < 0)
+		if (errno != EINTR)
+			return -1;
 
 	SLIST_FOREACH (conf_ent, &vm_conf_list, next) {
 		vm_ent = create_vm_entry(conf_ent);
@@ -486,7 +479,7 @@ reload_virtual_machines()
 				INFO("stop vm %s\n", conf->name);
 				acpi_poweroff_vm(&vm_ent->vm);
 				set_timer(vm_ent, conf->stop_timeout);
-				/* GO THROUGH */
+				/* FALLTHROUGH */
 			case STOP:
 			case REMOVE:
 			case RESTART:
@@ -531,6 +524,7 @@ event_loop()
 	struct vm_entry *vm_ent;
 	struct vm *vm;
 	int rc, n, size, status;
+	struct sock_buf *sb;
 	char *buf = malloc(BUFSIZE);
 
 	if (buf == NULL) {
@@ -539,21 +533,17 @@ event_loop()
 	}
 
 	EV_SET(&ev, gl_conf.cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
-retry:
-	if (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0) {
-		if (errno == EINTR)
-			goto retry;
-		return -1;
-	}
+	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+		if (errno != EINTR)
+			return -1;
 
 wait:
-	if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
-		if (errno == EINTR)
-			goto wait;
-		ERR("kevent failure (%s)\n", strerror(errno));
-		free(buf);
-		return -1;
-	}
+	while (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("kevent failure (%s)\n", strerror(errno));
+			free(buf);
+			return -1;
+		}
 
 	vm_ent = ev.udata;
 	vm = &vm_ent->vm;
@@ -562,8 +552,33 @@ wait:
 		if (ev.ident == gl_conf.cmd_sock) {
 			if ((n = accept_command_socket(ev.ident)) < 0)
 				break;
-			recv_command(n);
-			close(n);
+			create_sock_buf(n);
+			EV_SET(&ev, n, EVFILT_READ, EV_ADD, 0, 0, NULL);
+			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+				if (errno != EINTR) {
+					destroy_sock_buf(sb);
+					break;
+				}
+			break;
+		}
+		if (vm == NULL &&
+		    (sb = lookup_sock_buf(ev.ident)) != NULL) {
+			switch (recv_sock_buf(sb)) {
+			case 2:
+				if (recv_command(sb) == 0)
+					clear_sock_buf(sb);
+				/* FALLTHROUGH */
+			case 1:
+				break;
+			default:
+				destroy_sock_buf(sb);
+				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
+				       0, 0, NULL);
+				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
+					      NULL) < 0)
+					if (errno != EINTR)
+						break;
+			}
 			break;
 		}
 		while ((size = read(ev.ident, buf, BUFSIZE)) < 0)
@@ -573,7 +588,9 @@ wait:
 			close(ev.ident);
 			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
 			    NULL);
-			kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL);
+			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+				if (errno != EINTR)
+					break;
 			if (vm->outfd == ev.ident)
 				vm->outfd = -1;
 			if (vm->errfd == ev.ident)

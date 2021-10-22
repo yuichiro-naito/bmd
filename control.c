@@ -1,11 +1,14 @@
 #include <sys/queue.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/nv.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "vars.h"
 #include "log.h"
@@ -182,6 +185,7 @@ control(int argc, char *argv[])
 {
 	int s, ret = 0;
 	nvlist_t *cmd, *res = NULL;
+	int32_t sz;
 
 	if (argc < 2)
 		return usage(argc, argv);
@@ -235,7 +239,20 @@ control(int argc, char *argv[])
 		return 1;
 	}
 
-	nvlist_send(s, cmd);
+	sz = htonl(nvlist_size(cmd));
+retry:
+	ret = send(s, &sz, sizeof(sz), 0);
+	if (ret < 0) {
+		if (errno == EINTR)
+			goto retry;
+		printf("can not send to bmd\n");
+		goto end;
+	}
+	ret = nvlist_send(s, cmd);
+	if (ret < 0) {
+		printf("can not send to bmd\n");
+		goto end;
+	}
 
 	res = nvlist_recv(s, 0);
 	if (res == NULL) {
