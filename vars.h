@@ -58,7 +58,6 @@ struct fbuf {
 enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
 
 struct vm_conf {
-	unsigned int nmdm;
 	int boot_delay;
 	int loader_timeout;
 	int stop_timeout;

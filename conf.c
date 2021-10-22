@@ -333,23 +333,6 @@ set_ncpu(struct vm_conf *conf, int ncpu)
 }
 
 int
-assign_nmdm(struct vm_conf *conf)
-{
-	static unsigned int max = 0;
-
-	if (conf == NULL)
-		return 0;
-	conf->nmdm = max++;
-
-	free(conf->comport);
-	asprintf(&conf->comport, "/dev/nmdm%uB", conf->nmdm);
-	if (conf->comport == NULL)
-		return -1;
-
-	return 0;
-}
-
-int
 set_boot(struct vm_conf *conf, enum BOOT boot)
 {
 	if (conf == NULL)
@@ -557,7 +540,6 @@ create_vm_conf(char *filename)
 	ret->fbuf = fbuf;
 	ret->name = name;
 	ret->filename = fname;
-	ret->nmdm = -1;
 	ret->loader_timeout = 3;
 	ret->stop_timeout = 300;
 	ret->utctime = true;
