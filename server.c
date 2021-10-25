@@ -1,4 +1,3 @@
-#include <sys/signal.h>
 #include <sys/nv.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
@@ -8,13 +7,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
 #include <stdbool.h>
-#include <poll.h>
+#include <stdint.h>
 
 #include "log.h"
 #include "conf.h"
@@ -27,17 +25,6 @@ extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
 extern struct global_conf gl_conf;
 
-struct sock_buf {
-	SLIST_ENTRY(sock_buf) next;
-	int fd;
-	int state;
-	size_t buf_size;
-	char size[4];
-	size_t read_size;
-	size_t read_bytes;
-	char *buf;
-};
-
 SLIST_HEAD(, sock_buf) sock_list = SLIST_HEAD_INITIALIZER();
 
 struct sock_buf *
@@ -47,6 +34,7 @@ create_sock_buf(int fd)
 
 	if ((r = calloc(1, sizeof(*r))) == NULL)
 		return NULL;
+	r->type = SOCKBUF;
 	r->fd = fd;
 	SLIST_INSERT_HEAD(&sock_list, r, next);
 	return r;

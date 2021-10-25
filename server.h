@@ -1,9 +1,10 @@
 #ifndef _COMMAND_H
 #define _COMMAND_H
 
-#include "vars.h"
 
 struct sock_buf;
+struct global_conf;
+
 struct sock_buf *create_sock_buf(int fd);
 void destroy_sock_buf(struct sock_buf *p);
 struct sock_buf *lookup_sock_buf(int fd);

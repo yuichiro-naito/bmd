@@ -275,6 +275,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	vm_ent = calloc(1, sizeof(struct vm_entry));
 	if (vm_ent == NULL)
 		return NULL;
+	vm_ent->type = VMENTRY;
 	vm = &vm_ent->vm;
 	conf = &conf_ent->conf;
 	vm->conf = conf;
@@ -552,8 +553,8 @@ wait:
 		if (ev.ident == gl_conf.cmd_sock) {
 			if ((n = accept_command_socket(ev.ident)) < 0)
 				break;
-			create_sock_buf(n);
-			EV_SET(&ev, n, EVFILT_READ, EV_ADD, 0, 0, NULL);
+			sb = create_sock_buf(n);
+			EV_SET(&ev, n, EVFILT_READ, EV_ADD, 0, 0, sb);
 			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 				if (errno != EINTR) {
 					destroy_sock_buf(sb);
@@ -561,8 +562,8 @@ wait:
 				}
 			break;
 		}
-		if (vm == NULL &&
-		    (sb = lookup_sock_buf(ev.ident)) != NULL) {
+		if (vm_ent != NULL && vm_ent->type == SOCKBUF) {
+			sb = (struct sock_buf *)vm_ent;
 			switch (recv_sock_buf(sb)) {
 			case 2:
 				if (recv_command(sb) == 0)
@@ -623,7 +624,7 @@ wait:
 	case EVFILT_PROC:
 		if (waitpid(ev.ident, &status, 0) < 0)
 			ERR("wait error (%s)\n", strerror(errno));
-		if (vm == NULL || vm->pid != ev.ident)
+		if (vm_ent == NULL || vm->pid != ev.ident)
 			// Maybe plugin set this event
 			break;
 		switch (vm->state) {
@@ -737,7 +738,7 @@ stop_virtual_machines()
 			vm = &vm_ent->vm;
 			if (waitpid(ev.ident, &status, 0) < 0)
 				ERR("wait error (%s)\n", strerror(errno));
-			if (vm == NULL || vm->pid != ev.ident)
+			if (vm_ent == NULL || vm->pid != ev.ident)
 				// maybe plugin's child process
 				continue;
 			stop_waiting_fd(vm_ent);

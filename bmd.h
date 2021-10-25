@@ -28,23 +28,44 @@ struct plugin_data {
 /*
   Entry of vm_conf list.
   The individual entories hold the VM configuration.
-  Make sure 'conf' is the first element of the structure.
+  Make sure that 'conf' is the first member of this structure.
  */
 struct vm_conf_entry {
 	struct vm_conf conf;
 	SLIST_ENTRY(vm_conf_entry) next;
 };
 
+enum STRUCT_TYPE {
+	VMENTRY, SOCKBUF
+};
+
 /*
   Entry of vm list.
   The individual entries indicate the virtual machine process.
-  Make sure 'vm' is the first element of the structure.
+  Make sure that 'type' is the first member of this structure.
  */
 struct vm_entry {
+	enum STRUCT_TYPE type;
 	struct vm vm;
 	struct vm_conf *new_conf;
 	SLIST_HEAD(, plugin_data) pl_data;
 	SLIST_ENTRY(vm_entry) next;
+};
+
+/*
+  Socker buffer.
+  Make sure that 'type' is the first member of this structure.
+ */
+struct sock_buf {
+	enum STRUCT_TYPE type;
+	SLIST_ENTRY(sock_buf) next;
+	int fd;
+	int state;
+	size_t buf_size;
+	char size[4];
+	size_t read_size;
+	size_t read_bytes;
+	char *buf;
 };
 
 struct vm_conf_head;
