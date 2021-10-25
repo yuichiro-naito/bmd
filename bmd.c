@@ -713,6 +713,7 @@ stop_virtual_machines()
 			if (vm_ent == NULL || vm->pid != ev.ident)
 				// maybe plugin's child process
 				continue;
+			INFO("stop vm %s\n", vm->conf->name);
 			stop_waiting_fd(vm_ent);
 			cleanup_vm(vm);
 			call_plugins(vm_ent);
