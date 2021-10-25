@@ -16,5 +16,6 @@ int poweroff_vm(struct vm *vm);
 int acpi_poweroff_vm(struct vm *vm);
 int start_vm(struct vm *vm);
 void cleanup_vm(struct vm *vm);
+int write_err_log(int fd, struct vm *vm);
 
 #endif

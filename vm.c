@@ -618,3 +618,34 @@ cleanup_vm(struct vm *vm)
 	}
 	vm->state = TERMINATE;
 }
+
+int
+write_err_log(int fd, struct vm *vm)
+{
+	int n, rc;
+	ssize_t size;
+	char buf[4*1024];
+
+	while ((size = read(fd, buf, sizeof(buf))) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+	if (size == 0) {
+		close(fd);
+		if (vm->outfd == fd)
+			vm->outfd = -1;
+		if (vm->errfd == fd)
+			vm->errfd = -1;
+		return 0;
+	} else if (size > 0 && vm->logfd != -1) {
+		n = 0;
+		while (n < size) {
+			if ((rc = write(vm->logfd, buf + n, size - n)) < 0)
+				if (errno != EINTR && errno != EAGAIN)
+					break;
+			if (rc > 0)
+				n += rc;
+		}
+	}
+
+	return size;
+}

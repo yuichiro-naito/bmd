@@ -524,14 +524,8 @@ event_loop()
 	struct kevent ev;
 	struct vm_entry *vm_ent;
 	struct vm *vm;
-	int rc, n, size, status;
+	int n, status;
 	struct sock_buf *sb;
-	char *buf = malloc(BUFSIZE);
-
-	if (buf == NULL) {
-		ERR("can not allocate memory %d bytes", BUFSIZE);
-		return -1;
-	}
 
 	EV_SET(&ev, gl_conf.cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
 	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
@@ -542,7 +536,6 @@ wait:
 	while (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("kevent failure (%s)\n", strerror(errno));
-			free(buf);
 			return -1;
 		}
 
@@ -582,31 +575,12 @@ wait:
 			}
 			break;
 		}
-		while ((size = read(ev.ident, buf, BUFSIZE)) < 0)
-			if (errno != EINTR && errno != EAGAIN)
-				break;
-		if (size == 0) {
-			close(ev.ident);
+		if (write_err_log(ev.ident, vm) == 0) {
 			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
-			    NULL);
+			       NULL);
 			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 				if (errno != EINTR)
 					break;
-			if (vm->outfd == ev.ident)
-				vm->outfd = -1;
-			if (vm->errfd == ev.ident)
-				vm->errfd = -1;
-			break;
-		} else if (size > 0 && vm->logfd != -1) {
-			n = 0;
-			while (n < size) {
-				if ((rc = write(vm->logfd, buf + n, size - n)) <
-				    0)
-					if (errno != EINTR && errno != EAGAIN)
-						break;
-				if (rc > 0)
-					n += rc;
-			}
 		}
 		break;
 	case EVFILT_TIMER:
@@ -700,13 +674,11 @@ wait:
 		break;
 	default:
 		ERR("recieved unknown event! (%d)", ev.filter);
-		free(buf);
 		return -1;
 	}
 
 	goto wait;
 end:
-	free(buf);
 	return 0;
 }
 
@@ -733,9 +705,9 @@ stop_virtual_machines()
 				continue;
 			return -1;
 		}
+		vm_ent = ev.udata;
+		vm = &vm_ent->vm;
 		if (ev.filter == EVFILT_PROC) {
-			vm_ent = ev.udata;
-			vm = &vm_ent->vm;
 			if (waitpid(ev.ident, &status, 0) < 0)
 				ERR("wait error (%s)\n", strerror(errno));
 			if (vm_ent == NULL || vm->pid != ev.ident)
@@ -746,14 +718,30 @@ stop_virtual_machines()
 			call_plugins(vm_ent);
 			count--;
 		} else if (ev.filter == EVFILT_TIMER) {
-			vm_ent = ev.udata;
-			vm = &vm_ent->vm;
 			/* force to poweroff VM */
 			ERR("timeout kill vm %s\n", vm->conf->name);
 			poweroff_vm(vm);
+		} else if (ev.filter == EVFILT_READ) {
+			if (vm_ent->type == SOCKBUF) {
+				destroy_sock_buf((struct sock_buf *)vm_ent);
+				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
+				       0, 0, NULL);
+				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
+					      NULL) < 0)
+					if (errno != EINTR)
+						break;
+				continue;
+			}
+			if (write_err_log(ev.ident, vm) == 0) {
+				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
+				       0, 0, NULL);
+				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
+					      NULL) < 0)
+					if (errno != EINTR)
+						break;
+			}
 		}
 	}
-
 	// waiting for vm memory is actually freed in the kernel.
 	sleep(3);
 
