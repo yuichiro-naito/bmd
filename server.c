@@ -500,8 +500,7 @@ recv_command(struct sock_buf *sb)
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	if ((*func)(sb->fd, nv) < 0)
-		goto err;
+	(*func)(sb->fd, nv);
 
 	nvlist_destroy(nv);
 	return 0;
