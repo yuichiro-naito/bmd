@@ -71,8 +71,10 @@ BMD can take following options. Write the options after "bmd_flags=" in /etc/rc.
 
 ## VM Config files
 
-VM configuration files are written in simple text format.
-The format is "key = value(s)".
+VM configuration files are written in simple text format "key = value(s)".
+Multiple values are written separated by white space.
+A backslash preceding a newline is treated as a line continuation.
+
 One configuration file is for one VM.
 
 By default VM Config files are written in `${LOCALBASE}/etc/bmd.d`.
@@ -252,7 +254,7 @@ Following subcommands are available.
 
 # Known Issues
 
-## 1. Install mode doesn't boot from ISO image on UEFI boot
+## 1. UEFI doesn't boot from ISO in spite of install mode.
 
 There is no way to customize UEFI variables at boot for now.
 Following patch may allow us to choose boot disks.
