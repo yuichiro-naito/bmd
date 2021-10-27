@@ -529,19 +529,6 @@ compare_parser_entry(const void *a, const void *b)
 	return strcasecmp(name, ent->name);
 }
 
-static struct parser_entry *
-get_parser(char *name)
-{
-
-	struct parser_entry *p;
-
-	p = bsearch(name, parser_list,
-	    sizeof(parser_list) / sizeof(parser_list[0]),
-	    sizeof(parser_list[0]), compare_parser_entry);
-
-	return p;
-}
-
 static int
 parse(struct vm_conf *conf, FILE *fp)
 {
@@ -567,7 +554,9 @@ parse(struct vm_conf *conf, FILE *fp)
 			goto bad;
 		}
 
-		parser = get_parser(key);
+		parser = bsearch(key, parser_list,
+				 sizeof(parser_list) / sizeof(parser_list[0]),
+				 sizeof(parser_list[0]), compare_parser_entry);
 		if (parser == NULL) {
 			ERR("unknown key %s in %s\n", key, name);
 			goto bad;
