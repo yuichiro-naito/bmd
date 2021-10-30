@@ -66,6 +66,9 @@ struct sock_buf {
 	size_t read_size;
 	size_t read_bytes;
 	char *buf;
+	size_t res_size;
+	size_t res_bytes;
+	char *res_buf;
 };
 
 struct vm_conf_head;

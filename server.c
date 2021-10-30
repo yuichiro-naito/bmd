@@ -73,6 +73,46 @@ clear_sock_buf(struct sock_buf *p)
 	p->read_bytes = 0;
 }
 
+void
+clear_send_sock_buf(struct sock_buf *p)
+{
+	free(p->res_buf);
+	p->res_buf = NULL;
+	p->res_size = 0;
+	p->res_bytes = 0;
+}
+
+/**
+ * return value:
+ * -1 : error
+ *  0 : closed
+ *  1 : continue
+ *  2 : finished reading
+ */
+int
+send_sock_buf(struct sock_buf *p)
+{
+	ssize_t n = p->res_bytes;
+	size_t size = p->res_size;
+	char *buf = p->res_buf;
+
+retry:
+	if ((n = send(p->fd, buf + n, size - n, MSG_DONTWAIT)) < 0) {
+		switch (errno) {
+		case EINTR:
+			goto retry;
+		case EAGAIN:
+			return 1;
+		default:
+			return -1;
+		}
+	}
+	p->res_bytes += n;
+	if (p->res_bytes == p->res_size)
+		return 2;
+	return 1;
+}
+
 /**
  * return value:
  * -1 : error
@@ -227,7 +267,7 @@ accept_command_socket(int s0)
  *  -  0 = boot
  *  -  1 = install
  */
-static int
+static nvlist_t *
 boot0_command(int s, const nvlist_t *nv, int style)
 {
 	int fd;
@@ -318,24 +358,22 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	nvlist_send(s, res);
-	nvlist_destroy(res);
-	return 0;
+	return res;
 }
 
-static int
+static nvlist_t *
 boot_command(int s, const nvlist_t *nv)
 {
 	return boot0_command(s, nv, 0);
 }
 
-static int
+static nvlist_t *
 install_command(int s, const nvlist_t *nv)
 {
 	return boot0_command(s, nv, 1);
 }
 
-static int
+static nvlist_t *
 list_command(int s, const nvlist_t *nv)
 {
 	size_t i, count = 0;
@@ -374,13 +412,11 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	nvlist_send(s, res);
-	nvlist_destroy(res);
 	free(list);
-	return 0;
+	return res;
 }
 
-static int
+static nvlist_t *
 vm_down_command(int s, const nvlist_t *nv, int how)
 {
 	const char *name, *reason;
@@ -426,27 +462,25 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	nvlist_send(s, res);
-	nvlist_destroy(res);
-	return 0;
+	return res;
 }
 
-static int
+static nvlist_t *
 shutdown_command(int s, const nvlist_t *nv) {
 	return vm_down_command(s, nv, 0);
 }
 
-static int
+static nvlist_t *
 reset_command(int s, const nvlist_t *nv) {
 	return vm_down_command(s, nv, 1);
 }
 
-static int
+static nvlist_t *
 poweroff_command(int s, const nvlist_t *nv) {
 	return vm_down_command(s, nv, 2);
 }
 
-typedef int (*cfunc)(int s, const nvlist_t *nv);
+typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv);
 
 struct command_entry {
 	char *name;
@@ -488,7 +522,7 @@ int
 recv_command(struct sock_buf *sb)
 {
 	const char *cmd;
-	nvlist_t *nv;
+	nvlist_t *nv, *res;
 	cfunc func;
 
 	if ((nv = nvlist_unpack(sb->buf, sb->buf_size, 0)) == NULL)
@@ -500,16 +534,28 @@ recv_command(struct sock_buf *sb)
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	(*func)(sb->fd, nv);
+	res = (*func)(sb->fd, nv);
+
+	sb->res_buf = nvlist_pack(res, &sb->res_size);
+	if (sb->res_buf == NULL) {
+		nvlist_destroy(nv);
+		return -1;
+	}
+	sb->res_bytes = 0;
 
 	nvlist_destroy(nv);
 	return 0;
 err:
 	nvlist_destroy(nv);
-	nv = nvlist_create(0);
-	nvlist_add_bool(nv, "error", true);
-	nvlist_add_string(nv, "reason", "unknown command");
-	nvlist_send(sb->fd, nv);
-	nvlist_destroy(nv);
-	return -1;
+	res = nvlist_create(0);
+	nvlist_add_bool(res, "error", true);
+	nvlist_add_string(res, "reason", "unknown command");
+	sb->res_buf = nvlist_pack(res, &sb->res_size);
+	if (sb->res_buf == NULL) {
+		nvlist_destroy(res);
+		return -1;
+	}
+	sb->res_bytes = 0;
+	nvlist_destroy(res);
+	return 0;
 }

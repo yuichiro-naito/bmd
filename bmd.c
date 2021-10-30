@@ -522,7 +522,7 @@ reload_virtual_machines()
 int
 event_loop()
 {
-	struct kevent ev;
+	struct kevent ev, ev2[2];
 	struct vm_entry *vm_ent;
 	struct vm *vm;
 	int n, status;
@@ -543,6 +543,36 @@ wait:
 	vm_ent = ev.udata;
 	vm = &vm_ent->vm;
 	switch (ev.filter) {
+	case EVFILT_WRITE:
+		if (vm_ent != NULL && vm_ent->type == SOCKBUF) {
+			sb = (struct sock_buf *)vm_ent;
+			switch (send_sock_buf(sb)) {
+			case 2:
+				clear_send_sock_buf(sb);
+				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
+				       EV_ENABLE, 0, 0, sb);
+				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
+				       EV_DELETE, 0, 0, sb);
+				while (kevent(gl_conf.kq, ev2, 2, NULL,
+					      0, NULL) < 0)
+					if (errno != EINTR)
+						break;
+			case 1:
+				break;
+			default:
+				destroy_sock_buf(sb);
+				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
+				       EV_DELETE, 0, 0, NULL);
+				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
+				       EV_DELETE, 0, 0, NULL);
+				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
+					      NULL) < 0)
+					if (errno != EINTR)
+						break;
+				break;
+			}
+		}
+		break;
 	case EVFILT_READ:
 		if (ev.ident == gl_conf.cmd_sock) {
 			if ((n = accept_command_socket(ev.ident)) < 0)
@@ -560,8 +590,18 @@ wait:
 			sb = (struct sock_buf *)vm_ent;
 			switch (recv_sock_buf(sb)) {
 			case 2:
-				if (recv_command(sb) == 0)
+				if (recv_command(sb) == 0) {
 					clear_sock_buf(sb);
+					EV_SET(&ev2[0], ev.ident, EVFILT_READ,
+					       EV_DISABLE, 0, 0, sb);
+					EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
+					       EV_ADD, 0, 0, sb);
+					while (kevent(gl_conf.kq, ev2, 2, NULL,
+						      0, NULL) < 0)
+						if (errno != EINTR)
+							break;
+					break;
+				}
 				/* FALLTHROUGH */
 			case 1:
 				break;
