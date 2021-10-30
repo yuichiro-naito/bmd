@@ -339,8 +339,9 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	vm->logfd = open(vm->conf->err_logfile, O_WRONLY | O_APPEND | O_CREAT,
-	    0644);
+	if (vm->logfd == -1)
+		vm->logfd = open(vm->conf->err_logfile,
+				 O_WRONLY | O_APPEND | O_CREAT, 0644);
 
 	return 0;
 }
