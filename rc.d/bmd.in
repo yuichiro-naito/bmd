@@ -13,6 +13,7 @@ command="%%LOCALBASE%%/sbin/${name}"
 pidfile="/var/run/bmd.pid"
 extra_commands="reload"
 required_modules="vmm"
+${name}_oomprotect=YES
 
 load_rc_config $name
 run_rc_command "$1"
