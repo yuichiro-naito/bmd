@@ -190,23 +190,29 @@ int
 connect_to_server(const struct global_conf *gc)
 {
 	int s;
-	struct sockaddr_un addr;
+	struct addrinfo hints, *r;
 
-	addr.sun_family = PF_UNIX;
-	strncpy(addr.sun_path, gc->cmd_sock_path, sizeof(addr.sun_path));
-	addr.sun_len = SUN_LEN(&addr);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_LOCAL;
+	hints.ai_socktype = SOCK_STREAM;
 
-	while ((s = socket(PF_UNIX, SOCK_STREAM, 0)) < 0)
-		if (errno != EAGAIN && errno != EINTR)
-			return -1;
+	if (getaddrinfo(gc->cmd_sock_path, NULL, &hints, &r))
+		return -1;
 
-	while (connect(s, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
+	while (connect(s, r->ai_addr, r->ai_addrlen) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err;
+
+	freeaddrinfo(r);
 	return s;
 err:
-	close(s);
+	freeaddrinfo(r);
+	if (s != -1)
+		close(s);
 	return -1;
 }
 
@@ -229,7 +235,6 @@ create_command_server(const struct global_conf *gc)
 	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
-
 
 	while (bind(s, r->ai_addr, r->ai_addrlen) < 0)
 		if (errno != EAGAIN && errno != EINTR)
