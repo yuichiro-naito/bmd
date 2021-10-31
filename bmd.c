@@ -726,7 +726,7 @@ end:
 int
 stop_virtual_machines()
 {
-	struct kevent ev;
+	struct kevent ev, ev2[2];
 	struct vm *vm;
 	struct vm_entry *vm_ent;
 	int status, count = 0;
@@ -763,6 +763,18 @@ stop_virtual_machines()
 			/* force to poweroff VM */
 			ERR("timeout kill vm %s\n", vm->conf->name);
 			poweroff_vm(vm);
+		} else if (ev.filter == EVFILT_WRITE) {
+			if (vm_ent->type == SOCKBUF) {
+				destroy_sock_buf((struct sock_buf *)vm_ent);
+				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
+				       EV_DELETE, 0, 0, NULL);
+				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
+				       EV_DELETE, 0, 0, NULL);
+				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
+					      NULL) < 0)
+					if (errno != EINTR)
+						break;
+			}
 		} else if (ev.filter == EVFILT_READ) {
 			if (vm_ent->type == SOCKBUF) {
 				destroy_sock_buf((struct sock_buf *)vm_ent);
