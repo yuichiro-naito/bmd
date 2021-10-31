@@ -4,6 +4,7 @@
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/procctl.h>
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -888,6 +889,10 @@ main(int argc, char *argv[])
 	sigaddset(&nmask, SIGHUP);
 	sigaddset(&nmask, SIGPIPE);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
+
+	if (procctl(P_PID, getpid(), PROC_SPROTECT, &(int []){PPROT_SET}[0]) < 0)
+		WARN("%s\n", "can not protect from OOM killer");
+
 
 	if ((gl_conf.kq = kqueue()) < 0) {
 		ERR("%s\n", "can not open kqueue");
