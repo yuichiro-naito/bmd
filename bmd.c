@@ -307,17 +307,10 @@ start_virtual_machine(struct vm_entry *vm_ent)
 {
 	struct vm *vm = &vm_ent->vm;
 	char *name = vm->conf->name;
-	int (*vm_func)(struct vm *);
 
-	if (vm->state == LOAD)
-		vm_func = &exec_bhyve;
-	else {
-		INFO("start vm %s\n", name);
-		vm_func = &start_vm;
-	}
-
-	if ((*vm_func)(vm) < 0) {
+	if (start_vm(vm) < 0) {
 		ERR("failed to start vm %s\n", name);
+		cleanup_vm(vm);
 		return -1;
 	}
 

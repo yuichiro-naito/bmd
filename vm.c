@@ -567,6 +567,9 @@ start_vm(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
 
+	if (vm->state == LOAD)
+		return exec_bhyve(vm);
+
 	if (STAILQ_FIRST(&vm->taps) == NULL && assign_taps(vm) < 0)
 		return -1;
 
