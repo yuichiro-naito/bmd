@@ -1,4 +1,5 @@
 #include <sys/queue.h>
+#include <sys/event.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/nv.h>
@@ -67,8 +68,14 @@ direct_run(const char *name, bool install, bool single)
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
 	struct vm *vm;
+	struct kevent ev,ev2[2];
 
 	LOG_OPEN_PERROR();
+
+	if ((gl_conf.kq = kqueue()) < 0) {
+		ERR("%s\n", "can not open kqueue");
+		return 1;
+	}
 
 	fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY);
 	if (fd < 0) {
@@ -106,9 +113,38 @@ direct_run(const char *name, bool install, bool single)
 
 	if (start_vm(vm) < 0)
 		goto err;
+	EV_SET(&ev2[0], vm->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	       0, vm_ent);
+	EV_SET(&ev2[1], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
+	       vm->conf->loader_timeout, vm_ent);
+	while(kevent(gl_conf.kq, ev2, (vm->state == LOAD) ? 2 : 1, NULL, 0, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("failed to wait process (%s)\n", strerror(errno));
+			poweroff_vm(vm);
+			goto err;
+		}
 	call_plugins(vm_ent);
-	if (waitpid(vm->pid, &status, 0) < 0)
+
+wait:
+	while (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0)
+		if (errno != EINTR) {
+			ERR("kevent failure (%s)\n", strerror(errno));
+			poweroff_vm(vm);
+			goto err;
+		}
+
+	switch (ev.filter) {
+	case EVFILT_PROC:
+		if (waitpid(ev.ident, &status, 0) < 0)
+			goto err;
+		if (ev.ident != vm->pid)
+			goto wait;
+		break;
+	case EVFILT_TIMER:
+	default:
+		poweroff_vm(vm);
 		goto err;
+	}
 
 	if (vm->state == LOAD) {
 		if (exec_bhyve(vm) < 0)
