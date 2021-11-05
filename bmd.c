@@ -70,11 +70,11 @@ stop_waiting_fd(struct vm_entry *vm_ent)
 	int i = 0;
 	struct kevent ev[2];
 
-	if (vm_ent->vm.outfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.outfd, EVFILT_READ, EV_DELETE, 0, 0,
+	if (VM_OUTFD(vm_ent) != -1)
+		EV_SET(&ev[i++], VM_OUTFD(vm_ent), EVFILT_READ, EV_DELETE, 0, 0,
 		    vm_ent);
-	if (vm_ent->vm.errfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_DELETE, 0, 0,
+	if (VM_ERRFD(vm_ent) != -1)
+		EV_SET(&ev[i++], VM_ERRFD(vm_ent), EVFILT_READ, EV_DELETE, 0, 0,
 		    vm_ent);
 	while (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
@@ -83,10 +83,8 @@ stop_waiting_fd(struct vm_entry *vm_ent)
 			return -1;
 		}
 
-	close(vm_ent->vm.outfd);
-	close(vm_ent->vm.errfd);
-	vm_ent->vm.outfd = -1;
-	vm_ent->vm.errfd = -1;
+	VM_CLOSE(vm_ent, OUTFD);
+	VM_CLOSE(vm_ent, ERRFD);
 
 	return 0;
 }
@@ -112,7 +110,7 @@ wait_for_process(struct vm_entry *vm_ent)
 {
 	struct kevent ev;
 
-	EV_SET(&ev, vm_ent->vm.pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	EV_SET(&ev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	    0, vm_ent);
 	while(kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
@@ -204,7 +202,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	STAILQ_FOREACH_SAFE (nc, &vm_ent->vm.taps, next, nnc)
 		free_net_conf(nc);
 	free(vm_ent->vm.mapfile);
-	free_vm_conf(vm_ent->vm.conf);
+	free_vm_conf(VM_CONF(vm_ent));
 	free(vm_ent);
 }
 
@@ -308,8 +306,8 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
-	struct vm *vm = &vm_ent->vm;
-	char *name = vm->conf->name;
+	struct vm_conf *conf = VM_CONF(vm_ent);
+	char *name = conf->name;
 
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
@@ -324,23 +322,23 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		 * If this error happens, we can't manage bhyve process at all.
 		 */
 		VM_POWEROFF(vm_ent);
-		waitpid(vm->pid, NULL, 0);
+		waitpid(VM_PID(vm_ent), NULL, 0);
 		VM_CLEANUP(vm_ent);
 		return -1;
 	}
 
-	if (vm->state == RUN)
+	if (VM_STATE(vm_ent) == RUN)
 		INFO("start vm %s\n", name);
 
 	call_plugins(vm_ent);
-	if (vm->state == LOAD &&
-	    set_timer(vm_ent, vm->conf->loader_timeout) < 0) {
+	if (VM_STATE(vm_ent) == LOAD &&
+	    set_timer(vm_ent, conf->loader_timeout) < 0) {
 		ERR("failed to set timer for vm %s\n", name);
 		return -1;
 	}
 
-	if (vm->logfd == -1)
-		vm->logfd = open(vm->conf->err_logfile,
+	if (VM_LOGFD(vm_ent) == -1)
+		VM_LOGFD(vm_ent) = open(conf->err_logfile,
 				 O_WRONLY | O_APPEND | O_CREAT, 0644);
 
 	return 0;
@@ -387,7 +385,7 @@ lookup_vm_by_name(const char *name)
 	struct vm_entry *vm_ent;
 
 	SLIST_FOREACH (vm_ent, &vm_list, next)
-		if (strcmp(vm_ent->vm.conf->name, name) == 0)
+		if (strcmp(VM_CONF(vm_ent)->name, name) == 0)
 			return vm_ent;
 	return NULL;
 }
@@ -397,7 +395,6 @@ reload_virtual_machines()
 {
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent, *cen;
-	struct vm *vm;
 	struct vm_entry *vm_ent;
 	struct vm_conf_head new_list = SLIST_HEAD_INITIALIZER();
 
@@ -428,42 +425,41 @@ reload_virtual_machines()
 			continue;
 		} else if (vm_ent->vm.logfd != -1 &&
 		    vm_ent->vm.conf->err_logfile != NULL) {
-			close(vm_ent->vm.logfd);
-			vm_ent->vm.logfd = open(vm_ent->vm.conf->err_logfile,
+			VM_CLOSE(vm_ent, LOGFD);
+			VM_LOGFD(vm_ent) = open(VM_CONF(vm_ent)->err_logfile,
 			    O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
 		vm_ent->new_conf = conf;
-		vm = &vm_ent->vm;
 		if (conf->reboot_on_change &&
-		    compare_vm_conf(conf, vm->conf) != 0) {
-			if (vm->state == LOAD || vm->state == RUN) {
+		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
+			if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 				INFO("reboot vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
-				vm->state = RESTART;
-			} else if (vm->state == STOP)
-				vm->state = RESTART;
+				VM_STATE(vm_ent) = RESTART;
+			} else if (VM_STATE(vm_ent) == STOP)
+				VM_STATE(vm_ent) = RESTART;
 			continue;
 		}
 		if (vm_ent->new_conf->boot == vm_ent->vm.conf->boot)
 			continue;
 		switch (conf->boot) {
 		case NO:
-			if (vm->state == LOAD || vm->state == RUN) {
+			if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 				INFO("stop vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
-				vm->state = STOP;
-			} else if (vm->state == RESTART)
-				vm->state = STOP;
+				VM_STATE(vm_ent) = STOP;
+			} else if (VM_STATE(vm_ent) == RESTART)
+				VM_STATE(vm_ent) = STOP;
 			break;
 		case ALWAYS:
 		case YES:
-			if (vm->state == INIT || vm->state == TERMINATE) {
-				vm->conf = conf;
+			if (VM_STATE(vm_ent) == INIT || VM_STATE(vm_ent) == TERMINATE) {
+				VM_CONF(vm_ent) = conf;
 				start_virtual_machine(vm_ent);
-			} else if (vm->state == STOP)
-				vm->state = RESTART;
+			} else if (VM_STATE(vm_ent) == STOP)
+				VM_STATE(vm_ent) = RESTART;
 			break;
 		case ONESHOT:
 			// do nothing
@@ -473,9 +469,8 @@ reload_virtual_machines()
 
 	SLIST_FOREACH (vm_ent, &vm_list, next)
 		if (vm_ent->new_conf == NULL) {
-			vm = &vm_ent->vm;
-			conf = vm->conf;
-			switch (vm->state) {
+			conf = VM_CONF(vm_ent);
+			switch (VM_STATE(vm_ent)) {
 			case LOAD:
 			case RUN:
 				INFO("stop vm %s\n", conf->name);
@@ -485,7 +480,7 @@ reload_virtual_machines()
 			case STOP:
 			case REMOVE:
 			case RESTART:
-				vm->state = REMOVE;
+				VM_STATE(vm_ent) = REMOVE;
 				/* remove vm_conf_entry from the list
 				   to keep it until actually freed. */
 				if (SLIST_FIRST(&vm_conf_list))
@@ -505,7 +500,7 @@ reload_virtual_machines()
 			}
 
 		} else {
-			vm_ent->vm.conf = vm_ent->new_conf;
+			VM_CONF(vm_ent) = vm_ent->new_conf;
 			vm_ent->new_conf = NULL;
 		}
 
@@ -524,7 +519,6 @@ event_loop()
 {
 	struct kevent ev, ev2[2];
 	struct vm_entry *vm_ent;
-	struct vm *vm;
 	int n, status;
 	struct sock_buf *sb;
 
@@ -541,7 +535,6 @@ wait:
 		}
 
 	vm_ent = ev.udata;
-	vm = &vm_ent->vm;
 	switch (ev.filter) {
 	case EVFILT_WRITE:
 		if (vm_ent != NULL && vm_ent->type == SOCKBUF) {
@@ -616,7 +609,7 @@ wait:
 			}
 			break;
 		}
-		if (write_err_log(ev.ident, vm) == 0) {
+		if (write_err_log(ev.ident, &vm_ent->vm) == 0) {
 			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
 			       NULL);
 			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
@@ -625,42 +618,33 @@ wait:
 		}
 		break;
 	case EVFILT_TIMER:
-		if (vm->state == INIT) {
+		if (VM_STATE(vm_ent) == INIT) {
 			/* delayed boot */
 			start_virtual_machine(vm_ent);
-		} else if (vm->state == LOAD || vm->state == STOP ||
-		    vm->state == REMOVE || vm->state == RESTART) {
+		} else if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == STOP ||
+		    VM_STATE(vm_ent) == REMOVE || VM_STATE(vm_ent) == RESTART) {
 			/* loader timout or stop timeout */
 			/* force to poweroff */
-			ERR("timeout kill vm %s\n", vm->conf->name);
+			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
 			VM_POWEROFF(vm_ent);
 		}
 		break;
 	case EVFILT_PROC:
 		if (waitpid(ev.ident, &status, 0) < 0)
 			ERR("wait error (%s)\n", strerror(errno));
-		if (vm_ent == NULL || vm->pid != ev.ident)
+		if (vm_ent == NULL || VM_PID(vm_ent) != ev.ident)
 			// Maybe plugin set this event
 			break;
-		switch (vm->state) {
+		switch (VM_STATE(vm_ent)) {
 		case LOAD:
-			if (vm->infd != -1) {
-				close(vm->infd);
-				vm->infd = -1;
-			}
-			if (vm->outfd != -1) {
-				close(vm->outfd);
-				vm->outfd = -1;
-			}
-			if (vm->errfd != -1) {
-				close(vm->errfd);
-				vm->errfd = -1;
-			}
+			VM_CLOSE(vm_ent, INFD);
+			VM_CLOSE(vm_ent, OUTFD);
+			VM_CLOSE(vm_ent, ERRFD);
 			if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 				start_virtual_machine(vm_ent);
 			else {
 				ERR("failed loading vm %s (status:%d)\n",
-				    vm->conf->name, WEXITSTATUS(status));
+				    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
 				stop_waiting_fd(vm_ent);
 				VM_CLEANUP(vm_ent);
 				call_plugins(vm_ent);
@@ -671,23 +655,23 @@ wait:
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 
-			vm->state = INIT;
-			set_timer(vm_ent, MAX(vm->conf->boot_delay, 3));
+			VM_STATE(vm_ent) = INIT;
+			set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 			break;
 		case RUN:
-			if (vm->conf->install == false && WIFEXITED(status) &&
-			    (vm->conf->boot == ALWAYS ||
+			if (VM_CONF(vm_ent)->install == false && WIFEXITED(status) &&
+			    (VM_CONF(vm_ent)->boot == ALWAYS ||
 				WEXITSTATUS(status) == 0)) {
 				start_virtual_machine(vm_ent);
 				break;
 			}
 			/* FALLTHROUGH */
 		case STOP:
-			INFO("stop vm %s\n", vm->conf->name);
+			INFO("stop vm %s\n", VM_CONF(vm_ent)->name);
 			stop_waiting_fd(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
-			vm->conf->install = false;
+			VM_CONF(vm_ent)->install = false;
 			break;
 		case REMOVE:
 			stop_waiting_fd(vm_ent);
@@ -727,16 +711,14 @@ int
 stop_virtual_machines()
 {
 	struct kevent ev, ev2[2];
-	struct vm *vm;
 	struct vm_entry *vm_ent;
 	int status, count = 0;
 
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
-		vm = &vm_ent->vm;
-		if (vm->state == LOAD || vm->state == RUN) {
+		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 			count++;
 			VM_ACPI_POWEROFF(vm_ent);
-			set_timer(vm_ent, vm->conf->stop_timeout);
+			set_timer(vm_ent, VM_CONF(vm_ent)->stop_timeout);
 		}
 	}
 
@@ -747,21 +729,20 @@ stop_virtual_machines()
 			return -1;
 		}
 		vm_ent = ev.udata;
-		vm = &vm_ent->vm;
 		if (ev.filter == EVFILT_PROC) {
 			if (waitpid(ev.ident, &status, 0) < 0)
 				ERR("wait error (%s)\n", strerror(errno));
-			if (vm_ent == NULL || vm->pid != ev.ident)
+			if (vm_ent == NULL || VM_PID(vm_ent) != ev.ident)
 				// maybe plugin's child process
 				continue;
-			INFO("stop vm %s\n", vm->conf->name);
+			INFO("stop vm %s\n", VM_CONF(vm_ent)->name);
 			stop_waiting_fd(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			count--;
 		} else if (ev.filter == EVFILT_TIMER) {
 			/* force to poweroff VM */
-			ERR("timeout kill vm %s\n", vm->conf->name);
+			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
 			VM_POWEROFF(vm_ent);
 		} else if (ev.filter == EVFILT_WRITE) {
 			if (vm_ent->type == SOCKBUF) {
@@ -786,7 +767,7 @@ stop_virtual_machines()
 						break;
 				continue;
 			}
-			if (write_err_log(ev.ident, vm) == 0) {
+			if (write_err_log(ev.ident, &vm_ent->vm) == 0) {
 				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
 				       0, 0, NULL);
 				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,

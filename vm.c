@@ -28,24 +28,6 @@
 #include "vars.h"
 #include "vm.h"
 
-int destroy_vm(struct vm *vm);
-int reset_vm(struct vm *vm);
-int poweroff_vm(struct vm *vm);
-int acpi_poweroff_vm(struct vm *vm);
-int start_vm(struct vm *vm);
-void cleanup_vm(struct vm *vm);
-
-struct vm_methods method_list[] = {
-	{
-		start_vm,
-		reset_vm,
-		poweroff_vm,
-		acpi_poweroff_vm,
-		cleanup_vm,
-		destroy_vm
-	}
-};
-
 static int
 redirect_to_com(struct vm *vm)
 {
@@ -77,7 +59,7 @@ get_fbuf_option(int pcid, struct fbuf *fb)
 	return ret;
 }
 
-int
+static int
 write_mapfile(struct vm *vm)
 {
 	int fd, i;
@@ -530,11 +512,13 @@ exec_bhyve(struct vm *vm)
 		ERR("can not fork (%s)\n", strerror(errno));
 		exit(1);
 	}
+#undef WRITE_FMT
+#undef WRITE_STR
 
 	return 0;
 }
 
-int
+static int
 destroy_vm(struct vm *vm)
 {
 	char *name = vm->conf->name;
@@ -563,24 +547,27 @@ suspend_vm(struct vm *vm, enum vm_suspend_how how)
 	return rc;
 }
 
-int reset_vm(struct vm *vm)
+static int
+reset_vm(struct vm *vm)
 {
 	return suspend_vm(vm, VM_SUSPEND_RESET);
 }
 
-int poweroff_vm(struct vm *vm)
+static int
+poweroff_vm(struct vm *vm)
 {
 	if (vm->state == LOAD)
 		return kill(vm->pid, SIGKILL);
 	return suspend_vm(vm, VM_SUSPEND_POWEROFF);
 }
 
-int acpi_poweroff_vm(struct vm *vm)
+static int
+acpi_poweroff_vm(struct vm *vm)
 {
 	return kill(vm->pid, SIGTERM);
 }
 
-int
+static int
 start_vm(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
@@ -614,7 +601,7 @@ err:
 	return -1;
 }
 
-void
+static void
 cleanup_vm(struct vm *vm)
 {
 #define VM_CLOSE_FD(fd)                \
@@ -629,7 +616,7 @@ cleanup_vm(struct vm *vm)
 	VM_CLOSE_FD(outfd);
 	VM_CLOSE_FD(errfd);
 	VM_CLOSE_FD(logfd);
-
+#undef VM_CLOSE_FD
 	remove_taps(vm);
 	destroy_vm(vm);
 	if (vm->mapfile) {
@@ -670,3 +657,14 @@ write_err_log(int fd, struct vm *vm)
 
 	return size;
 }
+
+struct vm_methods method_list[] = {
+	{
+		start_vm,
+		reset_vm,
+		poweroff_vm,
+		acpi_poweroff_vm,
+		cleanup_vm,
+		destroy_vm
+	}
+};
