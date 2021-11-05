@@ -147,7 +147,7 @@ wait:
 	}
 
 	if (vm->state == LOAD) {
-		if (exec_bhyve(vm) < 0)
+		if (start_vm(vm) < 0)
 			goto err;
 		call_plugins(vm_ent);
 		if (waitpid(vm->pid, &status, 0) < 0)

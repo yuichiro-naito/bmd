@@ -151,7 +151,7 @@ end:
 	return cmd;
 }
 
-int
+static int
 grub_load(struct vm *vm)
 {
 	int ifd[2];
@@ -218,7 +218,7 @@ grub_load(struct vm *vm)
 	return 0;
 }
 
-int
+static int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
@@ -370,7 +370,7 @@ err:
 	return -1;
 }
 
-int
+static int
 exec_bhyve(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
