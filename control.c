@@ -111,7 +111,7 @@ direct_run(const char *name, bool install, bool single)
 	}
 	vm = &vm_ent->vm;
 
-	if (start_vm(vm) < 0)
+	if (VM_START(vm_ent) < 0)
 		goto err;
 	EV_SET(&ev2[0], vm->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	       0, vm_ent);
@@ -120,7 +120,7 @@ direct_run(const char *name, bool install, bool single)
 	while(kevent(gl_conf.kq, ev2, (vm->state == LOAD) ? 2 : 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait process (%s)\n", strerror(errno));
-			poweroff_vm(vm);
+			VM_POWEROFF(vm_ent);
 			goto err;
 		}
 	call_plugins(vm_ent);
@@ -129,7 +129,7 @@ wait:
 	while (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("kevent failure (%s)\n", strerror(errno));
-			poweroff_vm(vm);
+			VM_POWEROFF(vm_ent);
 			goto err;
 		}
 
@@ -142,25 +142,25 @@ wait:
 		break;
 	case EVFILT_TIMER:
 	default:
-		poweroff_vm(vm);
+		VM_POWEROFF(vm_ent);
 		goto err;
 	}
 
 	if (vm->state == LOAD) {
-		if (start_vm(vm) < 0)
+		if (VM_START(vm_ent) < 0)
 			goto err;
 		call_plugins(vm_ent);
 		if (waitpid(vm->pid, &status, 0) < 0)
 			goto err;
 	}
 
-	cleanup_vm(vm);
+	VM_CLEANUP(vm_ent);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	remove_plugins();
 	return 0;
 err:
-	cleanup_vm(vm);
+	VM_CLEANUP(vm_ent);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	remove_plugins();

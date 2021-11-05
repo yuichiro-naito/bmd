@@ -28,6 +28,24 @@
 #include "vars.h"
 #include "vm.h"
 
+int destroy_vm(struct vm *vm);
+int reset_vm(struct vm *vm);
+int poweroff_vm(struct vm *vm);
+int acpi_poweroff_vm(struct vm *vm);
+int start_vm(struct vm *vm);
+void cleanup_vm(struct vm *vm);
+
+struct vm_methods method_list[] = {
+	{
+		start_vm,
+		reset_vm,
+		poweroff_vm,
+		acpi_poweroff_vm,
+		cleanup_vm,
+		destroy_vm
+	}
+};
+
 static int
 redirect_to_com(struct vm *vm)
 {

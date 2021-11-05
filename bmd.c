@@ -40,6 +40,8 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
 	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, -1, -1, -1, 0, -1 };
 
+extern struct vm_methods method_list[];
+
 int
 wait_for_reading(struct vm_entry *vm_ent)
 {
@@ -277,6 +279,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	if (vm_ent == NULL)
 		return NULL;
 	vm_ent->type = VMENTRY;
+	vm_ent->method = &method_list[BHYVE];
 	vm = &vm_ent->vm;
 	conf = &conf_ent->conf;
 	vm->conf = conf;
@@ -308,9 +311,9 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	struct vm *vm = &vm_ent->vm;
 	char *name = vm->conf->name;
 
-	if (start_vm(vm) < 0) {
+	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
-		cleanup_vm(vm);
+		VM_CLEANUP(vm_ent);
 		return -1;
 	}
 
@@ -320,11 +323,14 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		 * Force to kill bhyve.
 		 * If this error happens, we can't manage bhyve process at all.
 		 */
-		poweroff_vm(vm);
+		VM_POWEROFF(vm_ent);
 		waitpid(vm->pid, NULL, 0);
-		cleanup_vm(vm);
+		VM_CLEANUP(vm_ent);
 		return -1;
 	}
+
+	if (vm->state == RUN)
+		INFO("start vm %s\n", name);
 
 	call_plugins(vm_ent);
 	if (vm->state == LOAD &&
@@ -432,7 +438,7 @@ reload_virtual_machines()
 		    compare_vm_conf(conf, vm->conf) != 0) {
 			if (vm->state == LOAD || vm->state == RUN) {
 				INFO("reboot vm %s\n", conf->name);
-				acpi_poweroff_vm(&vm_ent->vm);
+				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = RESTART;
 			} else if (vm->state == STOP)
@@ -445,7 +451,7 @@ reload_virtual_machines()
 		case NO:
 			if (vm->state == LOAD || vm->state == RUN) {
 				INFO("stop vm %s\n", conf->name);
-				acpi_poweroff_vm(&vm_ent->vm);
+				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
 				vm->state = STOP;
 			} else if (vm->state == RESTART)
@@ -473,7 +479,7 @@ reload_virtual_machines()
 			case LOAD:
 			case RUN:
 				INFO("stop vm %s\n", conf->name);
-				acpi_poweroff_vm(&vm_ent->vm);
+				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
 				/* FALLTHROUGH */
 			case STOP:
@@ -627,7 +633,7 @@ wait:
 			/* loader timout or stop timeout */
 			/* force to poweroff */
 			ERR("timeout kill vm %s\n", vm->conf->name);
-			poweroff_vm(vm);
+			VM_POWEROFF(vm_ent);
 		}
 		break;
 	case EVFILT_PROC:
@@ -656,13 +662,13 @@ wait:
 				ERR("failed loading vm %s (status:%d)\n",
 				    vm->conf->name, WEXITSTATUS(status));
 				stop_waiting_fd(vm_ent);
-				cleanup_vm(vm);
+				VM_CLEANUP(vm_ent);
 				call_plugins(vm_ent);
 			}
 			break;
 		case RESTART:
 			stop_waiting_fd(vm_ent);
-			cleanup_vm(vm);
+			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 
 			vm->state = INIT;
@@ -679,13 +685,13 @@ wait:
 		case STOP:
 			INFO("stop vm %s\n", vm->conf->name);
 			stop_waiting_fd(vm_ent);
-			cleanup_vm(vm);
+			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			vm->conf->install = false;
 			break;
 		case REMOVE:
 			stop_waiting_fd(vm_ent);
-			cleanup_vm(vm);
+			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 			free_vm_entry(vm_ent);
@@ -729,7 +735,7 @@ stop_virtual_machines()
 		vm = &vm_ent->vm;
 		if (vm->state == LOAD || vm->state == RUN) {
 			count++;
-			acpi_poweroff_vm(&vm_ent->vm);
+			VM_ACPI_POWEROFF(vm_ent);
 			set_timer(vm_ent, vm->conf->stop_timeout);
 		}
 	}
@@ -750,13 +756,13 @@ stop_virtual_machines()
 				continue;
 			INFO("stop vm %s\n", vm->conf->name);
 			stop_waiting_fd(vm_ent);
-			cleanup_vm(vm);
+			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			count--;
 		} else if (ev.filter == EVFILT_TIMER) {
 			/* force to poweroff VM */
 			ERR("timeout kill vm %s\n", vm->conf->name);
-			poweroff_vm(vm);
+			VM_POWEROFF(vm_ent);
 		} else if (ev.filter == EVFILT_WRITE) {
 			if (vm_ent->type == SOCKBUF) {
 				destroy_sock_buf((struct sock_buf *)vm_ent);

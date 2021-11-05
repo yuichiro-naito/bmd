@@ -455,17 +455,17 @@ vm_down_command(int s, const nvlist_t *nv, int how)
 	switch (how) {
 	case 0:
 		INFO("stop vm %s\n", conf->name);
-		acpi_poweroff_vm(&vm_ent->vm);
+		VM_ACPI_POWEROFF(vm_ent);
 		set_timer(vm_ent, vm_ent->vm.conf->stop_timeout);
 		vm_ent->vm.state = STOP;
 		break;
 	case 1:
 		INFO("reset vm %s\n", conf->name);
-		reset_vm(&vm_ent->vm);
+		VM_RESET(vm_ent);
 		break;
 	case 2:
 		INFO("poweroff vm %s\n", conf->name);
-		poweroff_vm(&vm_ent->vm);
+		VM_POWEROFF(vm_ent);
 		vm_ent->vm.state = STOP;
 		break;
 	default:

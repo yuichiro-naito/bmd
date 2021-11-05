@@ -113,6 +113,19 @@ struct vm {
 	char *mapfile;
 };
 
+enum VM_BACKENDS {
+	BHYVE, QEMU
+};
+
+struct vm_methods {
+	int (*vm_start)(struct vm*);
+	int (*vm_reset)(struct vm *vm);
+	int (*vm_poweroff)(struct vm *vm);
+	int (*vm_acpi_poweroff)(struct vm *vm);
+	void (*vm_cleanup)(struct vm *vm);
+	int (*vm_destroy)(struct vm *vm);
+};
+
 #define PLUGIN_VERSION 1
 
 typedef struct plugin_desc {

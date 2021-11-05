@@ -39,6 +39,13 @@ enum STRUCT_TYPE {
 	VMENTRY, SOCKBUF
 };
 
+#define VM_START(v)           (v)->method->vm_start(&(v)->vm)
+#define VM_RESET(v)           (v)->method->vm_reset(&(v)->vm)
+#define VM_POWEROFF(v)        (v)->method->vm_poweroff(&(v)->vm)
+#define VM_ACPI_POWEROFF(v)   (v)->method->vm_acpi_poweroff(&(v)->vm)
+#define VM_CLEANUP(v)         (v)->method->vm_cleanup(&(v)->vm)
+#define VM_DESTROY(v)         (v)->method->vm_destroy(&(v)->vm)
+
 /*
   Entry of vm list.
   The individual entries indicate the virtual machine process.
@@ -50,7 +57,9 @@ struct vm_entry {
 	struct vm_conf *new_conf;
 	SLIST_HEAD(, plugin_data) pl_data;
 	SLIST_ENTRY(vm_entry) next;
+	struct vm_methods *method;
 };
+
 
 /*
   Socker buffer.
