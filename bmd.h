@@ -44,7 +44,6 @@ enum STRUCT_TYPE {
 #define VM_POWEROFF(v)        (v)->method->vm_poweroff(&(v)->vm)
 #define VM_ACPI_POWEROFF(v)   (v)->method->vm_acpi_poweroff(&(v)->vm)
 #define VM_CLEANUP(v)         (v)->method->vm_cleanup(&(v)->vm)
-#define VM_DESTROY(v)         (v)->method->vm_destroy(&(v)->vm)
 #define VM_CONF(v)            ((v)->vm.conf)
 #define VM_PID(v)             ((v)->vm.pid)
 #define VM_STATE(v)           ((v)->vm.state)

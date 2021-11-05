@@ -123,7 +123,6 @@ struct vm_methods {
 	int (*vm_poweroff)(struct vm *vm);
 	int (*vm_acpi_poweroff)(struct vm *vm);
 	void (*vm_cleanup)(struct vm *vm);
-	int (*vm_destroy)(struct vm *vm);
 };
 
 #define PLUGIN_VERSION 1

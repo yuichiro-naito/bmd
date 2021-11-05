@@ -519,14 +519,14 @@ exec_bhyve(struct vm *vm)
 }
 
 static int
-destroy_vm(struct vm *vm)
+destroy_bhyve(struct vm *vm)
 {
 	char *name = vm->conf->name;
 	return sysctlbyname("hw.vmm.destroy", NULL, 0, name, strlen(name));
 }
 
 static int
-suspend_vm(struct vm *vm, enum vm_suspend_how how)
+suspend_bhyve(struct vm *vm, enum vm_suspend_how how)
 {
 	int rc, fd;
 	char *path;
@@ -548,27 +548,27 @@ suspend_vm(struct vm *vm, enum vm_suspend_how how)
 }
 
 static int
-reset_vm(struct vm *vm)
+reset_bhyve(struct vm *vm)
 {
-	return suspend_vm(vm, VM_SUSPEND_RESET);
+	return suspend_bhyve(vm, VM_SUSPEND_RESET);
 }
 
 static int
-poweroff_vm(struct vm *vm)
+poweroff_bhyve(struct vm *vm)
 {
 	if (vm->state == LOAD)
 		return kill(vm->pid, SIGKILL);
-	return suspend_vm(vm, VM_SUSPEND_POWEROFF);
+	return suspend_bhyve(vm, VM_SUSPEND_POWEROFF);
 }
 
 static int
-acpi_poweroff_vm(struct vm *vm)
+acpi_poweroff_bhyve(struct vm *vm)
 {
 	return kill(vm->pid, SIGTERM);
 }
 
 static int
-start_vm(struct vm *vm)
+start_bhyve(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
 
@@ -602,7 +602,7 @@ err:
 }
 
 static void
-cleanup_vm(struct vm *vm)
+cleanup_bhyve(struct vm *vm)
 {
 #define VM_CLOSE_FD(fd)                \
 	do {                           \
@@ -618,7 +618,7 @@ cleanup_vm(struct vm *vm)
 	VM_CLOSE_FD(logfd);
 #undef VM_CLOSE_FD
 	remove_taps(vm);
-	destroy_vm(vm);
+	destroy_bhyve(vm);
 	if (vm->mapfile) {
 		unlink(vm->mapfile);
 		free(vm->mapfile);
@@ -660,11 +660,10 @@ write_err_log(int fd, struct vm *vm)
 
 struct vm_methods method_list[] = {
 	{
-		start_vm,
-		reset_vm,
-		poweroff_vm,
-		acpi_poweroff_vm,
-		cleanup_vm,
-		destroy_vm
+		start_bhyve,
+		reset_bhyve,
+		poweroff_bhyve,
+		acpi_poweroff_bhyve,
+		cleanup_bhyve
 	}
 };
