@@ -93,6 +93,8 @@ free_vm_conf(struct vm_conf *vc)
 	clear_disk_conf(vc);
 	clear_iso_conf(vc);
 	clear_net_conf(vc);
+	free(vc->qemu_arch);
+	free(vc->qemu_machine);
 	free(vc);
 }
 
@@ -353,6 +355,32 @@ set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type)
 }
 
 int
+set_backend(struct vm_conf *conf, enum VM_BACKENDS backend)
+{
+	if (conf == NULL)
+		return 0;
+
+	conf->backend = backend;
+	return 0;
+}
+
+int
+set_qemu_arch(struct vm_conf *conf, const char *arch)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->qemu_arch, arch);
+}
+
+int
+set_qemu_machine(struct vm_conf *conf, const char *machine)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->qemu_machine, machine);
+}
+
+int
 set_boot_delay(struct vm_conf *conf, int delay)
 {
 	if (conf == NULL)
@@ -525,7 +553,7 @@ err:
 struct vm_conf *
 create_vm_conf(char *filename)
 {
-	char *name, *fname;
+	char *name, *fname, *arch;
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
 
@@ -533,7 +561,9 @@ create_vm_conf(char *filename)
 	fbuf = create_fbuf();
 	name = strdup(filename);
 	fname = strdup(filename);
-	if (ret == NULL || fbuf == NULL || name == NULL || fname == NULL)
+	arch = strdup("x86_64");
+	if (ret == NULL || fbuf == NULL || name == NULL || fname == NULL ||
+	    arch == NULL)
 		goto err;
 
 	ret->hostbridge = INTEL;
@@ -543,6 +573,7 @@ create_vm_conf(char *filename)
 	ret->loader_timeout = 3;
 	ret->stop_timeout = 300;
 	ret->utctime = true;
+	ret->qemu_arch = arch;
 
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
@@ -711,6 +742,9 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_STR(hookcmd);
 	CMP_STR(err_logfile);
 	CMP_STR(grub_run_partition);
+
+	CMP_STR(qemu_arch);
+	CMP_STR(qemu_machine);
 
 	if ((rc = compare_fbuf(a->fbuf, b->fbuf)) != 0)
 		return rc;

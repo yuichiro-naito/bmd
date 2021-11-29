@@ -7,7 +7,7 @@
 #include "vars.h"
 
 #define ARRAY_FOREACH(p, a) \
-	for (p = &a[0]; p < &a[sizeof(a)/sizeof(a[0])]; p++)
+	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)
 
 void free_disk_conf(struct disk_conf *c);
 void free_iso_conf(struct iso_conf *c);
@@ -37,6 +37,9 @@ int set_grub_run_partition(struct vm_conf *conf, const char *partition);
 int set_debug_port(struct vm_conf *conf, const char *port);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
 int set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type);
+int set_backend(struct vm_conf *conf, enum VM_BACKENDS backend);
+int set_qemu_arch(struct vm_conf *conf, const char *arch);
+int set_qemu_machine(struct vm_conf *conf, const char *machine);
 int set_boot_delay(struct vm_conf *conf, int delay);
 int set_comport(struct vm_conf *conf, const char *cmd);
 int set_reboot_on_change(struct vm_conf *conf, bool enable);

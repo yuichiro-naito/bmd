@@ -168,10 +168,9 @@ parse_ncpu(struct vm_conf *conf, char *val)
 static int
 parse_memory(struct vm_conf *conf, char *val)
 {
-	long n;
 	char *p;
 
-	n = strtol(val, &p, 10);
+	strtol(val, &p, 10);
 	switch (*p) {
 	case '\0':
 		break;
@@ -198,14 +197,13 @@ static int
 parse_disk(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	const char **p, *types[] = {
-		"ahci-hd:", "virtio-blk:", "nvme:"
-	};
+	const char **p, *types[] = { "ahci-hd:", "virtio-blk:", "nvme:" };
 
-	ARRAY_FOREACH(p, types) {
+	ARRAY_FOREACH(p, types)
+	{
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0) {
-			val[n-1] = '\0';
+			val[n - 1] = '\0';
 			return add_disk_conf(conf, val, &val[n]);
 		}
 	}
@@ -217,14 +215,13 @@ static int
 parse_iso(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	const char **p, *types[] = {
-		"ahci-cd:"
-	};
+	const char **p, *types[] = { "ahci-cd:" };
 
-	ARRAY_FOREACH(p, types) {
+	ARRAY_FOREACH(p, types)
+	{
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0) {
-			val[n-1] = '\0';
+			val[n - 1] = '\0';
 			return add_iso_conf(conf, val, &val[n]);
 		}
 	}
@@ -236,14 +233,13 @@ static int
 parse_net(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	const char **p, *types[] = {
-		"virtio-net:", "e1000:"
-	};
+	const char **p, *types[] = { "virtio-net:", "e1000:" };
 
-	ARRAY_FOREACH(p, types) {
+	ARRAY_FOREACH(p, types)
+	{
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0) {
-			val[n-1] = '\0';
+			val[n - 1] = '\0';
 			return add_net_conf(conf, val, &val[n]);
 		}
 	}
@@ -351,7 +347,7 @@ parse_hostbridge(struct vm_conf *conf, char *val)
 	if (strcasecmp(val, "none") == 0)
 		t = NONE;
 	else if ((strcasecmp(val, "standard") == 0) ||
-		 (strcasecmp(val, "intel") == 0))
+	    (strcasecmp(val, "intel") == 0))
 		t = INTEL;
 	else if (strcasecmp(val, "amd") == 0)
 		t = AMD;
@@ -360,6 +356,53 @@ parse_hostbridge(struct vm_conf *conf, char *val)
 
 	set_hostbridge(conf, t);
 	return 0;
+}
+
+static int
+parse_backend(struct vm_conf *conf, char *val)
+{
+	enum VM_BACKENDS b;
+
+	if (strcasecmp(val, "bhyve") == 0)
+		b = BHYVE;
+	else if (strcasecmp(val, "qemu") == 0)
+		b = QEMU;
+	else
+		return -1;
+
+	set_backend(conf, b);
+	return 0;
+}
+
+static int
+compare_archs(const void *a, const void *b)
+{
+	return strcasecmp((const char *)a, *(const char **)b);
+}
+
+static int
+parse_qemu_arch(struct vm_conf *conf, char *val)
+{
+	const char **p,
+	    *archs[] = { "aarch64", "alpha", "arm", "cris", "hppa", "i386",
+		    "lm32", "m68k", "microblaze", "microblazeel", "mips",
+		    "mips64", "mips64el", "mipsel", "moxie", "nios2", "or1k",
+		    "ppc", "ppc64", "riscv32", "riscv64", "rx", "s390x", "sh4",
+		    "sh4eb", "sparc", "sparc64", "tricore", "unicore32",
+		    "x86_64", "xtensa", "xtensaeb" };
+
+	if ((p = bsearch(val, archs, sizeof(archs) / sizeof(archs[0]),
+		 sizeof(archs[0]), compare_archs)) == NULL)
+		return -1;
+
+	set_qemu_arch(conf, *p);
+	return 0;
+}
+
+static int
+parse_qemu_machine(struct vm_conf *conf, char *val)
+{
+	return set_qemu_machine(conf, val);
 }
 
 static int
@@ -488,37 +531,40 @@ struct parser_entry {
 
 /* must be sorted by name */
 struct parser_entry parser_list[] = {
-	{ "boot", &parse_boot, NULL},
-	{ "boot_delay", &parse_boot_delay, NULL},
-	{ "comport", &parse_comport, NULL},
-	{ "debug_port", &parse_debug_port, NULL},
-	{ "disk", &parse_disk, &clear_disk_conf},
-	{ "err_logfile", &parse_err_logfile, NULL},
-	{ "graphics", &parse_graphics, NULL},
-	{ "graphics_listen", &parse_graphics_listen, NULL},
-	{ "graphics_password", &parse_graphics_password, NULL},
-	{ "graphics_port", &parse_graphics_port, NULL},
-	{ "graphics_res", &parse_graphics_res, NULL},
-	{ "graphics_vga", &parse_graphics_vga, NULL},
-	{ "graphics_wait", &parse_graphics_wait, NULL},
-	{ "grub_run_partition", &parse_grub_run_partition, NULL},
-	{ "hookcmd", &parse_hookcmd, NULL},
-	{ "hostbridge", &parse_hostbridge, NULL},
-	{ "install", &parse_install, NULL},
-	{ "installcmd", &parse_installcmd, NULL},
-	{ "iso", &parse_iso, &clear_iso_conf},
-	{ "loadcmd", &parse_loadcmd, NULL},
-	{ "loader", &parse_loader, NULL},
-	{ "loader_timeout", &parse_loader_timeout, NULL},
-	{ "memory", &parse_memory, NULL},
-	{ "name", &parse_name, NULL},
-	{ "ncpu", &parse_ncpu, NULL},
-	{ "network", &parse_net, &clear_net_conf},
-	{ "reboot_on_change", &parse_reboot_on_change, NULL},
-	{ "stop_timeout", &parse_stop_timeout, NULL},
-	{ "utctime", &parse_utctime, NULL},
-	{ "wired_memory", &parse_wired_memory, NULL},
-	{ "xhci_mouse", &parse_xhci_mouse, NULL},
+	{ "backend", &parse_backend, NULL },
+	{ "boot", &parse_boot, NULL },
+	{ "boot_delay", &parse_boot_delay, NULL },
+	{ "comport", &parse_comport, NULL },
+	{ "debug_port", &parse_debug_port, NULL },
+	{ "disk", &parse_disk, &clear_disk_conf },
+	{ "err_logfile", &parse_err_logfile, NULL },
+	{ "graphics", &parse_graphics, NULL },
+	{ "graphics_listen", &parse_graphics_listen, NULL },
+	{ "graphics_password", &parse_graphics_password, NULL },
+	{ "graphics_port", &parse_graphics_port, NULL },
+	{ "graphics_res", &parse_graphics_res, NULL },
+	{ "graphics_vga", &parse_graphics_vga, NULL },
+	{ "graphics_wait", &parse_graphics_wait, NULL },
+	{ "grub_run_partition", &parse_grub_run_partition, NULL },
+	{ "hookcmd", &parse_hookcmd, NULL },
+	{ "hostbridge", &parse_hostbridge, NULL },
+	{ "install", &parse_install, NULL },
+	{ "installcmd", &parse_installcmd, NULL },
+	{ "iso", &parse_iso, &clear_iso_conf },
+	{ "loadcmd", &parse_loadcmd, NULL },
+	{ "loader", &parse_loader, NULL },
+	{ "loader_timeout", &parse_loader_timeout, NULL },
+	{ "memory", &parse_memory, NULL },
+	{ "name", &parse_name, NULL },
+	{ "ncpu", &parse_ncpu, NULL },
+	{ "network", &parse_net, &clear_net_conf },
+	{ "qemu_arch", &parse_qemu_arch, NULL },
+	{ "qemu_machine", &parse_qemu_machine, NULL },
+	{ "reboot_on_change", &parse_reboot_on_change, NULL },
+	{ "stop_timeout", &parse_stop_timeout, NULL },
+	{ "utctime", &parse_utctime, NULL },
+	{ "wired_memory", &parse_wired_memory, NULL },
+	{ "xhci_mouse", &parse_xhci_mouse, NULL },
 };
 
 static int
@@ -555,8 +601,8 @@ parse(struct vm_conf *conf, FILE *fp)
 		}
 
 		parser = bsearch(key, parser_list,
-				 sizeof(parser_list) / sizeof(parser_list[0]),
-				 sizeof(parser_list[0]), compare_parser_entry);
+		    sizeof(parser_list) / sizeof(parser_list[0]),
+		    sizeof(parser_list[0]), compare_parser_entry);
 		if (parser == NULL) {
 			ERR("unknown key %s in %s\n", key, name);
 			goto bad;
@@ -609,7 +655,7 @@ check_conf(struct vm_conf *conf)
 		return -1;
 	}
 
-	if (conf->loader == NULL) {
+	if (conf->backend == BHYVE && conf->loader == NULL) {
 		ERR("loader is required for vm %s\n", name);
 		return -1;
 	}

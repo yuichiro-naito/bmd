@@ -2,6 +2,7 @@
 #define _BMD_H_
 
 #include <sys/queue.h>
+
 #include "vars.h"
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -35,30 +36,27 @@ struct vm_conf_entry {
 	SLIST_ENTRY(vm_conf_entry) next;
 };
 
-enum STRUCT_TYPE {
-	VMENTRY, SOCKBUF
-};
+enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 
-#define VM_START(v)           (v)->method->vm_start(&(v)->vm)
-#define VM_RESET(v)           (v)->method->vm_reset(&(v)->vm)
-#define VM_POWEROFF(v)        (v)->method->vm_poweroff(&(v)->vm)
-#define VM_ACPI_POWEROFF(v)   (v)->method->vm_acpi_poweroff(&(v)->vm)
-#define VM_CLEANUP(v)         (v)->method->vm_cleanup(&(v)->vm)
-#define VM_CONF(v)            ((v)->vm.conf)
-#define VM_PID(v)             ((v)->vm.pid)
-#define VM_STATE(v)           ((v)->vm.state)
-#define VM_INFD(v)            ((v)->vm.infd)
-#define VM_OUTFD(v)           ((v)->vm.outfd)
-#define VM_ERRFD(v)           ((v)->vm.errfd)
-#define VM_LOGFD(v)           ((v)->vm.logfd)
-#define VM_CLOSE(v, fd)				\
-	do {					\
-		if (VM_##fd(v) != -1) {		\
-			close(VM_##fd(v));	\
-			VM_##fd(v) = -1;	\
-		}				\
+#define VM_START(v)         (v)->method->vm_start(&(v)->vm)
+#define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm)
+#define VM_POWEROFF(v)      (v)->method->vm_poweroff(&(v)->vm)
+#define VM_ACPI_POWEROFF(v) (v)->method->vm_acpi_poweroff(&(v)->vm)
+#define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm)
+#define VM_CONF(v)          ((v)->vm.conf)
+#define VM_PID(v)           ((v)->vm.pid)
+#define VM_STATE(v)         ((v)->vm.state)
+#define VM_INFD(v)          ((v)->vm.infd)
+#define VM_OUTFD(v)         ((v)->vm.outfd)
+#define VM_ERRFD(v)         ((v)->vm.errfd)
+#define VM_LOGFD(v)         ((v)->vm.logfd)
+#define VM_CLOSE(v, fd)                    \
+	do {                               \
+		if (VM_##fd(v) != -1) {    \
+			close(VM_##fd(v)); \
+			VM_##fd(v) = -1;   \
+		}                          \
 	} while (0)
-
 
 /*
   Entry of vm list.
@@ -73,7 +71,6 @@ struct vm_entry {
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_methods *method;
 };
-
 
 /*
   Socker buffer.

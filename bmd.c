@@ -1,10 +1,10 @@
 #include <sys/dirent.h>
 #include <sys/event.h>
 #include <sys/nv.h>
+#include <sys/procctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <sys/procctl.h>
 
 #include <dirent.h>
 #include <dlfcn.h>
@@ -16,13 +16,13 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "server.h"
+#include "bmd.h"
 #include "conf.h"
 #include "log.h"
 #include "parser.h"
+#include "server.h"
 #include "vars.h"
 #include "vm.h"
-#include "bmd.h"
 
 /*
   List of VM configurations.
@@ -112,7 +112,7 @@ wait_for_process(struct vm_entry *vm_ent)
 
 	EV_SET(&ev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	    0, vm_ent);
-	while(kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait process (%s)\n", strerror(errno));
 			return -1;
@@ -183,11 +183,10 @@ void
 call_plugins(struct vm_entry *vm_ent)
 {
 	struct plugin_data *pl_data;
-	struct vm *vm = &vm_ent->vm;
 
 	SLIST_FOREACH (pl_data, &vm_ent->pl_data, next)
 		if (pl_data->ent->desc.on_status_change)
-			(*(pl_data->ent->desc.on_status_change))(vm,
+			(*(pl_data->ent->desc.on_status_change))(&vm_ent->vm,
 			    &pl_data->data);
 }
 
@@ -268,8 +267,6 @@ struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
 	struct vm_entry *vm_ent;
-	struct vm *vm;
-	struct vm_conf *conf;
 	struct plugin_entry *pl_ent;
 	struct plugin_data *pl_data;
 
@@ -277,18 +274,16 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	if (vm_ent == NULL)
 		return NULL;
 	vm_ent->type = VMENTRY;
-	vm_ent->method = &method_list[BHYVE];
-	vm = &vm_ent->vm;
-	conf = &conf_ent->conf;
-	vm->conf = conf;
-	vm->state = INIT;
-	vm->pid = -1;
-	vm->infd = -1;
-	vm->outfd = -1;
-	vm->errfd = -1;
-	vm->logfd = -1;
+	vm_ent->method = &method_list[conf_ent->conf.backend];
+	VM_CONF(vm_ent) = &conf_ent->conf;
+	VM_STATE(vm_ent) = INIT;
+	VM_PID(vm_ent) = -1;
+	VM_INFD(vm_ent) = -1;
+	VM_OUTFD(vm_ent) = -1;
+	VM_ERRFD(vm_ent) = -1;
+	VM_LOGFD(vm_ent) = -1;
 	SLIST_INIT(&vm_ent->pl_data);
-	STAILQ_INIT(&vm->taps);
+	STAILQ_INIT(&vm_ent->vm.taps);
 	SLIST_FOREACH (pl_ent, &plugin_list, next) {
 		pl_data = calloc(1, sizeof(*pl_data));
 		if (pl_data == NULL) {
@@ -308,6 +303,8 @@ start_virtual_machine(struct vm_entry *vm_ent)
 {
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
+
+	vm_ent->method = &method_list[conf->backend];
 
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
@@ -339,7 +336,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	if (VM_LOGFD(vm_ent) == -1)
 		VM_LOGFD(vm_ent) = open(conf->err_logfile,
-				 O_WRONLY | O_APPEND | O_CREAT, 0644);
+		    O_WRONLY | O_APPEND | O_CREAT, 0644);
 
 	return 0;
 }
@@ -432,7 +429,8 @@ reload_virtual_machines()
 		vm_ent->new_conf = conf;
 		if (conf->reboot_on_change &&
 		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
-			if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
+			if (VM_STATE(vm_ent) == LOAD ||
+			    VM_STATE(vm_ent) == RUN) {
 				INFO("reboot vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
@@ -445,7 +443,8 @@ reload_virtual_machines()
 			continue;
 		switch (conf->boot) {
 		case NO:
-			if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
+			if (VM_STATE(vm_ent) == LOAD ||
+			    VM_STATE(vm_ent) == RUN) {
 				INFO("stop vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
@@ -455,7 +454,8 @@ reload_virtual_machines()
 			break;
 		case ALWAYS:
 		case YES:
-			if (VM_STATE(vm_ent) == INIT || VM_STATE(vm_ent) == TERMINATE) {
+			if (VM_STATE(vm_ent) == INIT ||
+			    VM_STATE(vm_ent) == TERMINATE) {
 				VM_CONF(vm_ent) = conf;
 				start_virtual_machine(vm_ent);
 			} else if (VM_STATE(vm_ent) == STOP)
@@ -543,11 +543,11 @@ wait:
 			case 2:
 				clear_send_sock_buf(sb);
 				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-				       EV_ENABLE, 0, 0, sb);
+				    EV_ENABLE, 0, 0, sb);
 				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-				       EV_DELETE, 0, 0, sb);
-				while (kevent(gl_conf.kq, ev2, 2, NULL,
-					      0, NULL) < 0)
+				    EV_DELETE, 0, 0, sb);
+				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
+					   NULL) < 0)
 					if (errno != EINTR)
 						break;
 			case 1:
@@ -555,11 +555,11 @@ wait:
 			default:
 				destroy_sock_buf(sb);
 				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-				       EV_DELETE, 0, 0, NULL);
+				    EV_DELETE, 0, 0, NULL);
 				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-				       EV_DELETE, 0, 0, NULL);
+				    EV_DELETE, 0, 0, NULL);
 				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
-					      NULL) < 0)
+					   NULL) < 0)
 					if (errno != EINTR)
 						break;
 				break;
@@ -586,11 +586,11 @@ wait:
 				if (recv_command(sb) == 0) {
 					clear_sock_buf(sb);
 					EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-					       EV_DISABLE, 0, 0, sb);
+					    EV_DISABLE, 0, 0, sb);
 					EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-					       EV_ADD, 0, 0, sb);
+					    EV_ADD, 0, 0, sb);
 					while (kevent(gl_conf.kq, ev2, 2, NULL,
-						      0, NULL) < 0)
+						   0, NULL) < 0)
 						if (errno != EINTR)
 							break;
 					break;
@@ -600,10 +600,10 @@ wait:
 				break;
 			default:
 				destroy_sock_buf(sb);
-				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
-				       0, 0, NULL);
+				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
+				    0, NULL);
 				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
-					      NULL) < 0)
+					   NULL) < 0)
 					if (errno != EINTR)
 						break;
 			}
@@ -611,7 +611,7 @@ wait:
 		}
 		if (write_err_log(ev.ident, &vm_ent->vm) == 0) {
 			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
-			       NULL);
+			    NULL);
 			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
 				if (errno != EINTR)
 					break;
@@ -621,8 +621,9 @@ wait:
 		if (VM_STATE(vm_ent) == INIT) {
 			/* delayed boot */
 			start_virtual_machine(vm_ent);
-		} else if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == STOP ||
-		    VM_STATE(vm_ent) == REMOVE || VM_STATE(vm_ent) == RESTART) {
+		} else if (VM_STATE(vm_ent) == LOAD ||
+		    VM_STATE(vm_ent) == STOP || VM_STATE(vm_ent) == REMOVE ||
+		    VM_STATE(vm_ent) == RESTART) {
 			/* loader timout or stop timeout */
 			/* force to poweroff */
 			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
@@ -659,9 +660,11 @@ wait:
 			set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 			break;
 		case RUN:
-			if (VM_CONF(vm_ent)->install == false && WIFEXITED(status) &&
+			if (VM_CONF(vm_ent)->install == false &&
+			    WIFEXITED(status) &&
 			    (VM_CONF(vm_ent)->boot == ALWAYS ||
-				WEXITSTATUS(status) == 0)) {
+				(VM_CONF(vm_ent)->backend == BHYVE &&
+				    WEXITSTATUS(status) == 0))) {
 				start_virtual_machine(vm_ent);
 				break;
 			}
@@ -748,30 +751,30 @@ stop_virtual_machines()
 			if (vm_ent->type == SOCKBUF) {
 				destroy_sock_buf((struct sock_buf *)vm_ent);
 				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-				       EV_DELETE, 0, 0, NULL);
+				    EV_DELETE, 0, 0, NULL);
 				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-				       EV_DELETE, 0, 0, NULL);
+				    EV_DELETE, 0, 0, NULL);
 				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
-					      NULL) < 0)
+					   NULL) < 0)
 					if (errno != EINTR)
 						break;
 			}
 		} else if (ev.filter == EVFILT_READ) {
 			if (vm_ent->type == SOCKBUF) {
 				destroy_sock_buf((struct sock_buf *)vm_ent);
-				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
-				       0, 0, NULL);
+				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
+				    0, NULL);
 				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
-					      NULL) < 0)
+					   NULL) < 0)
 					if (errno != EINTR)
 						break;
 				continue;
 			}
 			if (write_err_log(ev.ident, &vm_ent->vm) == 0) {
-				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE,
-				       0, 0, NULL);
+				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
+				    0, NULL);
 				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
-					      NULL) < 0)
+					   NULL) < 0)
 					if (errno != EINTR)
 						break;
 			}
@@ -870,9 +873,9 @@ main(int argc, char *argv[])
 	sigaddset(&nmask, SIGPIPE);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
-	if (procctl(P_PID, getpid(), PROC_SPROTECT, &(int []){PPROT_SET}[0]) < 0)
+	if (procctl(P_PID, getpid(), PROC_SPROTECT, &(int[]) { PPROT_SET }[0]) <
+	    0)
 		WARN("%s\n", "can not protect from OOM killer");
-
 
 	if ((gl_conf.kq = kqueue()) < 0) {
 		ERR("%s\n", "can not open kqueue");

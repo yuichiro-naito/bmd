@@ -3,23 +3,24 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+
 #include <netinet/in.h>
 
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <netdb.h>
 
-#include "log.h"
-#include "conf.h"
-#include "vars.h"
-#include "parser.h"
 #include "bmd.h"
+#include "conf.h"
+#include "log.h"
+#include "parser.h"
+#include "vars.h"
 #include "vm.h"
 
 extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
@@ -172,7 +173,7 @@ retry:
 		if (nread == size) {
 			sb->state = 1;
 			sb->buf_size = ntohl(*((int32_t *)sb->size));
-			if (sb->buf_size > 1024*1024)
+			if (sb->buf_size > 1024 * 1024)
 				return -1;
 			sb->buf = malloc(sb->buf_size);
 			if (sb->buf == NULL)
@@ -276,7 +277,6 @@ accept_command_socket(int s0)
 
 	return s;
 }
-
 
 /*
  * The argument `style` must be one of followings.
@@ -398,8 +398,9 @@ list_command(int s, const nvlist_t *nv)
 	const nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
 	bool error = false;
-	static char *state_string[] = { "STOP", "LOAD", "RUN", "STOP",
+	const static char *state_string[] = { "STOP", "LOAD", "RUN", "STOP",
 		"TERMINATING", "TERMINATING", "REBOOTING" };
+	const static char *backend_string[] = { "bhyve", "qemu" };
 
 	res = nvlist_create(0);
 
@@ -408,6 +409,7 @@ list_command(int s, const nvlist_t *nv)
 
 	list = malloc(count * sizeof(nvlist_t *));
 	if (list == NULL) {
+		error = true;
 		reason = "can not allocate memory";
 		goto ret;
 	}
@@ -418,7 +420,10 @@ list_command(int s, const nvlist_t *nv)
 		nvlist_add_string(p, "name", vm_ent->vm.conf->name);
 		nvlist_add_string(p, "ncpu", vm_ent->vm.conf->ncpu);
 		nvlist_add_string(p, "memory", vm_ent->vm.conf->memory);
-		nvlist_add_string(p, "loader", vm_ent->vm.conf->loader);
+		nvlist_add_string(p, "loader",
+		    vm_ent->vm.conf->loader ?
+			vm_ent->vm.conf->loader :
+			      backend_string[vm_ent->vm.conf->backend]);
 		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
 		list[i++] = p;
 	}
@@ -482,17 +487,20 @@ ret:
 }
 
 static nvlist_t *
-shutdown_command(int s, const nvlist_t *nv) {
+shutdown_command(int s, const nvlist_t *nv)
+{
 	return vm_down_command(s, nv, 0);
 }
 
 static nvlist_t *
-reset_command(int s, const nvlist_t *nv) {
+reset_command(int s, const nvlist_t *nv)
+{
 	return vm_down_command(s, nv, 1);
 }
 
 static nvlist_t *
-poweroff_command(int s, const nvlist_t *nv) {
+poweroff_command(int s, const nvlist_t *nv)
+{
 	return vm_down_command(s, nv, 2);
 }
 
@@ -538,6 +546,7 @@ int
 recv_command(struct sock_buf *sb)
 {
 	const char *cmd;
+	char *reason = "unknown command";
 	nvlist_t *nv, *res;
 	cfunc func;
 
@@ -554,8 +563,8 @@ recv_command(struct sock_buf *sb)
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {
-		nvlist_destroy(nv);
-		return -1;
+		reason = "nvlist_pack error";
+		goto err;
 	}
 	sb->res_bytes = 0;
 
@@ -565,7 +574,7 @@ err:
 	nvlist_destroy(nv);
 	res = nvlist_create(0);
 	nvlist_add_bool(res, "error", true);
-	nvlist_add_string(res, "reason", "unknown command");
+	nvlist_add_string(res, "reason", reason);
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {
 		nvlist_destroy(res);

@@ -55,6 +55,8 @@ struct fbuf {
 	char *password;
 };
 
+enum VM_BACKENDS { BHYVE, QEMU };
+
 enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
 
 struct vm_conf {
@@ -62,6 +64,7 @@ struct vm_conf {
 	int loader_timeout;
 	int stop_timeout;
 	enum HOSTBRIDGE_TYPE hostbridge;
+	enum VM_BACKENDS backend;
 	char *debug_port;
 	char *filename;
 	char *ncpu;
@@ -88,6 +91,8 @@ struct vm_conf {
 	STAILQ_HEAD(, disk_conf) disks;
 	STAILQ_HEAD(, iso_conf) isoes;
 	STAILQ_HEAD(, net_conf) nets;
+	char *qemu_arch;
+	char *qemu_machine;
 };
 
 enum STATE {
@@ -113,19 +118,15 @@ struct vm {
 	char *mapfile;
 };
 
-enum VM_BACKENDS {
-	BHYVE, QEMU
-};
-
 struct vm_methods {
-	int (*vm_start)(struct vm*);
-	int (*vm_reset)(struct vm *vm);
-	int (*vm_poweroff)(struct vm *vm);
-	int (*vm_acpi_poweroff)(struct vm *vm);
-	void (*vm_cleanup)(struct vm *vm);
+	int (*vm_start)(struct vm *);
+	int (*vm_reset)(struct vm *);
+	int (*vm_poweroff)(struct vm *);
+	int (*vm_acpi_poweroff)(struct vm *);
+	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 1
+#define PLUGIN_VERSION 2
 
 typedef struct plugin_desc {
 	int version;
