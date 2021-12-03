@@ -32,6 +32,7 @@ struct inspection {
 	char *ufs_dev;           /* needs to be freed */
 	char *install_cmd;       /* needs to be freed */
 	char *load_cmd;          /* needs to be freed */
+	char *grub_run_partition;
 };
 
 static struct inspection *
@@ -396,18 +397,46 @@ ret:
 	return 0;
 }
 
+static void
+inspect_openbsd_partition(struct inspection *ins)
+{
+	size_t len;
+	char *p;
+
+	/* set default partition number */
+	ins->grub_run_partition = "1";
+
+	if (ins->ufs_dev == NULL)
+		return;
+	len = strlen(ins->ufs_dev);
+
+	for (p = &ins->ufs_dev[len - 1]; p >= ins->ufs_dev; p--)
+		if (*p < '0' || *p > '9')
+			break;
+	if (p == ins->ufs_dev)
+		return;
+
+	if (*p == 'p')
+		ins->grub_run_partition = p + 1;
+}
 
 static int
 inspect_openbsd_disk(struct inspection *ins)
 {
 	char *path, *cmd;
 
+	inspect_openbsd_partition(ins);
+
 	/* look for /bsd.upgrade */
 	if (asprintf(&path, "%s" OPENBSD_UPGRADE_KERNEL, ins->mount_point) < 0)
 		goto err;
 
 	cmd = "kopenbsd -h com0 -r sd0a " OPENBSD_UPGRADE_KERNEL "\nboot\n";
-	if (is_file(path) && (ins->load_cmd = strdup(cmd)) != NULL)
+	if (is_file(path) &&
+	    (asprintf(&ins->load_cmd,
+		      "kopenbsd -h com0 -r sd0a (hd0,%s)"
+		      OPENBSD_UPGRADE_KERNEL "\nboot\n",
+		      ins->grub_run_partition)) > 0)
 		goto ret;
 	free(path);
 
@@ -415,12 +444,12 @@ inspect_openbsd_disk(struct inspection *ins)
 	if (asprintf(&path, "%s" OPENBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = ins->single_user ?
-		"kopenbsd -s -h com0 -r sd0a " OPENBSD_KERNEL "\nboot\n" :
-		"kopenbsd -h com0 -r sd0a " OPENBSD_KERNEL "\nboot\n";
-
+	cmd = ins->single_user ? "-s" : "";
 	if (is_file(path) &&
-	    (ins->load_cmd = strdup(cmd)) != NULL)
+	    (asprintf(&ins->load_cmd,
+		      "kopenbsd %s -h com0 -r sd0a (hd0,%s)"
+		      OPENBSD_KERNEL "\nboot\n",
+		      cmd, ins->grub_run_partition)) > 0)
 		goto ret;
 	free(path);
 err:
