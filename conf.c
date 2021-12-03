@@ -82,6 +82,7 @@ free_vm_conf(struct vm_conf *vc)
 	if (vc == NULL)
 		return;
 	free(vc->name);
+	free(vc->filename);
 	free(vc->ncpu);
 	free(vc->memory);
 	free(vc->comport);
@@ -89,6 +90,8 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->loadcmd);
 	free(vc->installcmd);
 	free(vc->hookcmd);
+	free(vc->debug_port);
+	free(vc->err_logfile);
 	free_fbuf(vc->fbuf);
 	clear_disk_conf(vc);
 	clear_iso_conf(vc);
