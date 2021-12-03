@@ -100,6 +100,7 @@ void free_vm_entry(struct vm_entry *vm_ent);
 
 struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
 int load_config_files(struct vm_conf_head *list);
+void free_config_files();
 struct vm_entry *lookup_vm_by_name(const char *name);
 int set_timer(struct vm_entry *vm_ent, int second);
 int start_virtual_machine(struct vm_entry *vm_ent);

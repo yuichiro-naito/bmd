@@ -263,6 +263,16 @@ load_config_files(struct vm_conf_head *list)
 	return 0;
 }
 
+void
+free_config_files()
+{
+	struct vm_conf_entry *conf_ent, *cen;
+
+	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
+		free_vm_conf(&conf_ent->conf);
+	SLIST_INIT(&vm_conf_list);
+}
+
 struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
