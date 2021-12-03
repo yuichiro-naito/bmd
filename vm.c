@@ -28,6 +28,7 @@
 #include "tap.h"
 #include "vars.h"
 #include "vm.h"
+#include "inspect.h"
 
 #define WRITE_STR(fp, str) \
 	fwrite_unlocked(&(char *[]) { (str) }[0], sizeof(char *), 1, (fp))
@@ -133,12 +134,19 @@ static char *
 create_load_command(struct vm_conf *conf, size_t *length)
 {
 	const char **p, *repl[] = { "kopenbsd ", "knetbsd " };
-	size_t len;
-	char *cmd;
+	size_t len = 0;
+	char *cmd = NULL;
 	char *t = (conf->install) ? conf->installcmd : conf->loadcmd;
-	if (t == NULL) {
-		len = 0;
-		cmd = NULL;
+	if (t == NULL)
+		goto end;
+
+	if (strcasecmp(t, "auto") == 0) {
+		if ((cmd = inspect(conf)) == NULL) {
+			ERR("%s inspection failed for VM %s\n",
+			    conf->install ? "installcmd" : "loadcmd", conf->name);
+			goto end;
+		}
+		len = strlen(cmd);
 		goto end;
 	}
 

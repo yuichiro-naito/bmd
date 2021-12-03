@@ -18,6 +18,7 @@
 #include "vm.h"
 #include "server.h"
 #include "bmd.h"
+#include "inspect.h"
 
 extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
 extern struct global_conf gl_conf;
@@ -208,6 +209,45 @@ do_console(char *name)
 	return 1;
 }
 
+int
+do_inspect(char *name)
+{
+	int i;
+	struct vm_conf *conf = NULL;
+	char *p;
+	const bool flags[2] = {true, false};
+	const char *types[2] = {"installcmd", "loadcmd"};
+
+	if ((conf = lookup_vm_conf(name)) == NULL) {
+		printf("no such VM %s\n", name);
+		return 1;
+	}
+
+	for (i = 0; i < 2; i++) {
+		set_install(conf, flags[i]);
+		p = inspect(conf);
+		if (p == NULL) {
+			printf("%s = (null)\n", types[i]);
+		} else {
+			printf("%s = ", types[i]);
+			while (*p != '\0') {
+				switch (*p) {
+				case '\n':
+					putchar('\\');
+					putchar('n');
+					break;
+				default:
+					putchar(*p);
+				}
+				p++;
+			}
+			putchar('\n');
+		}
+	}
+
+	return 0;
+}
+
 static int
 compare_by_name(const void *a, const void *b)
 {
@@ -228,6 +268,9 @@ control(int argc, char *argv[])
 
 	if (argc == 3 && strcmp(argv[1], "console") == 0)
 		return do_console(argv[2]);
+
+	if (argc == 3 && strcmp(argv[1], "inspect") == 0)
+		return do_inspect(argv[2]);
 
 	if (strcmp(argv[1], "run") == 0) {
 		char c, *name;
