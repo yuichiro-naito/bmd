@@ -15,6 +15,12 @@
 #include "vars.h"
 #include "conf.h"
 
+#define NETBSD_KERNEL   "/netbsd"
+#define OPENBSD_KERNEL  "/bsd"
+#define OPENBSD_RAMDISK_KERNEL  "/bsd.rd"
+#define OPENBSD_UPGRADE_KERNEL  "/bsd.upgrade"
+#define MDCTL_PATH  "/dev/" MDCTL_NAME
+
 struct inspection {
 	int single_user;
 	unsigned md_unit;
@@ -84,7 +90,7 @@ mdattach(char *path, unsigned *unit)
 	mdio.md_mediasize = sb.st_size;
 	close(fd);
 
-	if ((fd = open("/dev/mdctl", O_RDWR, 0)) < 0)
+	if ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
 		return -1;
 	if (ioctl(fd, MDIOCATTACH, &mdio) < 0)
 		goto err;
@@ -107,7 +113,7 @@ mddetach(unsigned unit)
 	mdio.md_version = MDIOVERSION;
 	mdio.md_unit = unit;
 
-	if ((fd = open("/dev/mdctl", O_RDWR, 0)) < 0)
+	if ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
 		return -1;
 
 	if (ioctl(fd, MDIOCDETACH, &mdio) < 0)
@@ -192,51 +198,40 @@ match_version_number(char *name)
 	return 1;
 }
 
-static int
+static bool
 is_directory(int df, struct dirent *e)
 {
 	struct stat s;
-	int fd,rc;
+	int fd, rc;
 
 	if ((fd = openat(df, e->d_name, O_RDONLY)) < 0)
 		return 0;
-	rc = 1;
-	if (fstat(fd, &s) < 0 ||
-	    !S_ISDIR(s.st_mode))
-		rc = 0;
+	rc = (fstat(fd, &s) == 0 && S_ISDIR(s.st_mode)) ? true : false;
 	close(fd);
 
 	return rc;
 }
 
-static int
+static bool
 is_file(char *path)
 {
 	struct stat s;
-
-	if (stat(path, &s) < 0 ||
-	    !S_ISREG(s.st_mode))
-		return 0;
-	return 1;
+	return (stat(path, &s) == 0 && S_ISREG(s.st_mode)) ? true : false;
 }
 
 static int
 inspect_netbsd_iso(struct inspection *ins)
 {
+	int rc;
 	char *path, *cmd;
 
-	if (asprintf(&path, "%s/netbsd", ins->mount_point) < 0)
-		goto err;
+	if (asprintf(&path, "%s" NETBSD_KERNEL, ins->mount_point) < 0)
+		return -1;
 
-	cmd = "knetbsd -h com0 -r cd0a /netbsd\nboot\n";
-	if (is_file(path) && (ins->install_cmd = strdup(cmd)) != NULL) {
-		free(path);
-		return 0;
-	}
-
+	cmd = "knetbsd -h com0 -r cd0a " NETBSD_KERNEL "\nboot\n";
+	rc = (is_file(path) && (ins->install_cmd = strdup(cmd)) != NULL) ? 0 : -1;
 	free(path);
-err:
-	return -1;
+	return rc;
 }
 
 static int
@@ -301,10 +296,10 @@ inspect_openbsd_iso(struct inspection *ins)
 		goto err;
 
 	/* look for bsd.rd */
-	if (len + 8 >= PATH_MAX)
+	if (len + strlen(OPENBSD_RAMDISK_KERNEL) > PATH_MAX)
 		goto err;
-	strcat(path, "/bsd.rd");
-	len += 7;
+	strcat(path, OPENBSD_RAMDISK_KERNEL);
+	len += strlen(OPENBSD_RAMDISK_KERNEL);
 
 	if (!is_file(path) ||
 	    asprintf(&ins->install_cmd,
@@ -408,20 +403,21 @@ inspect_openbsd_disk(struct inspection *ins)
 	char *path, *cmd;
 
 	/* look for /bsd.upgrade */
-	if (asprintf(&path, "%s/bsd.upgrade", ins->mount_point) < 0)
+	if (asprintf(&path, "%s" OPENBSD_UPGRADE_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = "kopenbsd -h com0 -r sd0a /bsd.upgrade\nboot\n";
+	cmd = "kopenbsd -h com0 -r sd0a " OPENBSD_UPGRADE_KERNEL "\nboot\n";
 	if (is_file(path) && (ins->load_cmd = strdup(cmd)) != NULL)
 		goto ret;
 	free(path);
 
 	/* look for /bsd */
-	if (asprintf(&path, "%s/bsd", ins->mount_point) < 0)
+	if (asprintf(&path, "%s" OPENBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = ins->single_user ? "kopenbsd -s -h com0 -r sd0a /bsd\nboot\n" :
-		"kopenbsd -h com0 -r sd0a /bsd\nboot\n";
+	cmd = ins->single_user ?
+		"kopenbsd -s -h com0 -r sd0a " OPENBSD_KERNEL "\nboot\n" :
+		"kopenbsd -h com0 -r sd0a " OPENBSD_KERNEL "\nboot\n";
 
 	if (is_file(path) &&
 	    (ins->load_cmd = strdup(cmd)) != NULL)
@@ -439,11 +435,12 @@ inspect_netbsd_disk(struct inspection *ins)
 {
 	char *path, *cmd;
 
-	if (asprintf(&path, "%s/netbsd", ins->mount_point) < 0)
+	if (asprintf(&path, "%s" NETBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = ins->single_user ? "knetbsd -s -h com0 -r dk0a /netbsd\nboot\n" :
-		"knetbsd -h com0 -r dk0a /netbsd\nboot\n";
+	cmd = ins->single_user ?
+		"knetbsd -s -h com0 -r dk0a " NETBSD_KERNEL "\nboot\n" :
+		"knetbsd -h com0 -r dk0a " NETBSD_KERNEL "\nboot\n";
 	if (is_file(path) &&
 	    (ins->load_cmd = strdup(cmd)) != NULL) {
 		free(path);
