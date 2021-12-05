@@ -247,7 +247,7 @@ inspect_openbsd_iso(struct inspection *ins)
 		return -1;
 
 	len = olen = mplen = strlen(ins->mount_point);
-	if (len >= PATH_MAX)
+	if (len + 1 > PATH_MAX)
 		goto err;
 
 	strcpy(path, ins->mount_point);
@@ -259,7 +259,7 @@ inspect_openbsd_iso(struct inspection *ins)
 		if (e->d_name[0] == '.')
 			continue;
 		if (is_directory(dirfd(d), e) && match_version_number(e->d_name)) {
-			if (len + e->d_namlen + 2 >= PATH_MAX)
+			if (len + e->d_namlen + 2 > PATH_MAX)
 				goto err2;
 			strcat(path, "/");
 			len += 1;
@@ -282,7 +282,7 @@ inspect_openbsd_iso(struct inspection *ins)
 		if (e->d_name[0] == '.')
 			continue;
 		if (is_directory(dirfd(d), e)) {
-			if (len + e->d_namlen + 2 >= PATH_MAX)
+			if (len + e->d_namlen + 2 > PATH_MAX)
 				goto err2;
 			strcat(path, "/");
 			len += 1;
@@ -297,7 +297,7 @@ inspect_openbsd_iso(struct inspection *ins)
 		goto err;
 
 	/* look for bsd.rd */
-	if (len + strlen(OPENBSD_RAMDISK_KERNEL) > PATH_MAX)
+	if (len + strlen(OPENBSD_RAMDISK_KERNEL) + 1 > PATH_MAX)
 		goto err;
 	strcat(path, OPENBSD_RAMDISK_KERNEL);
 	len += strlen(OPENBSD_RAMDISK_KERNEL);
