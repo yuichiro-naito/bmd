@@ -34,6 +34,7 @@ usage(int argc, char *argv[])
 	    "  poweroff <name>      : poweroff VM\n"
 	    "  reset <name>         : reset VM\n"
 	    "  console <name>       : connect to com port\n"
+	    "  inspect <name>       : inspect and print installcmd & loadcmd\n"
 	    "  run [-i] [-s] <name> : directly run with serial console\n"
 	    "  list                 : list VM name & status\n",
 	    argv[0]);
