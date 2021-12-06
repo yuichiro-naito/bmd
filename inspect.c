@@ -240,17 +240,13 @@ inspect_openbsd_iso(struct inspection *ins)
 {
 	DIR *d;
 	struct dirent *e;
-	char *path;
+	char *path, *npath;
 	size_t len, olen, mplen;
 
-	if ((path = malloc(PATH_MAX)) == NULL)
+	if ((path = strdup(ins->mount_point)) == NULL)
 		return -1;
 
 	len = olen = mplen = strlen(ins->mount_point);
-	if (len + 1 > PATH_MAX)
-		goto err;
-
-	strcpy(path, ins->mount_point);
 
 	/* look for a version number directory (i.e. "6.9", "7.0", etc.) */
 	if ((d = opendir(path)) == NULL)
@@ -259,12 +255,11 @@ inspect_openbsd_iso(struct inspection *ins)
 		if (e->d_name[0] == '.')
 			continue;
 		if (is_directory(dirfd(d), e) && match_version_number(e->d_name)) {
-			if (len + e->d_namlen + 2 > PATH_MAX)
+			if (asprintf(&npath, "%s/%s", path, e->d_name) < 0)
 				goto err2;
-			strcat(path, "/");
-			len += 1;
-			strcat(path, e->d_name);
-			len += e->d_namlen;
+			free(path);
+			path = npath;
+			len += e->d_namlen + 1;
 			break;
 		}
 	}
@@ -282,12 +277,12 @@ inspect_openbsd_iso(struct inspection *ins)
 		if (e->d_name[0] == '.')
 			continue;
 		if (is_directory(dirfd(d), e)) {
-			if (len + e->d_namlen + 2 > PATH_MAX)
+			if (asprintf(&npath, "%s/%s/%s", path, e->d_name,
+					    OPENBSD_RAMDISK_KERNEL) < 0)
 				goto err2;
-			strcat(path, "/");
-			len += 1;
-			strcat(path, e->d_name);
-			len += e->d_namlen;
+			free(path);
+			path = npath;
+			len += e->d_namlen + strlen(OPENBSD_RAMDISK_KERNEL) + 2;
 			break;
 		}
 	}
@@ -297,11 +292,6 @@ inspect_openbsd_iso(struct inspection *ins)
 		goto err;
 
 	/* look for bsd.rd */
-	if (len + strlen(OPENBSD_RAMDISK_KERNEL) + 1 > PATH_MAX)
-		goto err;
-	strcat(path, OPENBSD_RAMDISK_KERNEL);
-	len += strlen(OPENBSD_RAMDISK_KERNEL);
-
 	if (!is_file(path) ||
 	    asprintf(&ins->install_cmd,
 		     "kopenbsd -h com0 %s\nboot\n", &path[mplen]) < 0)
