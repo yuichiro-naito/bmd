@@ -339,6 +339,26 @@ err:
 
 
 static int
+match_diskname(struct dirent *e, char *diskname)
+{
+	char *p;
+	size_t len = strlen(diskname);
+
+	if (strncmp(e->d_name, diskname, len) != 0)
+		return 0;
+
+	p = &e->d_name[len];
+	if (*p != 'p' && *p != 's')
+		return 0;
+
+	for (p++; *p != '\0'; p++)
+		if (*p < '0' || *p > '9')
+			return 0;
+
+	return 1;
+}
+
+static int
 mount_blockdev(struct inspection *ins)
 {
 	DIR *d;
@@ -365,7 +385,7 @@ mount_blockdev(struct inspection *ins)
 	while ((e = readdir(d)) != NULL) {
 		if (e->d_name[0] == '.')
 			continue;
-		if (strncmp(e->d_name, diskname, strlen(diskname)) == 0) {
+		if (match_diskname(e, diskname)) {
 			if (asprintf(&p, "%s/%s", dirname, e->d_name) < 0)
 				break;
 			if (mount_ufs(ins, p) == 0 &&
