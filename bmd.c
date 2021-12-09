@@ -800,13 +800,11 @@ int
 parse_opt(int argc, char *argv[])
 {
 	int ch;
-	FILE *fp;
-	int fg = 0;
 
 	while ((ch = getopt(argc, argv, "Ff:p:m:")) != -1) {
 		switch (ch) {
 		case 'F':
-			fg = 1;
+			gl_conf.foreground = 1;
 			break;
 		case 'c':
 			gl_conf.config_dir = strdup(optarg);
@@ -831,15 +829,8 @@ parse_opt(int argc, char *argv[])
 		}
 	}
 
-	if ((gl_conf.foreground = fg) == 0) {
+	if (gl_conf.foreground == 0)
 		daemon(0, 0);
-
-		fp = fopen(gl_conf.pid_path, "w");
-		if (fp) {
-			fprintf(fp, "%d\n", getpid());
-			fclose(fp);
-		}
-	}
 
 	return 0;
 }
@@ -862,6 +853,7 @@ int control(int argc, char *argv[]);
 int
 main(int argc, char *argv[])
 {
+	FILE *fp;
 	sigset_t nmask, omask;
 
 	if (strendswith(argv[0], "ctl") == 0)
@@ -907,6 +899,12 @@ main(int argc, char *argv[])
 	if ((gl_conf.cmd_sock = create_command_server(&gl_conf)) < 0) {
 		ERR("can not bind %s\n", gl_conf.cmd_sock_path);
 		return 1;
+	}
+
+	if (gl_conf.foreground == 0 &&
+	    (fp = fopen(gl_conf.pid_path, "w")) != NULL) {
+		fprintf(fp, "%d\n", getpid());
+		fclose(fp);
 	}
 
 	INFO("%s\n", "start daemon");
