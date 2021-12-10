@@ -9,15 +9,18 @@
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)
 
+void free_passthru_conf(struct passthru_conf *c);
 void free_disk_conf(struct disk_conf *c);
 void free_iso_conf(struct iso_conf *c);
 void free_net_conf(struct net_conf *c);
 void free_vm_conf(struct vm_conf *vc);
 void free_fbuf(struct fbuf *f);
+void clear_passthru_conf(struct vm_conf *vc);
 void clear_disk_conf(struct vm_conf *vc);
 void clear_iso_conf(struct vm_conf *vc);
 void clear_net_conf(struct vm_conf *vc);
 
+int add_passthru_conf(struct vm_conf *conf, const char *devid);
 int add_disk_conf(struct vm_conf *conf, const char *type, const char *path);
 int add_iso_conf(struct vm_conf *conf, const char *type, const char *path);
 int add_net_conf(struct vm_conf *conf, const char *type, const char *bridge);
@@ -62,6 +65,7 @@ int finalize_vm_conf(struct vm_conf *conf);
 int dump_vm_conf(struct vm_conf *conf, FILE *fp);
 
 int compare_fbuf(const struct fbuf *a, const struct fbuf *b);
+int compare_passthru_conf(const struct passthru_conf *a, const struct passthru_conf *b);
 int compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b);
 int compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b);
 int compare_net_conf(const struct net_conf *a, const struct net_conf *b);

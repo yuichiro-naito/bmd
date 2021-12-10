@@ -194,6 +194,17 @@ parse_memory(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_passthru(struct vm_conf *conf, char *val)
+{
+	char *p;
+	for (p = val; *p != '\0'; p++)
+		if (*p != '/' && (*p < '0' || *p > '9'))
+			return -1;
+
+	return add_passthru_conf(conf, val);
+}
+
+static int
 parse_disk(struct vm_conf *conf, char *val)
 {
 	size_t n;
@@ -558,6 +569,7 @@ struct parser_entry parser_list[] = {
 	{ "name", &parse_name, NULL },
 	{ "ncpu", &parse_ncpu, NULL },
 	{ "network", &parse_net, &clear_net_conf },
+	{ "passthru", &parse_passthru, &clear_passthru_conf },
 	{ "qemu_arch", &parse_qemu_arch, NULL },
 	{ "qemu_machine", &parse_qemu_machine, NULL },
 	{ "reboot_on_change", &parse_reboot_on_change, NULL },

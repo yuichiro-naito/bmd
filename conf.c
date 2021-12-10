@@ -8,6 +8,15 @@
 #include "conf.h"
 
 void
+free_passthru_conf(struct passthru_conf *c)
+{
+	if (c == NULL)
+		return;
+	free(c->devid);
+	free(c);
+}
+
+void
 free_disk_conf(struct disk_conf *c)
 {
 	if (c == NULL)
@@ -47,6 +56,15 @@ free_fbuf(struct fbuf *f)
 	free(f->vgaconf);
 	free(f->password);
 	free(f);
+}
+
+void
+clear_passthru_conf(struct vm_conf *vc)
+{
+	struct passthru_conf *pc, *pn;
+	STAILQ_FOREACH_SAFE (pc, &vc->passthrues, next, pn)
+		free_passthru_conf(pc);
+	STAILQ_INIT(&vc->passthrues);
 }
 
 void
@@ -93,12 +111,36 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->debug_port);
 	free(vc->err_logfile);
 	free_fbuf(vc->fbuf);
+	clear_passthru_conf(vc);
 	clear_disk_conf(vc);
 	clear_iso_conf(vc);
 	clear_net_conf(vc);
 	free(vc->qemu_arch);
 	free(vc->qemu_machine);
 	free(vc);
+}
+
+int
+add_passthru_conf(struct vm_conf *conf, const char *devid)
+{
+	struct passthru_conf *p;
+	char *d;
+	if (conf == NULL)
+		return 0;
+
+	p = malloc(sizeof(struct passthru_conf));
+	d = strdup(devid);
+	if (p == NULL || d == NULL)
+		goto err;
+	p->devid = d;
+
+	STAILQ_INSERT_TAIL(&conf->passthrues, p, next);
+	conf->npassthrues++;
+	return 0;
+err:
+	free(d);
+	free(p);
+	return -1;
 }
 
 int
@@ -681,6 +723,16 @@ compare_fbuf(const struct fbuf *a, const struct fbuf *b)
 }
 
 int
+compare_passthru_conf(const struct passthru_conf *a, const struct passthru_conf *b)
+{
+	int rc;
+
+	CMP_STR(devid);
+
+	return 0;
+}
+
+int
 compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 {
 	int rc;
@@ -724,6 +776,7 @@ int
 compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 {
 	int rc;
+	struct passthru_conf *pa, *pb;
 	struct disk_conf *da, *db;
 	struct iso_conf *ia, *ib;
 	struct net_conf *na, *nb;
@@ -761,6 +814,16 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(ndisks);
 	CMP_NUM(nisoes);
 	CMP_NUM(nnets);
+
+	for (pa = STAILQ_FIRST(&a->passthrues), pb = STAILQ_FIRST(&b->passthrues);
+	     pa != NULL && pb != NULL;
+	     pa = STAILQ_NEXT(pa, next), pb = STAILQ_NEXT(pb, next))
+		if ((rc = compare_passthru_conf(pa, pb)) != 0)
+			return rc;
+	if (pa != NULL)
+		return 1;
+	if (pb != NULL)
+		return -1;
 
 	for (da = STAILQ_FIRST(&a->disks), db = STAILQ_FIRST(&b->disks);
 	     da != NULL && db != NULL;
