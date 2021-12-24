@@ -48,11 +48,11 @@ wait_for_reading(struct vm_entry *vm_ent)
 	int i = 0;
 	struct kevent ev[2];
 
-	if (vm_ent->vm.outfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.outfd, EVFILT_READ, EV_ADD, 0, 0,
+	if (VM_OUTFD(vm_ent) != -1)
+		EV_SET(&ev[i++], VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
 		    vm_ent);
-	if (vm_ent->vm.errfd != -1)
-		EV_SET(&ev[i++], vm_ent->vm.errfd, EVFILT_READ, EV_ADD, 0, 0,
+	if (VM_ERRFD(vm_ent) != -1)
+		EV_SET(&ev[i++], VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
 		    vm_ent);
 	while (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
@@ -184,9 +184,9 @@ call_plugins(struct vm_entry *vm_ent)
 {
 	struct plugin_data *pl_data;
 
-	SLIST_FOREACH (pl_data, &vm_ent->pl_data, next)
+	SLIST_FOREACH (pl_data, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pl_data->ent->desc.on_status_change)
-			(*(pl_data->ent->desc.on_status_change))(&vm_ent->vm,
+			(*(pl_data->ent->desc.on_status_change))(VM_PTR(vm_ent),
 			    &pl_data->data);
 }
 
@@ -196,11 +196,11 @@ free_vm_entry(struct vm_entry *vm_ent)
 	struct plugin_data *pl_data, *pln;
 	struct net_conf *nc, *nnc;
 
-	SLIST_FOREACH_SAFE (pl_data, &vm_ent->pl_data, next, pln)
+	SLIST_FOREACH_SAFE (pl_data, &VM_PLUGIN_DATA(vm_ent), next, pln)
 		free(pl_data);
-	STAILQ_FOREACH_SAFE (nc, &vm_ent->vm.taps, next, nnc)
+	STAILQ_FOREACH_SAFE (nc, &VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
-	free(vm_ent->vm.mapfile);
+	free(VM_MAPFILE(vm_ent));
 	free_vm_conf(VM_CONF(vm_ent));
 	free(vm_ent);
 }
@@ -278,13 +278,13 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 {
 	struct vm_entry *vm_ent;
 	struct plugin_entry *pl_ent;
-	struct plugin_data *pl_data;
+	struct plugin_data *pld, *pln;
 
 	vm_ent = calloc(1, sizeof(struct vm_entry));
 	if (vm_ent == NULL)
 		return NULL;
-	vm_ent->type = VMENTRY;
-	vm_ent->method = &method_list[conf_ent->conf.backend];
+	VM_TYPE(vm_ent) = VMENTRY;
+	VM_METHOD(vm_ent) = &method_list[conf_ent->conf.backend];
 	VM_CONF(vm_ent) = &conf_ent->conf;
 	VM_STATE(vm_ent) = INIT;
 	VM_PID(vm_ent) = -1;
@@ -292,20 +292,22 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_OUTFD(vm_ent) = -1;
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
-	SLIST_INIT(&vm_ent->pl_data);
-	STAILQ_INIT(&vm_ent->vm.taps);
+	SLIST_INIT(&VM_PLUGIN_DATA(vm_ent));
+	STAILQ_INIT(&VM_TAPS(vm_ent));
 	SLIST_FOREACH (pl_ent, &plugin_list, next) {
-		pl_data = calloc(1, sizeof(*pl_data));
-		if (pl_data == NULL) {
-			free(vm_ent);
-			return NULL;
-		}
-		pl_data->ent = pl_ent;
-		SLIST_INSERT_HEAD(&vm_ent->pl_data, pl_data, next);
+		if ((pld = calloc(1, sizeof(*pld))) == NULL)
+			goto err;
+		pld->ent = pl_ent;
+		SLIST_INSERT_HEAD(&VM_PLUGIN_DATA(vm_ent), pld, next);
 	}
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 
 	return vm_ent;
+err:
+	SLIST_FOREACH_SAFE (pld, &VM_PLUGIN_DATA(vm_ent), next, pln)
+		free(pld);
+	free(vm_ent);
+	return NULL;
 }
 
 int
@@ -314,7 +316,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
 
-	vm_ent->method = &method_list[conf->backend];
+	VM_METHOD(vm_ent) = &method_list[conf->backend];
 
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
@@ -410,7 +412,7 @@ reload_virtual_machines()
 
 	/* make sure new_conf is NULL */
 	SLIST_FOREACH (vm_ent, &vm_list, next)
-		vm_ent->new_conf = NULL;
+		VM_NEWCONF(vm_ent) = NULL;
 
 	SLIST_FOREACH (conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
@@ -419,7 +421,7 @@ reload_virtual_machines()
 			vm_ent = create_vm_entry(conf_ent);
 			if (vm_ent == NULL)
 				return -1;
-			vm_ent->new_conf = conf;
+			VM_NEWCONF(vm_ent) = conf;
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
@@ -430,13 +432,13 @@ reload_virtual_machines()
 			}
 			start_virtual_machine(vm_ent);
 			continue;
-		} else if (vm_ent->vm.logfd != -1 &&
-		    vm_ent->vm.conf->err_logfile != NULL) {
+		} else if (VM_LOGFD(vm_ent) != -1 &&
+			VM_CONF(vm_ent)->err_logfile != NULL) {
 			VM_CLOSE(vm_ent, LOGFD);
 			VM_LOGFD(vm_ent) = open(VM_CONF(vm_ent)->err_logfile,
 			    O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
-		vm_ent->new_conf = conf;
+		VM_NEWCONF(vm_ent) = conf;
 		if (conf->reboot_on_change &&
 		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
 			if (VM_STATE(vm_ent) == LOAD ||
@@ -449,7 +451,7 @@ reload_virtual_machines()
 				VM_STATE(vm_ent) = RESTART;
 			continue;
 		}
-		if (vm_ent->new_conf->boot == vm_ent->vm.conf->boot)
+		if (VM_NEWCONF(vm_ent)->boot == VM_CONF(vm_ent)->boot)
 			continue;
 		switch (conf->boot) {
 		case NO:
@@ -478,7 +480,7 @@ reload_virtual_machines()
 	}
 
 	SLIST_FOREACH (vm_ent, &vm_list, next)
-		if (vm_ent->new_conf == NULL) {
+		if (VM_NEWCONF(vm_ent) == NULL) {
 			conf = VM_CONF(vm_ent);
 			switch (VM_STATE(vm_ent)) {
 			case LOAD:
@@ -510,8 +512,8 @@ reload_virtual_machines()
 			}
 
 		} else {
-			VM_CONF(vm_ent) = vm_ent->new_conf;
-			vm_ent->new_conf = NULL;
+			VM_CONF(vm_ent) = VM_NEWCONF(vm_ent);
+			VM_NEWCONF(vm_ent) = NULL;
 		}
 
 	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
@@ -547,7 +549,7 @@ wait:
 	vm_ent = ev.udata;
 	switch (ev.filter) {
 	case EVFILT_WRITE:
-		if (vm_ent != NULL && vm_ent->type == SOCKBUF) {
+		if (vm_ent != NULL && VM_TYPE(vm_ent) == SOCKBUF) {
 			sb = (struct sock_buf *)vm_ent;
 			switch (send_sock_buf(sb)) {
 			case 2:
@@ -589,7 +591,7 @@ wait:
 				}
 			break;
 		}
-		if (vm_ent != NULL && vm_ent->type == SOCKBUF) {
+		if (vm_ent != NULL && VM_TYPE(vm_ent) == SOCKBUF) {
 			sb = (struct sock_buf *)vm_ent;
 			switch (recv_sock_buf(sb)) {
 			case 2:
@@ -619,7 +621,7 @@ wait:
 			}
 			break;
 		}
-		if (write_err_log(ev.ident, &vm_ent->vm) == 0) {
+		if (write_err_log(ev.ident, VM_PTR(vm_ent)) == 0) {
 			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
 			    NULL);
 			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
@@ -758,7 +760,7 @@ stop_virtual_machines()
 			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
 			VM_POWEROFF(vm_ent);
 		} else if (ev.filter == EVFILT_WRITE) {
-			if (vm_ent->type == SOCKBUF) {
+			if (VM_TYPE(vm_ent) == SOCKBUF) {
 				destroy_sock_buf((struct sock_buf *)vm_ent);
 				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
 				    EV_DELETE, 0, 0, NULL);
@@ -770,7 +772,7 @@ stop_virtual_machines()
 						break;
 			}
 		} else if (ev.filter == EVFILT_READ) {
-			if (vm_ent->type == SOCKBUF) {
+			if (VM_TYPE(vm_ent) == SOCKBUF) {
 				destroy_sock_buf((struct sock_buf *)vm_ent);
 				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
 				    0, NULL);
@@ -780,7 +782,7 @@ stop_virtual_machines()
 						break;
 				continue;
 			}
-			if (write_err_log(ev.ident, &vm_ent->vm) == 0) {
+			if (write_err_log(ev.ident, VM_PTR(vm_ent)) == 0) {
 				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
 				    0, NULL);
 				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
