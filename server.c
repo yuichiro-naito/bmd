@@ -89,7 +89,7 @@ clear_send_sock_buf(struct sock_buf *p)
  * -1 : error
  *  0 : closed
  *  1 : continue
- *  2 : finished reading
+ *  2 : finished sending
  */
 int
 send_sock_buf(struct sock_buf *p)
