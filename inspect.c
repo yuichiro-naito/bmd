@@ -159,21 +159,17 @@ mount_iso(struct inspection *ins)
 static int
 mount_ufs(struct inspection *ins, char *path)
 {
-	int rc,i;
+	int i = 0;
 	struct iovec iov[6];
 
 	memset(iov, 0, sizeof(iov));
-	rc = i = 0;
 	set_iovec(&iov[i++], "fstype");
 	set_iovec(&iov[i++], "ufs");
 	set_iovec(&iov[i++], "fspath");
 	set_iovec(&iov[i++], ins->mount_point);
 	set_iovec(&iov[i++], "from");
 	set_iovec(&iov[i++], path);
-	if (nmount(iov, i, MNT_RDONLY) < 0)
-		rc = -1;
-
-	return rc;
+	return nmount(iov, i, MNT_RDONLY);
 }
 
 /* mach [0-9]+\.[0-9]+ */
