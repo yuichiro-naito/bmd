@@ -466,6 +466,10 @@ exec_bhyve(struct vm *vm)
 			WRITE_FMT(fp, "com1,%s", conf->comport);
 		}
 
+		if (conf->keymap != NULL) {
+			WRITE_STR(fp, "-K");
+			WRITE_STR(fp, conf->keymap);
+		}
 		if (strcasecmp(conf->loader, "uefi") == 0) {
 			WRITE_STR(fp, "-l");
 			WRITE_STR(fp,

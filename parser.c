@@ -406,6 +406,12 @@ parse_qemu_machine(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_keymap(struct vm_conf *conf, char *val)
+{
+	return set_keymap(conf, val);
+}
+
+static int
 parse_boot_delay(struct vm_conf *conf, char *val)
 {
 	int delay;
@@ -551,6 +557,7 @@ struct parser_entry parser_list[] = {
 	{ "install", &parse_install, NULL },
 	{ "installcmd", &parse_installcmd, NULL },
 	{ "iso", &parse_iso, &clear_iso_conf },
+	{ "keymap", &parse_keymap, NULL },
 	{ "loadcmd", &parse_loadcmd, NULL },
 	{ "loader", &parse_loader, NULL },
 	{ "loader_timeout", &parse_loader_timeout, NULL },

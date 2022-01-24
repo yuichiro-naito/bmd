@@ -55,6 +55,7 @@ int set_fbuf_password(struct fbuf *fb, const char *pass);
 int set_mouse(struct vm_conf *conf, bool use);
 int set_wired_memory(struct vm_conf *conf, bool val);
 int set_utctime(struct vm_conf *conf, bool val);
+int set_keymap(struct vm_conf *conf, const char *keymap);
 
 struct fbuf *create_fbuf();
 struct vm_conf *create_vm_conf(char *filename);

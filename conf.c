@@ -98,6 +98,7 @@ free_vm_conf(struct vm_conf *vc)
 	clear_net_conf(vc);
 	free(vc->qemu_arch);
 	free(vc->qemu_machine);
+	free(vc->keymap);
 	free(vc);
 }
 
@@ -383,6 +384,13 @@ set_qemu_machine(struct vm_conf *conf, const char *machine)
 	return set_string(&conf->qemu_machine, machine);
 }
 
+int
+set_keymap(struct vm_conf *conf, const char *keymap)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->keymap, keymap);
+}
 int
 set_boot_delay(struct vm_conf *conf, int delay)
 {
@@ -748,6 +756,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 
 	CMP_STR(qemu_arch);
 	CMP_STR(qemu_machine);
+	CMP_STR(keymap);
 
 	if ((rc = compare_fbuf(a->fbuf, b->fbuf)) != 0)
 		return rc;

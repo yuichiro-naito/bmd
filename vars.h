@@ -93,6 +93,7 @@ struct vm_conf {
 	STAILQ_HEAD(, net_conf) nets;
 	char *qemu_arch;
 	char *qemu_machine;
+	char *keymap;
 };
 
 enum STATE {
