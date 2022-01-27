@@ -173,33 +173,34 @@ mount_ufs(struct inspection *ins, char *path)
 }
 
 /* mach [0-9]+\.[0-9]+ */
-static int
+static bool
 match_version_number(char *name)
 {
-	char *p,*q;
+	char *p, *q;
 
 	for (p = name; *p != '\0'; p++)
 		if (*p < '0' || *p > '9')
 			break;
 
 	if (p == name || *p++ != '.')
-		return 0;
+		return false;
 
 	for (q = p; *q != '\0'; q++)
 		if (*q < '0' || *q > '9')
 			break;
 
 	if (q == p || *q != '\0')
-		return 0;
+		return false;
 
-	return 1;
+	return true;
 }
 
 static bool
 is_directory(int df, struct dirent *e)
 {
 	struct stat s;
-	int fd, rc;
+	int fd;
+	bool rc;
 
 	if ((fd = openat(df, e->d_name, O_RDONLY)) < 0)
 		return 0;
