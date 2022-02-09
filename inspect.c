@@ -204,7 +204,7 @@ is_directory(int df, struct dirent *e)
 
 	if ((fd = openat(df, e->d_name, O_RDONLY)) < 0)
 		return 0;
-	rc = (fstat(fd, &s) == 0 && S_ISDIR(s.st_mode)) ? true : false;
+	rc = (fstat(fd, &s) == 0 && S_ISDIR(s.st_mode));
 	close(fd);
 
 	return rc;
@@ -214,7 +214,7 @@ static bool
 is_file(char *path)
 {
 	struct stat s;
-	return (stat(path, &s) == 0 && S_ISREG(s.st_mode)) ? true : false;
+	return (stat(path, &s) == 0 && S_ISREG(s.st_mode));
 }
 
 static int
