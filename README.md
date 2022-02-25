@@ -254,13 +254,6 @@ Following subcommands are available.
 
 # Known Issues
 
-## 1. UEFI doesn't boot from ISO in spite of install mode.
-
-There is no way to customize UEFI variables at boot for now.
-Following patch may allow us to choose boot disks.
-
-https://reviews.freebsd.org/D19976
-
-## 2. Configuration keys are condensed compared to bhyve
+## 1. Configuration keys are condensed compared to bhyve
 
 It's under development.

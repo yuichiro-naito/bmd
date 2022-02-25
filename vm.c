@@ -1,17 +1,13 @@
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
-
-#include <machine/vmm.h>
-
-#if __FreeBSD_version < 1300094
-#include <sys/param.h>
 #include <sys/cpuset.h>
 
+#include <machine/vmm.h>
 #include <machine/vmm_dev.h>
-#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -29,6 +25,9 @@
 #include "vars.h"
 #include "vm.h"
 #include "inspect.h"
+
+#define UEFI_FIRMWARE       LOCALBASE"/share/uefi-firmware/BHYVE_UEFI.fd"
+#define UEFI_FIRMWARE_VARS  LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
 
 #define WRITE_STR(fp, str) \
 	fwrite_unlocked(&(char *[]) { (str) }[0], sizeof(char *), 1, (fp))
@@ -129,6 +128,86 @@ err:
 	free(fn);
 	return -1;
 }
+
+#if __FreeBSD_version > 1400000
+bool is_file(char *path);
+static int
+copy_uefi_vars(struct vm *vm) {
+	char *fn, *buf;
+	int out, in, rc, len, n;
+	size_t size = 1024*1024;
+	const char *origin = UEFI_FIRMWARE_VARS;
+	extern struct global_conf gl_conf;
+
+	fn = vm->varsfile;
+	if (fn == NULL && asprintf(&fn, "/%s/%s.vars", gl_conf.vars_dir,
+				   vm->conf->name) < 0)
+		return -1;
+
+	if (vm->conf->install == false && is_file(fn)) {
+		free(vm->varsfile);
+		vm->varsfile = fn;
+		return 0;
+	}
+
+	if ((buf = malloc(size)) == NULL) {
+		free(fn);
+		return -1;
+	}
+
+	if ((out = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0) {
+		ERR("can't create %s\n", fn);
+		free(buf);
+		free(fn);
+		return -1;
+	}
+
+	if ((in = open(origin, O_RDONLY)) < 0) {
+		ERR("can not open %s\n", origin);
+		free(buf);
+		free(fn);
+		close(out);
+		return -1;
+	}
+
+retry:
+	while ((len = read(in, buf, size)) > 0) {
+		n = 0;
+		while (n < len) {
+			if ((rc = write(out, buf + n, len - n)) < 0)
+				if (errno != EINTR && errno != EAGAIN)
+					goto err;
+			if (rc > 0)
+				n += rc;
+		}
+	}
+	if (len < 0) {
+		if (errno == EINTR || errno == EAGAIN)
+			goto retry;
+		goto err;
+	}
+
+	free(vm->varsfile);
+	vm->varsfile = fn;
+
+	close(in);
+	close(out);
+	free(buf);
+	return 0;
+err:
+	close(in);
+	close(out);
+	unlink(fn);
+	free(buf);
+	free(fn);
+	return -1;
+}
+#else
+static int
+copy_uefi_vars(struct vm *vm) {
+	return 0;
+}
+#endif
 
 static char *
 create_load_command(struct vm_conf *conf, size_t *length)
@@ -472,8 +551,12 @@ exec_bhyve(struct vm *vm)
 		}
 		if (strcasecmp(conf->loader, "uefi") == 0) {
 			WRITE_STR(fp, "-l");
-			WRITE_STR(fp,
-			    "bootrom,/usr/local/share/uefi-firmware/BHYVE_UEFI.fd");
+			if (vm->varsfile)
+				WRITE_FMT(fp,"bootrom,"UEFI_FIRMWARE",%s",
+					  vm->varsfile);
+			else
+				WRITE_STR(fp,"bootrom,"UEFI_FIRMWARE);
+
 		}
 		WRITE_STR(fp, "-s");
 		switch (conf->hostbridge) {
@@ -594,10 +677,10 @@ start_bhyve(struct vm *vm)
 		if (bhyve_load(vm) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "grub") == 0) {
-		if (write_mapfile(vm) < 0 || (grub_load(vm)) < 0)
+		if (write_mapfile(vm) < 0 || grub_load(vm) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
-		if (exec_bhyve(vm) < 0)
+		if (copy_uefi_vars(vm) < 0 || exec_bhyve(vm) < 0)
 			goto err;
 	} else {
 		ERR("unknown loader %s\n", conf->loader);

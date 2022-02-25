@@ -5,8 +5,6 @@
 
 #include "vars.h"
 
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
-
 /*
   Entry of plugins.
   The individual entries refer to the installed plugin.
@@ -53,6 +51,7 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 #define VM_TAPS(v)          ((v)->vm.taps)
 #define VM_STATE(v)         ((v)->vm.state)
 #define VM_MAPFILE(v)       ((v)->vm.mapfile)
+#define VM_VARSFILE(v)      ((v)->vm.varsfile)
 #define VM_INFD(v)          ((v)->vm.infd)
 #define VM_OUTFD(v)         ((v)->vm.outfd)
 #define VM_ERRFD(v)         ((v)->vm.errfd)

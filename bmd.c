@@ -1,3 +1,4 @@
+#include <sys/param.h>
 #include <sys/dirent.h>
 #include <sys/event.h>
 #include <sys/nv.h>
@@ -38,6 +39,7 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
   Global configuration.
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
+	LOCALBASE "/var/cache/bmd",
 	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, -1, -1, -1, 0, -1 };
 
 extern struct vm_methods method_list[];
@@ -201,6 +203,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	STAILQ_FOREACH_SAFE (nc, &VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
 	free(VM_MAPFILE(vm_ent));
+	free(VM_VARSFILE(vm_ent));
 	free_vm_conf(VM_CONF(vm_ent));
 	free(vm_ent);
 }

@@ -210,7 +210,7 @@ is_directory(int df, struct dirent *e)
 	return rc;
 }
 
-static bool
+bool
 is_file(char *path)
 {
 	struct stat s;

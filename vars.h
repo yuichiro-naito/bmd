@@ -13,6 +13,7 @@
 struct global_conf {
 	char *config_dir;
 	char *plugin_dir;
+	char *vars_dir;
 	char *pid_path;
 	char *cmd_sock_path;
 	char *unix_domain_socket_mode;
@@ -117,6 +118,7 @@ struct vm {
 	int ntaps;
 	STAILQ_HEAD(, net_conf) taps;
 	char *mapfile;
+	char *varsfile;
 };
 
 struct vm_methods {
