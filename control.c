@@ -213,7 +213,7 @@ do_inspect(char *name)
 	int i;
 	struct vm_conf_entry *conf_ent;
 	struct vm_conf *conf;
-	char *p;
+	char *p, *q;
 	const bool flags[2] = {true, false};
 	const char *types[2] = {"installcmd", "loadcmd"};
 
@@ -225,7 +225,7 @@ do_inspect(char *name)
 
 	for (i = 0; i < 2; i++) {
 		set_install(conf, flags[i]);
-		p = inspect(conf);
+		q = p = inspect(conf);
 		if (p == NULL) {
 			printf("%s = (null)\n", types[i]);
 		} else {
@@ -243,8 +243,10 @@ do_inspect(char *name)
 			}
 			putchar('\n');
 		}
+		free(q);
 	}
 
+	free_vm_conf(&conf_ent->conf);
 	return 0;
 }
 
