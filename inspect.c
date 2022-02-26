@@ -274,12 +274,12 @@ inspect_openbsd_iso(struct inspection *ins)
 		if (e->d_name[0] == '.')
 			continue;
 		if (is_directory(dirfd(d), e)) {
-			if (asprintf(&npath, "%s/%s/%s", path, e->d_name,
+			if (asprintf(&npath, "%s/%s%s", path, e->d_name,
 					    OPENBSD_RAMDISK_KERNEL) < 0)
 				goto err2;
 			free(path);
 			path = npath;
-			len += e->d_namlen + strlen(OPENBSD_RAMDISK_KERNEL) + 2;
+			len += e->d_namlen + strlen(OPENBSD_RAMDISK_KERNEL) + 1;
 			break;
 		}
 	}
