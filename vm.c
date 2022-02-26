@@ -135,7 +135,7 @@ static int
 copy_uefi_vars(struct vm *vm) {
 	char *fn, *buf;
 	int out, in, rc, len, n;
-	size_t size = 1024*1024;
+	const size_t size = 1024*1024;
 	const char *origin = UEFI_FIRMWARE_VARS;
 	extern struct global_conf gl_conf;
 
@@ -144,28 +144,24 @@ copy_uefi_vars(struct vm *vm) {
 				   vm->conf->name) < 0)
 		return -1;
 
-	if (vm->conf->install == false && is_file(fn)) {
-		free(vm->varsfile);
-		vm->varsfile = fn;
+	vm->varsfile = fn;
+	if (vm->conf->install == false && is_file(fn))
 		return 0;
-	}
 
 	if ((buf = malloc(size)) == NULL) {
-		free(fn);
+		ERR("can't allocate %zu bytes memory\n", size);
 		return -1;
 	}
 
 	if ((out = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0) {
 		ERR("can't create %s\n", fn);
 		free(buf);
-		free(fn);
 		return -1;
 	}
 
 	if ((in = open(origin, O_RDONLY)) < 0) {
 		ERR("can not open %s\n", origin);
 		free(buf);
-		free(fn);
 		close(out);
 		return -1;
 	}
@@ -187,9 +183,6 @@ retry:
 		goto err;
 	}
 
-	free(vm->varsfile);
-	vm->varsfile = fn;
-
 	close(in);
 	close(out);
 	free(buf);
@@ -199,7 +192,6 @@ err:
 	close(out);
 	unlink(fn);
 	free(buf);
-	free(fn);
 	return -1;
 }
 #else
