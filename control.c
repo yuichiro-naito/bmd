@@ -41,24 +41,24 @@ usage(int argc, char *argv[])
 	return 1;
 }
 
-struct vm_conf *
+static struct vm_conf_entry *
 lookup_vm_conf(const char *name)
 {
-	struct vm_conf_entry *conf_ent;
-	struct vm_conf *conf = NULL;
+	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
 
 	if (load_config_files(&vm_conf_list) < 0) {
 		printf("failed to load VM config files\n");
 		return NULL;
 	}
 
-	SLIST_FOREACH (conf_ent, &vm_conf_list, next)
-		if (strcmp(conf_ent->conf.name, name) == 0) {
-			conf = &conf_ent->conf;
-			break;
-		}
+	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
+		if (strcmp(conf_ent->conf.name, name) == 0)
+			ret = conf_ent;
+		else
+			free_vm_conf(&conf_ent->conf);
 
-	return conf;
+	SLIST_INIT(&vm_conf_list);
+	return ret;
 }
 
 int
@@ -89,22 +89,17 @@ direct_run(const char *name, bool install, bool single)
 	if (load_plugins() < 0)
 		return 1;
 
-	conf = lookup_vm_conf(name);
-	if (conf == NULL) {
+	conf_ent = lookup_vm_conf(name);
+	if (conf_ent == NULL) {
 		ERR("no such VM %s\n", name);
 		return 1;
 	}
 
+	conf = &conf_ent->conf;
 	free(conf->comport);
 	conf->comport = strdup("stdio");
 	conf->install = install;
 	set_single_user(conf, single);
-
-	conf_ent = realloc(conf, sizeof(*conf_ent));
-	if (conf_ent == NULL) {
-		free_vm_conf(conf);
-		return 1;
-	}
 
 	vm_ent = create_vm_entry(conf_ent);
 	if (vm_ent == NULL) {
@@ -172,14 +167,16 @@ err:
 int
 do_console(char *name)
 {
-	struct vm_conf *conf = NULL;
+	struct vm_conf_entry *conf_ent;
+	struct vm_conf *conf;
 	int i;
 	char *port;
 
-	if ((conf = lookup_vm_conf(name)) == NULL) {
+	if ((conf_ent = lookup_vm_conf(name)) == NULL) {
 		printf("no such VM %s\n", name);
 		return 1;
 	}
+	conf = &conf_ent->conf;
 
 	/* A null modem device has at least 6 characters. */
 	if (conf->comport == NULL ||
@@ -214,15 +211,17 @@ int
 do_inspect(char *name)
 {
 	int i;
-	struct vm_conf *conf = NULL;
+	struct vm_conf_entry *conf_ent;
+	struct vm_conf *conf;
 	char *p;
 	const bool flags[2] = {true, false};
 	const char *types[2] = {"installcmd", "loadcmd"};
 
-	if ((conf = lookup_vm_conf(name)) == NULL) {
+	if ((conf_ent = lookup_vm_conf(name)) == NULL) {
 		printf("no such VM %s\n", name);
 		return 1;
 	}
+	conf = &conf_ent->conf;
 
 	for (i = 0; i < 2; i++) {
 		set_install(conf, flags[i]);
