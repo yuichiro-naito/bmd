@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "../vars.h"
 
@@ -84,16 +85,18 @@ avahi_status_change(struct vm *vm, void **data)
 	switch (vm->state) {
 	case LOAD:
 	case RUN:
-		if (ad->pid <= 0)
-			ad->pid = exec_avahi_publish(vm);
+		if (ad->pid <= 0 &&
+		    (ad->pid = exec_avahi_publish(vm)) > 0) {
+			EV_SET(&ev, ad->pid, EVFILT_PROC,
+			       EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
+			while(kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
+				if (errno != EINTR)
+					break;
+		}
 		break;
 	case TERMINATE:
-		if (ad->pid > 0) {
+		if (ad->pid > 0)
 			kill(ad->pid, SIGINT);
-			EV_SET(&ev, ad->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
-			    NOTE_EXIT, 0, NULL);
-			kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL);
-		}
 		free(ad);
 		*data = NULL;
 		break;
