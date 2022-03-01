@@ -278,7 +278,7 @@ grub_load(struct vm *vm)
 			redirect_to_com(vm);
 
 		setenv("TERM", "vt100", 1);
-		args[0] = "/usr/local/sbin/grub-bhyve";
+		args[0] = LOCALBASE"/sbin/grub-bhyve";
 		args[1] = "-r";
 		if (conf->install)
 			args[2] = "cd0";
@@ -828,7 +828,7 @@ exec_qemu(struct vm *vm)
 		}
 		flockfile(fp);
 
-		WRITE_FMT(fp, "/usr/local/bin/qemu-system-%s", conf->qemu_arch);
+		WRITE_FMT(fp, LOCALBASE"/bin/qemu-system-%s", conf->qemu_arch);
 		WRITE_STR(fp, "-accel");
 		WRITE_STR(fp, "tcg");
 		if (conf->qemu_machine) {
