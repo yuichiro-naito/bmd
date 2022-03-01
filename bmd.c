@@ -289,7 +289,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_TYPE(vm_ent) = VMENTRY;
 	VM_METHOD(vm_ent) = &method_list[conf_ent->conf.backend];
 	VM_CONF(vm_ent) = &conf_ent->conf;
-	VM_STATE(vm_ent) = INIT;
+	VM_STATE(vm_ent) = TERMINATE;
 	VM_PID(vm_ent) = -1;
 	VM_INFD(vm_ent) = -1;
 	VM_OUTFD(vm_ent) = -1;
@@ -469,8 +469,7 @@ reload_virtual_machines()
 			break;
 		case ALWAYS:
 		case YES:
-			if (VM_STATE(vm_ent) == INIT ||
-			    VM_STATE(vm_ent) == TERMINATE) {
+			if (VM_STATE(vm_ent) == TERMINATE) {
 				VM_CONF(vm_ent) = conf;
 				start_virtual_machine(vm_ent);
 			} else if (VM_STATE(vm_ent) == STOP)
@@ -633,7 +632,7 @@ wait:
 		}
 		break;
 	case EVFILT_TIMER:
-		if (VM_STATE(vm_ent) == INIT) {
+		if (VM_STATE(vm_ent) == TERMINATE) {
 			/* delayed boot */
 			start_virtual_machine(vm_ent);
 		} else if (VM_STATE(vm_ent) == LOAD ||
@@ -671,7 +670,7 @@ wait:
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 
-			VM_STATE(vm_ent) = INIT;
+			VM_STATE(vm_ent) = TERMINATE;
 			set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 			break;
 		case RUN:
@@ -698,7 +697,6 @@ wait:
 			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 			free_vm_entry(vm_ent);
 			break;
-		case INIT:
 		case TERMINATE:
 			break;
 		}

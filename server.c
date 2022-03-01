@@ -308,8 +308,7 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	}
 	vm = &vm_ent->vm;
 
-	if (style < 2 && vm_ent->vm.state != INIT &&
-	    vm_ent->vm.state != TERMINATE) {
+	if (style < 2 && vm_ent->vm.state != TERMINATE) {
 		error = true;
 		reason = "already running";
 		goto ret;

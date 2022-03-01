@@ -26,7 +26,7 @@ hookcmd_status_change(struct vm *vm, void **data)
 	pid_t pid;
 	struct kevent ev;
 	char *args[4];
-	static char *state_name[] = { "INIT", "LOAD", "RUN", "TERMINATE",
+	static char *state_name[] = { "TERMINATE", "LOAD", "RUN",
 		"STOP", "REMOVE", "RESTART" };
 
 	if (vm->conf->hookcmd == NULL)

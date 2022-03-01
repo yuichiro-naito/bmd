@@ -98,10 +98,9 @@ struct vm_conf {
 };
 
 enum STATE {
-	INIT,	   // initial state
+	TERMINATE, // bhyve is terminated
 	LOAD,	   // bhyveload or grub-bhyve
 	RUN,	   // bhyve is running
-	TERMINATE, // bhyve is terminated
 	STOP,	   // send SIGTERM to stop bhyve
 	REMOVE,	   // send SIGTERM to stop bhyve and remove vm_entry
 	RESTART	   // send SIGTERM and need rebooting
