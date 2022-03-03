@@ -23,7 +23,7 @@
 #include "vars.h"
 #include "vm.h"
 
-extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
+extern struct vm_conf_head vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
 extern struct global_conf gl_conf;
 

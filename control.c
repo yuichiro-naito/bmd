@@ -20,7 +20,6 @@
 #include "bmd.h"
 #include "inspect.h"
 
-extern SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list;
 extern struct global_conf gl_conf;
 
 int
@@ -45,6 +44,7 @@ static struct vm_conf_entry *
 lookup_vm_conf(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
+	struct vm_conf_head vm_conf_list = SLIST_HEAD_INITIALIZER();
 
 	if (load_config_files(&vm_conf_list) < 0) {
 		printf("failed to load VM config files\n");
@@ -57,7 +57,6 @@ lookup_vm_conf(const char *name)
 		else
 			free_vm_conf(&conf_ent->conf);
 
-	SLIST_INIT(&vm_conf_list);
 	return ret;
 }
 

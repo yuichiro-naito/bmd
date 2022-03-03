@@ -97,7 +97,7 @@ struct sock_buf {
 	char *res_buf;
 };
 
-struct vm_conf_head;
+SLIST_HEAD(vm_conf_head, vm_conf_entry);
 
 int remove_plugins();
 void call_plugins(struct vm_entry *vm_ent);

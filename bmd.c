@@ -28,7 +28,8 @@
 /*
   List of VM configurations.
  */
-SLIST_HEAD(vm_conf_head, vm_conf_entry) vm_conf_list = SLIST_HEAD_INITIALIZER();
+struct vm_conf_head vm_conf_list = SLIST_HEAD_INITIALIZER();
+
 /*
   List of virtual machines.
  */
