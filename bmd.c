@@ -469,7 +469,7 @@ reload_virtual_machines()
 		case NO:
 			if (VM_STATE(vm_ent) == LOAD ||
 			    VM_STATE(vm_ent) == RUN) {
-				INFO("stop vm %s\n", conf->name);
+				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
 				VM_STATE(vm_ent) = STOP;
@@ -496,7 +496,7 @@ reload_virtual_machines()
 			switch (VM_STATE(vm_ent)) {
 			case LOAD:
 			case RUN:
-				INFO("stop vm %s\n", conf->name);
+				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
 				/* FALLTHROUGH */
@@ -697,13 +697,14 @@ wait:
 			}
 			/* FALLTHROUGH */
 		case STOP:
-			INFO("stop vm %s\n", VM_CONF(vm_ent)->name);
+			INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
 			stop_waiting_fd(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			VM_CONF(vm_ent)->install = false;
 			break;
 		case REMOVE:
+			INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
 			stop_waiting_fd(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
