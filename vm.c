@@ -1,5 +1,6 @@
 #include <sys/param.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
@@ -133,9 +134,11 @@ err:
 bool is_file(char *path);
 static int
 copy_uefi_vars(struct vm *vm) {
-	char *fn, *buf;
-	int out, in, rc, len, n;
-	const size_t size = 1024*1024;
+	char *fn;
+	int out, in;
+	ssize_t n;
+	off_t len = 0;
+	struct stat st;
 	const char *origin = UEFI_FIRMWARE_VARS;
 	extern struct global_conf gl_conf;
 
@@ -148,50 +151,37 @@ copy_uefi_vars(struct vm *vm) {
 	if (vm->conf->install == false && is_file(fn))
 		return 0;
 
-	if ((buf = malloc(size)) == NULL) {
-		ERR("can't allocate %zu bytes memory\n", size);
+	if ((in = open(origin, O_RDONLY)) < 0) {
+		ERR("can not open %s\n", origin);
 		return -1;
 	}
 
 	if ((out = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0) {
 		ERR("can't create %s\n", fn);
-		free(buf);
+		close(in);
 		return -1;
 	}
 
-	if ((in = open(origin, O_RDONLY)) < 0) {
-		ERR("can not open %s\n", origin);
-		free(buf);
-		close(out);
-		return -1;
-	}
+	if (fstat(in, &st) < 0)
+		goto err;
 
 retry:
-	while ((len = read(in, buf, size)) > 0) {
-		n = 0;
-		while (n < len) {
-			if ((rc = write(out, buf + n, len - n)) < 0)
-				if (errno != EINTR && errno != EAGAIN)
-					goto err;
-			if (rc > 0)
-				n += rc;
-		}
-	}
-	if (len < 0) {
-		if (errno == EINTR || errno == EAGAIN)
+	while ((n = copy_file_range(in, &len, out, &len, st.st_size - len, 0)) < 0)
+		if (errno != EINTR)
+			goto err;
+	if (n > 0) {
+		len += n;
+		if (len < st.st_size)
 			goto retry;
-		goto err;
 	}
 
 	close(in);
 	close(out);
-	free(buf);
 	return 0;
 err:
 	close(in);
 	close(out);
 	unlink(fn);
-	free(buf);
 	return -1;
 }
 #else
