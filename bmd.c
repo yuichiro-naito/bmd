@@ -443,16 +443,24 @@ reload_virtual_machines()
 			    O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
 		VM_NEWCONF(vm_ent) = conf;
-		if (conf->reboot_on_change &&
+		if (conf->boot != NO && conf->reboot_on_change &&
 		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
-			if (VM_STATE(vm_ent) == LOAD ||
-			    VM_STATE(vm_ent) == RUN) {
+			switch (VM_STATE(vm_ent)) {
+			case TERMINATE:
+				set_timer(vm_ent, MAX(conf->boot_delay, 1));
+				break;
+			case LOAD:
+			case RUN:
 				INFO("reboot vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				set_timer(vm_ent, conf->stop_timeout);
 				VM_STATE(vm_ent) = RESTART;
-			} else if (VM_STATE(vm_ent) == STOP)
+				break;
+			case STOP:
 				VM_STATE(vm_ent) = RESTART;
+			default:
+				break;
+			}
 			continue;
 		}
 		if (VM_NEWCONF(vm_ent)->boot == VM_CONF(vm_ent)->boot)
