@@ -535,8 +535,6 @@ reload_virtual_machines()
 	return 0;
 }
 
-#define BUFSIZE (4 * 1024)
-
 int
 event_loop()
 {
