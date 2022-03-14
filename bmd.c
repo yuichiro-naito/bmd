@@ -645,16 +645,23 @@ wait:
 		}
 		break;
 	case EVFILT_TIMER:
-		if (VM_STATE(vm_ent) == TERMINATE) {
+		switch (VM_STATE(vm_ent)) {
+		case TERMINATE:
 			/* delayed boot */
 			start_virtual_machine(vm_ent);
-		} else if (VM_STATE(vm_ent) == LOAD ||
-		    VM_STATE(vm_ent) == STOP || VM_STATE(vm_ent) == REMOVE ||
-		    VM_STATE(vm_ent) == RESTART) {
+			break;
+		case LOAD:
+		case STOP:
+		case REMOVE:
+		case RESTART:
 			/* loader timout or stop timeout */
 			/* force to poweroff */
 			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
 			VM_POWEROFF(vm_ent);
+			break;
+		case RUN:
+			/* ignore timer */
+			break;
 		}
 		break;
 	case EVFILT_PROC:
