@@ -27,7 +27,7 @@ extern struct vm_conf_head vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
 extern struct global_conf gl_conf;
 
-SLIST_HEAD(, sock_buf) sock_list = SLIST_HEAD_INITIALIZER();
+LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
 
 struct sock_buf *
 create_sock_buf(int fd)
@@ -38,7 +38,8 @@ create_sock_buf(int fd)
 		return NULL;
 	r->type = SOCKBUF;
 	r->fd = fd;
-	SLIST_INSERT_HEAD(&sock_list, r, next);
+	time(&r->event_time);
+	LIST_INSERT_HEAD(&sock_list, r, next);
 	return r;
 }
 
@@ -47,10 +48,44 @@ destroy_sock_buf(struct sock_buf *p)
 {
 	if (p == NULL)
 		return;
+	LIST_REMOVE(p, next);
 	close(p->fd);
 	free(p->buf);
-	SLIST_REMOVE(&sock_list, p, sock_buf, next);
 	free(p);
+}
+
+struct timespec *
+calc_timeout(int timeout, struct timespec *ts)
+{
+	struct sock_buf *p;
+	long t;
+	time_t s;
+
+	if (LIST_EMPTY(&sock_list) || ts == NULL)
+		return NULL;
+
+	s = LIST_FIRST(&sock_list)->event_time;
+	LIST_FOREACH (p, &sock_list, next)
+		if (p->event_time < s)
+			s = p->event_time;
+
+	if ((t = s + timeout - time(NULL)) < 0)
+		return NULL;
+
+	ts->tv_sec = t;
+	ts->tv_nsec = 0;
+	return ts;
+}
+
+void
+close_timeout_sock_buf(int timeout)
+{
+	struct sock_buf *p, *n;
+	time_t now = time(NULL);
+
+	LIST_FOREACH_SAFE (p, &sock_list, next, n)
+		if (p->event_time + timeout <= now)
+			destroy_sock_buf(p);
 }
 
 struct sock_buf *
@@ -58,7 +93,7 @@ lookup_sock_buf(int fd)
 {
 	struct sock_buf *p;
 
-	SLIST_FOREACH (p, &sock_list, next)
+	LIST_FOREACH (p, &sock_list, next)
 		if (p->fd == fd)
 			return p;
 	return NULL;
@@ -109,6 +144,7 @@ retry:
 			return -1;
 		}
 	}
+	time(&p->event_time);
 	p->res_bytes += n;
 	if (p->res_bytes == p->res_size)
 		return 2;
@@ -167,6 +203,7 @@ retry:
 	if (start == buf)
 		return -1;
 
+	time(&sb->event_time);
 	nread += n;
 	if (sb->state == 0) {
 		sb->read_size = nread;

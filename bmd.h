@@ -6,6 +6,11 @@
 #include "vars.h"
 
 /*
+  Command timeout in second.
+ */
+#define COMMAND_TIMEOUT_SEC 30
+
+/*
   Entry of plugins.
   The individual entries refer to the installed plugin.
  */
@@ -84,7 +89,7 @@ struct vm_entry {
  */
 struct sock_buf {
 	enum STRUCT_TYPE type;
-	SLIST_ENTRY(sock_buf) next;
+	LIST_ENTRY(sock_buf) next;
 	int fd;
 	int state;
 	size_t buf_size;
@@ -95,6 +100,7 @@ struct sock_buf {
 	size_t res_size;
 	size_t res_bytes;
 	char *res_buf;
+	time_t event_time;
 };
 
 SLIST_HEAD(vm_conf_head, vm_conf_entry);

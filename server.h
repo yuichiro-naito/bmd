@@ -17,5 +17,7 @@ int connect_to_server(const struct global_conf *gc);
 int create_command_server(const struct global_conf *gc);
 int accept_command_socket(int s0);
 int recv_command(struct sock_buf *sb);
+struct timespec *calc_timeout(int timeout, struct timespec *ts);
+int close_timeout_sock_buf(int timeout);
 
 #endif

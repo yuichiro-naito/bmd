@@ -536,6 +536,7 @@ event_loop()
 	struct vm_entry *vm_ent;
 	int n, status;
 	struct sock_buf *sb;
+	struct timespec *to, timeout;
 
 	EV_SET(&ev, gl_conf.cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
 	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
@@ -543,11 +544,16 @@ event_loop()
 			return -1;
 
 wait:
-	while (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0)
+	to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
+	while ((n = kevent(gl_conf.kq, NULL, 0, &ev, 1, to)) < 0)
 		if (errno != EINTR) {
 			ERR("kevent failure (%s)\n", strerror(errno));
 			return -1;
 		}
+	if (n == 0) {
+		close_timeout_sock_buf(COMMAND_TIMEOUT_SEC);
+		goto wait;
+	}
 
 	vm_ent = ev.udata;
 	switch (ev.filter) {
