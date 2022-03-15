@@ -139,9 +139,8 @@ parse_int(int *val, char *value)
 	char *p;
 
 	n = strtol(value, &p, 10);
-	if (*p != '\0') {
+	if (*p != '\0')
 		return -1;
-	}
 	*val = n;
 	return 0;
 }
@@ -278,12 +277,12 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	if (strcasecmp(val, "uefi") != 0 && strcasecmp(val, "bhyveload") != 0 &&
-	    strcasecmp(val, "grub") != 0)
-		return -1;
+	const char **p, *values[] = { "uefi", "bhyveload", "grub" };
 
-	set_loader(conf, val);
-	return 0;
+	ARRAY_FOREACH(p, values)
+		if (strcasecmp(val, *p) == 0)
+			return set_loader(conf, val);
+	return -1;
 }
 
 static int
@@ -311,8 +310,7 @@ parse_stop_timeout(struct vm_conf *conf, char *val)
 static int
 parse_grub_run_partition(struct vm_conf *conf, char *val)
 {
-	set_grub_run_partition(conf, val);
-	return 0;
+	return set_grub_run_partition(conf, val);
 }
 
 static int
@@ -324,38 +322,30 @@ parse_debug_port(struct vm_conf *conf, char *val)
 static int
 parse_boot(struct vm_conf *conf, char *val)
 {
-	enum BOOT b;
+	const char **p, *values[] = { "yes", "true", "oneshot", "always" };
+	enum BOOT r[] = { YES, YES, ONESHOT, ALWAYS, NO };
 
-	if (strcasecmp(val, "yes") == 0 || strcasecmp(val, "true") == 0)
-		b = YES;
-	else if (strcasecmp(val, "oneshot") == 0)
-		b = ONESHOT;
-	else if (strcasecmp(val, "always") == 0)
-		b = ALWAYS;
-	else
-		b = NO;
+	ARRAY_FOREACH (p, values)
+		if (strcasecmp(val, *p) == 0)
+			break;
 
-	set_boot(conf, b);
-	return 0;
+	return set_boot(conf, r[p - values]);
 }
 
 static int
 parse_hostbridge(struct vm_conf *conf, char *val)
 {
-	enum HOSTBRIDGE_TYPE t;
+	const char **p, *values[] = { "none", "standard", "intel", "amd" };
+	enum HOSTBRIDGE_TYPE t[] = { NONE, INTEL, INTEL, AMD };
 
-	if (strcasecmp(val, "none") == 0)
-		t = NONE;
-	else if ((strcasecmp(val, "standard") == 0) ||
-	    (strcasecmp(val, "intel") == 0))
-		t = INTEL;
-	else if (strcasecmp(val, "amd") == 0)
-		t = AMD;
-	else
+	ARRAY_FOREACH (p, values)
+		if (strcasecmp(val, *p) ==0)
+			break;
+
+	if (p == &values[sizeof(values) / sizeof(values[0])])
 		return -1;
 
-	set_hostbridge(conf, t);
-	return 0;
+	return set_hostbridge(conf, t[p - values]);
 }
 
 static int
@@ -370,8 +360,7 @@ parse_backend(struct vm_conf *conf, char *val)
 	else
 		return -1;
 
-	set_backend(conf, b);
-	return 0;
+	return set_backend(conf, b);
 }
 
 static int
@@ -395,8 +384,7 @@ parse_qemu_arch(struct vm_conf *conf, char *val)
 		 sizeof(archs[0]), compare_archs)) == NULL)
 		return -1;
 
-	set_qemu_arch(conf, *p);
-	return 0;
+	return set_qemu_arch(conf, *p);
 }
 
 static int
@@ -425,16 +413,14 @@ parse_boot_delay(struct vm_conf *conf, char *val)
 static int
 parse_comport(struct vm_conf *conf, char *val)
 {
-	set_comport(conf, val);
-	return 0;
+	return set_comport(conf, val);
 }
 
 static bool
 parse_boolean(const char *value)
 {
-	if (strcasecmp(value, "yes") == 0 || strcasecmp(value, "true") == 0)
-		return true;
-	return false;
+	return (strcasecmp(value, "yes") == 0 ||
+		strcasecmp(value, "true") == 0);
 }
 
 static int
@@ -478,8 +464,7 @@ parse_graphics_res(struct vm_conf *conf, char *val)
 	char *p;
 	int width, height;
 
-	p = strchr(val, 'x');
-	if (p == NULL)
+	if ((p = strchr(val, 'x')) == NULL)
 		return -1;
 
 	*p = '\0';
