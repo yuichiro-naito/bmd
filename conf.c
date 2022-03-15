@@ -643,11 +643,10 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 		fprintf(fp, "net%d: %s,%s\n", i++, nc->type, nc->bridge);
 
 	fb = conf->fbuf;
-	if (fb->enable) {
+	if (fb->enable)
 		fprintf(fp, "graphics: %s:%d, %dx%d, %s, %s\n", fb->ipaddr,
 		    fb->port, fb->width, fb->height, fb->vgaconf,
 		    fb->wait ? "wait" : "nowait");
-	}
 	fprintf(fp, "xhci_mouse: %s\n", conf->mouse ? "true" : "false");
 	return 0;
 }
@@ -666,10 +665,10 @@ compare_string(const char *a, const char *b)
 
 #define CMP_NUM(t)                       \
 	if ((rc = (a)->t - (b)->t) != 0) \
-	return rc
+		return rc
 #define CMP_STR(t)                                      \
 	if ((rc = compare_string((a)->t, (b)->t)) != 0) \
-	return rc
+		return rc
 
 int
 compare_fbuf(const struct fbuf *a, const struct fbuf *b)
