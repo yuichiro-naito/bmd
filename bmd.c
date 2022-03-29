@@ -535,12 +535,31 @@ reload_virtual_machines()
 	return 0;
 }
 
+static char *
+reason_string(int status)
+{
+	int sz;
+	char *mes;
+
+	if (WIFSIGNALED(status))
+		sz = asprintf(&mes, " by signal %d%s", WTERMSIG(status),
+			      (WCOREDUMP(status) ? " coredump" : ""));
+	else if (WIFSTOPPED(status))
+		sz = asprintf(&mes, " by signal %d", WSTOPSIG(status));
+	else
+		sz = ((mes = strdup("")) == NULL ? -1 : 0);
+
+
+	return (sz < 0) ? NULL : mes;
+}
+
 int
 event_loop()
 {
 	struct kevent ev, ev2[2];
 	struct vm_entry *vm_ent;
 	int n, status;
+	char *rs;
 	struct sock_buf *sb;
 	struct timespec *to, timeout;
 
@@ -704,7 +723,10 @@ wait:
 			}
 			/* FALLTHROUGH */
 		case STOP:
-			INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
+			rs = reason_string(status);
+			INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
+			     (rs == NULL ? "" : rs));
+			free(rs);
 			stop_waiting_fd(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
