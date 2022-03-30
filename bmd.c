@@ -133,29 +133,33 @@ load_plugins()
 	struct plugin_desc *desc;
 	struct plugin_entry *pl_ent;
 
-	d = fdopendir(gl_conf.plugin_fd);
-	if (d == NULL) {
+	if ((d = fdopendir(gl_conf.plugin_fd)) == NULL) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return -1;
 	}
 
 	while ((ent = readdir(d)) != NULL) {
-		fd = -1;
 		if (ent->d_namlen < 4 || ent->d_name[0] == '.' ||
 		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0 ||
-		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) <
-			0 ||
-		    ((hdl = fdlopen(fd, RTLD_NOW)) == NULL))
+		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) < 0)
+			continue;
+
+		if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL)
 			goto next;
 
-		desc = dlsym(hdl, "plugin_desc");
-		if (desc == NULL || desc->version != PLUGIN_VERSION ||
-		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL ||
-		    (desc->initialize && (*(desc->initialize))(&gl_conf) < 0)) {
+		if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
+		    desc->version != PLUGIN_VERSION ||
+		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
 			dlclose(hdl);
 			goto next;
 		}
-		memcpy(&pl_ent->desc, desc, sizeof(PLUGIN_DESC));
+
+		if (desc->initialize && (*(desc->initialize))(&gl_conf) < 0) {
+			free(pl_ent);
+			dlclose(hdl);
+			goto next;
+		}
+		pl_ent->desc = *desc;
 		pl_ent->handle = hdl;
 		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	next:
@@ -185,22 +189,22 @@ remove_plugins()
 void
 call_plugins(struct vm_entry *vm_ent)
 {
-	struct plugin_data *pl_data;
+	struct plugin_data *pd;
 
-	SLIST_FOREACH (pl_data, &VM_PLUGIN_DATA(vm_ent), next)
-		if (pl_data->ent->desc.on_status_change)
-			(*(pl_data->ent->desc.on_status_change))(VM_PTR(vm_ent),
-			    &pl_data->data);
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->ent->desc.on_status_change)
+			(*(pd->ent->desc.on_status_change))(VM_PTR(vm_ent),
+			    &pd->data);
 }
 
 void
 free_vm_entry(struct vm_entry *vm_ent)
 {
-	struct plugin_data *pl_data, *pln;
+	struct plugin_data *pd, *pln;
 	struct net_conf *nc, *nnc;
 
-	SLIST_FOREACH_SAFE (pl_data, &VM_PLUGIN_DATA(vm_ent), next, pln)
-		free(pl_data);
+	SLIST_FOREACH_SAFE (pd, &VM_PLUGIN_DATA(vm_ent), next, pln)
+		free(pd);
 	STAILQ_FOREACH_SAFE (nc, &VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
 	free(VM_MAPFILE(vm_ent));
