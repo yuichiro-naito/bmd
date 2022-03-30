@@ -258,8 +258,7 @@ load_config_files(struct vm_conf_head *list)
 		close(fd);
 		if (conf == NULL)
 			continue;
-		conf_ent = realloc(conf, sizeof(*conf_ent));
-		if (conf_ent == NULL) {
+		if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL) {
 			free_vm_conf(conf);
 			continue;
 		}
@@ -288,8 +287,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	struct plugin_entry *pl_ent;
 	struct plugin_data *pld, *pln;
 
-	vm_ent = calloc(1, sizeof(struct vm_entry));
-	if (vm_ent == NULL)
+	if ((vm_ent = calloc(1, sizeof(struct vm_entry))) == NULL)
 		return NULL;
 	VM_TYPE(vm_ent) = VMENTRY;
 	VM_METHOD(vm_ent) = &method_list[conf_ent->conf.backend];
@@ -440,11 +438,12 @@ reload_virtual_machines()
 			}
 			start_virtual_machine(vm_ent);
 			continue;
-		} else if (VM_LOGFD(vm_ent) != -1 &&
-			VM_CONF(vm_ent)->err_logfile != NULL) {
+		}
+		if (VM_LOGFD(vm_ent) != -1 &&
+		    VM_CONF(vm_ent)->err_logfile != NULL) {
 			VM_CLOSE(vm_ent, LOGFD);
 			VM_LOGFD(vm_ent) = open(VM_CONF(vm_ent)->err_logfile,
-			    O_WRONLY | O_APPEND | O_CREAT, 0644);
+				O_WRONLY | O_APPEND | O_CREAT, 0644);
 		}
 		VM_NEWCONF(vm_ent) = conf;
 		if (conf->boot != NO && conf->reboot_on_change &&
