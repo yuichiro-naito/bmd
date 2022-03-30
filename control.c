@@ -78,7 +78,9 @@ direct_run(const char *name, bool install, bool single)
 		return 1;
 	}
 
-	fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY);
+	while ((fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
 	if (fd < 0) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return 1;

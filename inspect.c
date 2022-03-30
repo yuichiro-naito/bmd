@@ -84,14 +84,20 @@ mdattach(char *path, unsigned *unit)
 	mdio.md_options = MD_CLUSTER | MD_COMPRESS | MD_READONLY | MD_AUTOUNIT;
 	mdio.md_file = path;
 
-	if ((fd = open(mdio.md_file, O_RDONLY)) < 0)
+	while ((fd = open(mdio.md_file, O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0)
 		return -1;
 	if (fstat(fd, &sb) == -1 || !S_ISREG(sb.st_mode))
 		goto err;
 	mdio.md_mediasize = sb.st_size;
 	close(fd);
 
-	if ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
+	while ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0)
 		return -1;
 	if (ioctl(fd, MDIOCATTACH, &mdio) < 0)
 		goto err;
@@ -114,7 +120,10 @@ mddetach(unsigned unit)
 	mdio.md_version = MDIOVERSION;
 	mdio.md_unit = unit;
 
-	if ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
+	while ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0)
 		return -1;
 
 	if (ioctl(fd, MDIOCDETACH, &mdio) < 0)
@@ -202,7 +211,10 @@ is_directory(int df, struct dirent *e)
 	int fd;
 	bool rc;
 
-	if ((fd = openat(df, e->d_name, O_RDONLY)) < 0)
+	while ((fd = openat(df, e->d_name, O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0)
 		return 0;
 	rc = (fstat(fd, &s) == 0 && S_ISDIR(s.st_mode));
 	close(fd);

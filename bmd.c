@@ -140,8 +140,12 @@ load_plugins()
 
 	while ((ent = readdir(d)) != NULL) {
 		if (ent->d_namlen < 4 || ent->d_name[0] == '.' ||
-		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0 ||
-		    (fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) < 0)
+		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0)
+			continue;
+		while ((fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) < 0)
+			if (errno != EINTR)
+				break;
+		if (fd < 0)
 			continue;
 
 		if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL)
@@ -235,8 +239,11 @@ load_config_files(struct vm_conf_head *list)
 	if (gl_conf.config_fd != -1)
 		close(gl_conf.config_fd);
 
-	if ((gl_conf.config_fd = open(gl_conf.config_dir,
-		 O_DIRECTORY | O_RDONLY)) < 0) {
+	while ((gl_conf.config_fd = open(gl_conf.config_dir,
+					 O_DIRECTORY | O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+	if (gl_conf.config_fd < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
 		return -1;
 	}
@@ -252,7 +259,11 @@ load_config_files(struct vm_conf_head *list)
 	while ((ent = readdir(d)) != NULL) {
 		if (ent->d_namlen > 0 && ent->d_name[0] == '.')
 			continue;
-		if ((fd = openat(gl_conf.config_fd, ent->d_name, O_RDONLY)) < 0)
+		while ((fd = openat(gl_conf.config_fd, ent->d_name,
+				    O_RDONLY)) < 0)
+			if (errno != EINTR)
+				break;
+		if (fd < 0)
 			continue;
 		conf = parse_file(fd, ent->d_name);
 		close(fd);
@@ -353,8 +364,11 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	}
 
 	if (VM_LOGFD(vm_ent) == -1)
-		VM_LOGFD(vm_ent) = open(conf->err_logfile,
-		    O_WRONLY | O_APPEND | O_CREAT, 0644);
+		while ((VM_LOGFD(vm_ent) = open(conf->err_logfile,
+						O_WRONLY | O_APPEND | O_CREAT,
+						0644)) < 0)
+			if (errno != EINTR)
+				break;
 
 	return 0;
 }
@@ -442,8 +456,11 @@ reload_virtual_machines()
 		if (VM_LOGFD(vm_ent) != -1 &&
 		    VM_CONF(vm_ent)->err_logfile != NULL) {
 			VM_CLOSE(vm_ent, LOGFD);
-			VM_LOGFD(vm_ent) = open(VM_CONF(vm_ent)->err_logfile,
-				O_WRONLY | O_APPEND | O_CREAT, 0644);
+			while ((VM_LOGFD(vm_ent) =
+				open(VM_CONF(vm_ent)->err_logfile,
+				     O_WRONLY | O_APPEND | O_CREAT, 0644)) < 0)
+				if (errno != EINTR)
+					break;
 		}
 		VM_NEWCONF(vm_ent) = conf;
 		if (conf->boot != NO && conf->reboot_on_change &&
@@ -933,14 +950,22 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	if ((gl_conf.config_fd = open(gl_conf.config_dir,
-		 O_DIRECTORY | O_RDONLY)) < 0) {
+	while ((gl_conf.config_fd = open(gl_conf.config_dir,
+					 O_DIRECTORY | O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+
+	if (gl_conf.config_fd < 0) {
 		ERR("can not open %s\n", gl_conf.config_dir);
 		return 1;
 	}
 
-	if ((gl_conf.plugin_fd = open(gl_conf.plugin_dir,
-		 O_DIRECTORY | O_RDONLY)) < 0) {
+	while ((gl_conf.plugin_fd = open(gl_conf.plugin_dir,
+					 O_DIRECTORY | O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+
+	if (gl_conf.plugin_fd < 0) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return 1;
 	}

@@ -49,7 +49,9 @@ redirect_to_com(struct vm *vm)
 	if ((com = vm->conf->comport) == NULL)
 		com = "/dev/null";
 
-	fd = open(com, O_WRONLY | O_NONBLOCK);
+	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
+		if (errno != EINTR)
+			break;
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
 		return -1;
@@ -151,12 +153,18 @@ copy_uefi_vars(struct vm *vm) {
 	if (vm->conf->install == false && is_file(fn))
 		return 0;
 
-	if ((in = open(origin, O_RDONLY)) < 0) {
+	while ((in = open(origin, O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+	if (in < 0) {
 		ERR("can not open %s\n", origin);
 		return -1;
 	}
 
-	if ((out = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0) {
+	while ((out = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0)
+		if (errno != EINTR)
+			break;
+	if (out < 0) {
 		ERR("can't create %s\n", fn);
 		close(in);
 		return -1;
@@ -606,8 +614,13 @@ suspend_bhyve(struct vm *vm, enum vm_suspend_how how)
 	char *path;
 	struct vm_suspend vmsuspend;
 
-	if ((asprintf(&path, "/dev/vmm/%s", vm->conf->name)) < 0 ||
-	    (fd = open(path, O_RDWR)) < 0) {
+	if ((asprintf(&path, "/dev/vmm/%s", vm->conf->name)) < 0)
+		return -1;
+
+	while ((fd = open(path, O_RDWR)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0) {
 		free(path);
 		return -1;
 	}

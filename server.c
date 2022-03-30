@@ -352,15 +352,21 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	}
 
 	close(gl_conf.config_fd);
-	if ((gl_conf.config_fd = open(gl_conf.config_dir,
-		 O_DIRECTORY | O_RDONLY)) < 0) {
+	while ((gl_conf.config_fd = open(gl_conf.config_dir,
+		 O_DIRECTORY | O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+	if (gl_conf.config_fd < 0) {
 		error = true;
 		reason = "failed to open config directory";
 		goto ret;
 	}
 
-	if ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) <
-	    0) {
+	while ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) <
+	       0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0) {
 		error = true;
 		reason = "failed to load config file";
 		goto ret;
