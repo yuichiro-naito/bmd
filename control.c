@@ -169,7 +169,9 @@ wait:
 			goto err;
 		if (ev.ident != vm->pid)
 			goto wait;
-		break;
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+			break;
+		goto err;
 	case EVFILT_TIMER:
 	default:
 		VM_POWEROFF(vm_ent);
