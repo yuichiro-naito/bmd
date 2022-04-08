@@ -75,7 +75,7 @@ static int
 mdattach(char *path, unsigned *unit)
 {
 	int fd;
-        struct stat sb;
+	struct stat sb;
 	struct md_ioctl mdio;
 
 	memset(&mdio, 0, sizeof(mdio));
@@ -113,7 +113,7 @@ err:
 static int
 mddetach(unsigned unit)
 {
-	int fd, rc=0;
+	int fd, rc = 0;
 	struct md_ioctl mdio;
 
 	memset(&mdio, 0, sizeof(mdio));
@@ -143,7 +143,7 @@ set_iovec(struct iovec *iov, char *val)
 static int
 mount_iso(struct inspection *ins)
 {
-	int rc,i;
+	int rc, i;
 	char *md_path;
 	struct iovec iov[6];
 
@@ -345,7 +345,6 @@ err:
 	mddetach(ins->md_unit);
 	return -1;
 }
-
 
 static int
 match_diskname(struct dirent *e, char *diskname)

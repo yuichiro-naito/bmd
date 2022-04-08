@@ -569,7 +569,6 @@ reason_string(int status)
 	else
 		sz = ((mes = strdup("")) == NULL ? -1 : 0);
 
-
 	return (sz < 0) ? NULL : mes;
 }
 

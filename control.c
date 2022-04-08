@@ -144,7 +144,7 @@ direct_run(const char *name, bool install, bool single)
 		       NOTE_SECONDS, vm->conf->loader_timeout, vm_ent);
 	if (vm->infd != -1)
 		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
-	while(kevent(gl_conf.kq, ev2, i, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf.kq, ev2, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait process (%s)\n", strerror(errno));
 			VM_POWEROFF(vm_ent);
@@ -249,8 +249,8 @@ do_inspect(char *name)
 	struct vm_conf_entry *conf_ent;
 	struct vm_conf *conf;
 	char *p, *q;
-	const bool flags[2] = {true, false};
-	const char *types[2] = {"installcmd", "loadcmd"};
+	const bool flags[2] = { true, false };
+	const char *types[2] = { "installcmd", "loadcmd" };
 
 	if ((conf_ent = lookup_vm_conf(name)) == NULL) {
 		printf("no such VM %s\n", name);
@@ -313,8 +313,8 @@ control(int argc, char *argv[])
 		char c, *name;
 		bool install, single;
 		install = single = false;
-		while ((c = getopt(argc-1, argv+1, "is")) != -1) {
-			switch(c) {
+		while ((c = getopt(argc - 1, argv + 1, "is")) != -1) {
+			switch (c) {
 			case 'i':
 				install = true;
 				break;
@@ -325,7 +325,7 @@ control(int argc, char *argv[])
 				return usage(argc, argv);
 			}
 		}
-		if ((name = argv[optind+1]) == NULL)
+		if ((name = argv[optind + 1]) == NULL)
 			return usage(argc, argv);
 		return direct_run(name, install, single);
 	}
@@ -392,7 +392,7 @@ retry:
 		       "----", "------", "---------", "-----------");
 
 		list = nvlist_get_nvlist_array(res, "vm_list", &count);
-		qsort((void*)list, count, sizeof(nvlist_t *), compare_by_name);
+		qsort((void *)list, count, sizeof(nvlist_t *), compare_by_name);
 		for (i = 0; i < count; i++) {
 			printf(FORMAT,
 			       nvlist_get_string(list[i], "name"),
