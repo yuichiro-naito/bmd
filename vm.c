@@ -379,9 +379,9 @@ remove_taps(struct vm *vm)
 	int s;
 	struct net_conf *nc, *nnc;
 
-	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-	if (s < 0)
-		return -1;
+	while ((s = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			return -1;
 
 	STAILQ_FOREACH_SAFE (nc, &vm->taps, next, nnc) {
 		if (nc->tap != NULL)
@@ -400,9 +400,9 @@ activate_taps(struct vm *vm)
 	int s;
 	struct net_conf *nc;
 
-	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-	if (s < 0)
-		return -1;
+	while ((s = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			return -1;
 	STAILQ_FOREACH (nc, &vm->taps, next)
 		if (activate_tap(s, nc->tap) < 0)
 			ERR("failed to up %s\n", nc->tap);
@@ -425,9 +425,9 @@ assign_taps(struct vm *vm)
 		STAILQ_INSERT_TAIL(&vm->taps, nnc, next);
 	}
 
-	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-	if (s < 0)
-		goto err;
+	while ((s = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err;
 
 	i = 0;
 	STAILQ_FOREACH (nc, &vm->taps, next) {
