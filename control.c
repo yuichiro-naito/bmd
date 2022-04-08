@@ -139,7 +139,7 @@ direct_run(const char *name, bool install, bool single)
 	i = 0;
 	EV_SET(&ev2[i++], vm->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	       0, vm_ent);
-	if (vm->state == LOAD)
+	if (vm->state == LOAD && conf->loader_timeout >= 0)
 		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
 		       NOTE_SECONDS, vm->conf->loader_timeout, vm_ent);
 	if (vm->infd != -1)
