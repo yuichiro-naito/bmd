@@ -43,6 +43,7 @@ CompactNamespaces: true
 DerivePointerAlignment: false
 DisableFormat: false
 ForEachMacros:
+  - ARRAY_FOREACH
   - ARB_ARRFOREACH
   - ARB_ARRFOREACH_REVWCOND
   - ARB_ARRFOREACH_REVERSE
