@@ -241,7 +241,7 @@ end:
 static int
 grub_load(struct vm *vm)
 {
-	int ifd[2];
+	int i, ifd[2];
 	pid_t pid;
 	char *args[9];
 	struct vm_conf *conf = vm->conf;
@@ -276,23 +276,22 @@ grub_load(struct vm *vm)
 			redirect_to_com(vm);
 
 		setenv("TERM", "vt100", 1);
-		args[0] = LOCALBASE"/sbin/grub-bhyve";
-		args[1] = "-r";
+		i = 0;
+		args[i++] = LOCALBASE"/sbin/grub-bhyve";
+		args[i++] = "-r";
 		if (conf->install)
-			args[2] = "cd0";
-		else {
-			if (conf->grub_run_partition)
-				asprintf(&args[2], "hd0,%s",
-				    conf->grub_run_partition);
-			else
-				args[2] = "hd0,1";
-		}
-		args[3] = "-M";
-		args[4] = conf->memory;
-		args[5] = "-m";
-		args[6] = vm->mapfile;
-		args[7] = conf->name;
-		args[8] = NULL;
+			args[i++] = "cd0";
+		else if (conf->grub_run_partition)
+			asprintf(&args[i++], "hd0,%s",
+				 conf->grub_run_partition);
+		else
+			args[i++] = "hd0,1";
+		args[i++] = "-M";
+		args[i++] = conf->memory;
+		args[i++] = "-m";
+		args[i++] = vm->mapfile;
+		args[i++] = conf->name;
+		args[i++] = NULL;
 
 		execv(args[0], args);
 		ERR("can not exec %s\n", args[0]);
