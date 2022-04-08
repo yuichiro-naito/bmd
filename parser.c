@@ -198,8 +198,7 @@ parse_disk(struct vm_conf *conf, char *val)
 	size_t n;
 	const char **p, *types[] = { "ahci-hd:", "virtio-blk:", "nvme:" };
 
-	ARRAY_FOREACH(p, types)
-	{
+	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0) {
 			val[n - 1] = '\0';
@@ -216,8 +215,7 @@ parse_iso(struct vm_conf *conf, char *val)
 	size_t n;
 	const char **p, *types[] = { "ahci-cd:" };
 
-	ARRAY_FOREACH(p, types)
-	{
+	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0) {
 			val[n - 1] = '\0';
@@ -234,8 +232,7 @@ parse_net(struct vm_conf *conf, char *val)
 	size_t n;
 	const char **p, *types[] = { "virtio-net:", "e1000:" };
 
-	ARRAY_FOREACH(p, types)
-	{
+	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0) {
 			val[n - 1] = '\0';
@@ -279,7 +276,7 @@ parse_loader(struct vm_conf *conf, char *val)
 {
 	const char **p, *values[] = { "uefi", "bhyveload", "grub" };
 
-	ARRAY_FOREACH(p, values)
+	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
 			return set_loader(conf, val);
 	return -1;
@@ -339,7 +336,7 @@ parse_hostbridge(struct vm_conf *conf, char *val)
 	enum HOSTBRIDGE_TYPE t[] = { NONE, INTEL, INTEL, AMD };
 
 	ARRAY_FOREACH (p, values)
-		if (strcasecmp(val, *p) ==0)
+		if (strcasecmp(val, *p) == 0)
 			break;
 
 	if (p == &values[sizeof(values) / sizeof(values[0])])
