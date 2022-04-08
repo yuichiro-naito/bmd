@@ -135,7 +135,8 @@ err:
 #if __FreeBSD_version > 1400000
 bool is_file(char *path);
 static int
-copy_uefi_vars(struct vm *vm) {
+copy_uefi_vars(struct vm *vm)
+{
 	char *fn;
 	int out, in;
 	ssize_t n;
@@ -161,7 +162,7 @@ copy_uefi_vars(struct vm *vm) {
 		return -1;
 	}
 
-	while ((out = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0)
+	while ((out = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
 		if (errno != EINTR)
 			break;
 	if (out < 0) {
@@ -194,7 +195,8 @@ err:
 }
 #else
 static int
-copy_uefi_vars(struct vm *vm) {
+copy_uefi_vars(struct vm *vm)
+{
 	return 0;
 }
 #endif
@@ -220,8 +222,7 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	}
 
 	if (conf->single_user)
-		ARRAY_FOREACH(p, repl)
-		{
+		ARRAY_FOREACH (p, repl) {
 			len = strlen(*p);
 			if (strncmp(t, *p, len) == 0) {
 				len = asprintf(&cmd, "%s-s %s\nboot\n", *p,
@@ -541,10 +542,10 @@ exec_bhyve(struct vm *vm)
 		if (strcasecmp(conf->loader, "uefi") == 0) {
 			WRITE_STR(fp, "-l");
 			if (vm->varsfile)
-				WRITE_FMT(fp,"bootrom,"UEFI_FIRMWARE",%s",
+				WRITE_FMT(fp, "bootrom,"UEFI_FIRMWARE",%s",
 					  vm->varsfile);
 			else
-				WRITE_STR(fp,"bootrom,"UEFI_FIRMWARE);
+				WRITE_STR(fp, "bootrom,"UEFI_FIRMWARE);
 
 		}
 		WRITE_STR(fp, "-s");
