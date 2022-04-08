@@ -61,15 +61,40 @@ lookup_vm_conf(const char *name)
 }
 
 int
+read_stdin(struct vm *vm)
+{
+	int n, rc;
+	ssize_t size;
+	char buf[4 * 1024];
+
+	while ((size = read(0, buf, sizeof(buf))) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+	if (size == 0)
+		return 0;
+	if (size > 0 && vm->infd != -1) {
+		n = 0;
+		while (n < size) {
+			if ((rc = write(vm->infd, buf + n, size - n)) < 0)
+				if (errno != EINTR && errno != EAGAIN)
+					break;
+			if (rc > 0)
+				n += rc;
+		}
+	}
+
+	return size;
+}
+
+int
 direct_run(const char *name, bool install, bool single)
 {
-	int fd;
-	int status;
+	int i, fd, status;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
 	struct vm *vm;
-	struct kevent ev,ev2[2];
+	struct kevent ev, ev2[3];
 
 	LOG_OPEN_PERROR();
 
@@ -111,11 +136,15 @@ direct_run(const char *name, bool install, bool single)
 
 	if (VM_START(vm_ent) < 0)
 		goto err;
-	EV_SET(&ev2[0], vm->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	i = 0;
+	EV_SET(&ev2[i++], vm->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	       0, vm_ent);
-	EV_SET(&ev2[1], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
-	       vm->conf->loader_timeout, vm_ent);
-	while(kevent(gl_conf.kq, ev2, (vm->state == LOAD) ? 2 : 1, NULL, 0, NULL) < 0)
+	if (vm->state == LOAD)
+		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
+		       NOTE_SECONDS, vm->conf->loader_timeout, vm_ent);
+	if (vm->infd != -1)
+		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
+	while(kevent(gl_conf.kq, ev2, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait process (%s)\n", strerror(errno));
 			VM_POWEROFF(vm_ent);
@@ -132,6 +161,9 @@ wait:
 		}
 
 	switch (ev.filter) {
+	case EVFILT_READ:
+		read_stdin(vm);
+		goto wait;
 	case EVFILT_PROC:
 		if (waitpid(ev.ident, &status, 0) < 0)
 			goto err;
