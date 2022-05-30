@@ -855,8 +855,10 @@ stop_virtual_machines()
 			}
 		}
 	}
+#if __FreeBSD_version < 1400059
 	// waiting for vm memory is actually freed in the kernel.
 	sleep(3);
+#endif
 
 	return 0;
 }
