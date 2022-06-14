@@ -85,7 +85,7 @@ avahi_status_change(struct vm *vm, void **data)
 	switch (vm->state) {
 	case LOAD:
 	case RUN:
-		if (ad->pid <= 0 &&
+		if (ad->pid == 0 &&
 		    (ad->pid = exec_avahi_publish(vm)) > 0) {
 			EV_SET(&ev, ad->pid, EVFILT_PROC,
 			       EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
