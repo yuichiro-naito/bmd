@@ -10,6 +10,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "vars.h"
 #include "log.h"
@@ -251,12 +252,17 @@ do_inspect(char *name)
 	char *p, *q;
 	const bool flags[2] = { true, false };
 	const char *types[2] = { "installcmd", "loadcmd" };
+	sigset_t nmask, omask;
 
 	if ((conf_ent = lookup_vm_conf(name)) == NULL) {
 		printf("no such VM %s\n", name);
 		return 1;
 	}
 	conf = &conf_ent->conf;
+
+	sigemptyset(&nmask);
+	sigaddset(&nmask, SIGPIPE);
+	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
 	for (i = 0; i < 2; i++) {
 		set_install(conf, flags[i]);

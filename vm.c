@@ -73,17 +73,16 @@ get_fbuf_option(int pcid, struct fbuf *fb)
 	return ret;
 }
 
-static int
-write_mapfile(struct vm *vm)
+int
+write_mapfile(struct vm_conf *conf, char **mapfile)
 {
 	int fd, i;
 	char *fn;
 	FILE *fp;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
-	struct vm_conf *conf;
 
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", vm->conf->name, getpid()) <
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", conf->name, getpid()) <
 	    0)
 		return -1;
 
@@ -94,22 +93,20 @@ write_mapfile(struct vm *vm)
 		return -1;
 	}
 
-	if (vm->mapfile) {
-		unlink(vm->mapfile);
-		free(vm->mapfile);
+	if (*mapfile) {
+		unlink(*mapfile);
+		free(*mapfile);
 	}
-	vm->mapfile = fn;
+	*mapfile = fn;
 
 	fp = fdopen(fd, "w+");
 	if (fp == NULL) {
 		ERR("can't open mapfile (%s)\n", strerror(errno));
 		unlink(fn);
-		vm->mapfile = NULL;
+		*mapfile = NULL;
 		free(fn);
 		return -1;
 	}
-
-	conf = vm->conf;
 
 	i = 0;
 	STAILQ_FOREACH (dc, &conf->disks, next)
@@ -126,7 +123,7 @@ write_mapfile(struct vm *vm)
 err:
 	ERR("can't write mapfile (%s)\n", strerror(errno));
 	fclose(fp);
-	vm->mapfile = NULL;
+	*mapfile = NULL;
 	unlink(fn);
 	free(fn);
 	return -1;
@@ -672,7 +669,8 @@ start_bhyve(struct vm *vm)
 		if (bhyve_load(vm) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "grub") == 0) {
-		if (write_mapfile(vm) < 0 || grub_load(vm) < 0)
+		if (write_mapfile(vm->conf, &vm->mapfile) < 0 ||
+		    grub_load(vm) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
 		if (copy_uefi_vars(vm) < 0 || exec_bhyve(vm) < 0)

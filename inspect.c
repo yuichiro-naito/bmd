@@ -1,39 +1,24 @@
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <sys/mount.h>
-#include <sys/ioctl.h>
-#include <sys/mdioctl.h>
-#include <sys/uio.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/dirent.h>
+#include <sys/ioccom.h>
+#include <sys/mdioctl.h>
+#include <sys/mount.h>
+#include <sys/queue.h>
+#include <sys/sysctl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "vars.h"
-#include "conf.h"
-
-#define NETBSD_KERNEL   "/netbsd"
-#define OPENBSD_KERNEL  "/bsd"
-#define OPENBSD_RAMDISK_KERNEL  "/bsd.rd"
-#define OPENBSD_UPGRADE_KERNEL  "/bsd.upgrade"
-#define MDCTL_PATH  "/dev/" MDCTL_NAME
-
-struct inspection {
-	int single_user;
-	unsigned md_unit;
-	struct vm_conf *conf;
-	char *mount_point;       /* needs to be freed */
-	char *iso_path;
-	char *disk_path;
-	char *block_dev;         /* needs to be freed */
-	char *ufs_dev;           /* needs to be freed */
-	char *install_cmd;       /* needs to be freed */
-	char *load_cmd;          /* needs to be freed */
-	char *grub_run_partition;
-};
+#include "vm.h"
+#include "inspect.h"
 
 static struct inspection *
 create_inspection(struct vm_conf *conf)
@@ -181,7 +166,7 @@ mount_ufs(struct inspection *ins, char *path)
 	return nmount(iov, i, MNT_RDONLY);
 }
 
-/* mach [0-9]+\.[0-9]+ */
+/* match [0-9]+\.[0-9]+ */
 static bool
 match_version_number(char *name)
 {
@@ -235,10 +220,10 @@ inspect_netbsd_iso(struct inspection *ins)
 	int rc;
 	char *path, *cmd;
 
-	if (asprintf(&path, "%s" NETBSD_KERNEL, ins->mount_point) < 0)
+	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		return -1;
 
-	cmd = "knetbsd -h com0 -r cd0a " NETBSD_KERNEL "\nboot\n";
+	cmd = "knetbsd -h com0 -r cd0a /" NETBSD_KERNEL "\nboot\n";
 	rc = (is_file(path) && (ins->install_cmd = strdup(cmd)) != NULL) ? 0 : -1;
 	free(path);
 	return rc;
@@ -286,12 +271,12 @@ inspect_openbsd_iso(struct inspection *ins)
 		if (e->d_name[0] == '.')
 			continue;
 		if (is_directory(dirfd(d), e)) {
-			if (asprintf(&npath, "%s/%s%s", path, e->d_name,
+			if (asprintf(&npath, "%s/%s/%s", path, e->d_name,
 					    OPENBSD_RAMDISK_KERNEL) < 0)
 				goto err2;
 			free(path);
 			path = npath;
-			len += e->d_namlen + strlen(OPENBSD_RAMDISK_KERNEL) + 1;
+			len += e->d_namlen + strlen(OPENBSD_RAMDISK_KERNEL) + 2;
 			break;
 		}
 	}
@@ -441,33 +426,32 @@ inspect_openbsd_partition(struct inspection *ins)
 static int
 inspect_openbsd_disk(struct inspection *ins)
 {
-	char *path, *cmd;
+	char *path;
 
 	inspect_openbsd_partition(ins);
 
 	/* look for /bsd.upgrade */
-	if (asprintf(&path, "%s" OPENBSD_UPGRADE_KERNEL, ins->mount_point) < 0)
+	if (asprintf(&path, "%s/" OPENBSD_UPGRADE_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = "kopenbsd -h com0 -r sd0a " OPENBSD_UPGRADE_KERNEL "\nboot\n";
 	if (is_file(path) &&
 	    (asprintf(&ins->load_cmd,
-		      "kopenbsd -h com0 -r sd0a (hd0,%s)"
+		      "kopenbsd -h com0 -r sd0a (hd0,%s)/"
 		      OPENBSD_UPGRADE_KERNEL "\nboot\n",
 		      ins->grub_run_partition)) > 0)
 		goto ret;
 	free(path);
 
 	/* look for /bsd */
-	if (asprintf(&path, "%s" OPENBSD_KERNEL, ins->mount_point) < 0)
+	if (asprintf(&path, "%s/" OPENBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = ins->single_user ? "-s" : "";
 	if (is_file(path) &&
 	    (asprintf(&ins->load_cmd,
-		      "kopenbsd %s -h com0 -r sd0a (hd0,%s)"
+		      "kopenbsd %s -h com0 -r sd0a (hd0,%s)/"
 		      OPENBSD_KERNEL "\nboot\n",
-		      cmd, ins->grub_run_partition)) > 0)
+		      ins->single_user ? "-s" : "",
+		      ins->grub_run_partition)) > 0)
 		goto ret;
 	free(path);
 err:
@@ -482,12 +466,12 @@ inspect_netbsd_disk(struct inspection *ins)
 {
 	char *path, *cmd;
 
-	if (asprintf(&path, "%s" NETBSD_KERNEL, ins->mount_point) < 0)
+	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
 	cmd = ins->single_user ?
-		"knetbsd -s -h com0 -r dk0a " NETBSD_KERNEL "\nboot\n" :
-		"knetbsd -h com0 -r dk0a " NETBSD_KERNEL "\nboot\n";
+		"knetbsd -s -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n" :
+		"knetbsd -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n";
 	if (is_file(path) &&
 	    (ins->load_cmd = strdup(cmd)) != NULL) {
 		free(path);
@@ -534,7 +518,7 @@ err2:
 err:
 	if (ins->md_unit != -1)
 		mddetach(ins->md_unit);
-	return 0;
+	return -1;
 }
 
 char *
@@ -553,7 +537,8 @@ inspect(struct vm_conf *conf)
 			ins->install_cmd = NULL;
 		}
 	} else {
-		if (inspect_disk_image(ins) == 0) {
+		if (inspect_disk_image(ins) == 0 ||
+		    inspect_with_grub(ins) == 0) {
 			rc = ins->load_cmd;
 			ins->load_cmd = NULL;
 		}
