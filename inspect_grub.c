@@ -477,16 +477,18 @@ inspect_with_grub(struct inspection *ins)
 		for (i = 0; i < sizeof(kernels)/sizeof(kernels[0]) ; i++)
 			if (look_for_filename(buf, kernels[i])) {
 				if (asprintf(&ins->load_cmd,
-					     "%s%s -h com0 -r sd0a (%s)/%s"
+					     "%s%s -h com0 -r %s0%c (%s)/%s"
 					     "\nboot\n",
 					     methods[i],
 					     ins->single_user ? " -s" : "",
+					     strcmp(kernels[i], NETBSD_KERNEL) ? "sd" : "dk",
+					     0x60 + di->index,
 					     di->orig_name, kernels[i]) < 0)
 					goto err;
-				break;
+				goto end;
 			}
 	}
-
+end:
 	if (pp_printf(pp, "%s\n", "exit") < 0 ||
 	    pp_expect(pp, NEWLINE, NULL, 0) < 0)
 		goto err;
