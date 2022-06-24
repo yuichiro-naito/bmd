@@ -326,38 +326,30 @@ compare_disk_info(const void *l, const void *r)
 	return a->index - b->index;
 }
 
-static int
-sort_disk_info_list(struct disk_info_head *list)
+static void
+sort_disk_info_list(struct disk_info_head *list, int nlist)
 {
-	int i, count = 0;
-	struct disk_info *di, **array;
+	int i;
+	struct disk_info *di, *array[nlist];
 
-	SLIST_FOREACH(di, list, next)
-		count++;
-
-	if (count == 0)
-		return 0;
-
-	if ((array = malloc(sizeof(struct disk_info *) * count)) == NULL)
-		return -1;
+	if (nlist == 0)
+		return;
 
 	i = 0;
 	SLIST_FOREACH(di, list, next)
 		array[i++] = di;
 
-	qsort(array, count, sizeof(struct disk_info *), compare_disk_info);
+	qsort(array, nlist, sizeof(struct disk_info *), compare_disk_info);
 
-	for (i = 0; i < count - 1; i++)
+	for (i = 0; i < nlist - 1; i++)
 		SLIST_NEXT(array[i], next) = array[i + 1];
-	SLIST_NEXT(array[count - 1], next) = NULL;
+	SLIST_NEXT(array[nlist - 1], next) = NULL;
 
 	SLIST_FIRST(list) = array[0];
-	free(array);
-	return 0;
 }
 
 static int
-parse_disks(char *line, struct disk_info_head *list)
+parse_disks(char *line, struct disk_info_head *list, int nlist)
 {
 	struct disk_info *di;
 	char *d, *p, *e, *n, t;
@@ -401,10 +393,11 @@ parse_disks(char *line, struct disk_info_head *list)
 				goto err;
 		}
 		SLIST_INSERT_HEAD(list, di, next);
+		nlist++;
 		*e = t;
 	}
 
-	sort_disk_info_list(list);
+	sort_disk_info_list(list, nlist);
 	return 0;
 err:
 	free_disk_info(di);
@@ -458,7 +451,7 @@ inspect_with_grub(struct inspection *ins)
 	    pp_printf(pp, "%s\n", "ls") < 0 ||
 	    pp_expect(pp, NEWLINE, NULL, 0) < 0 ||
 	    pp_expect(pp, PROMPT, buf, sizeof(buf)) < 0 ||
-	    parse_disks(buf, &list) < 0)
+	    parse_disks(buf, &list, 0) < 0)
 		goto err;
 
 	SLIST_FOREACH(di, &list, next) {
