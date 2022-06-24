@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "conf.h"
 #include "inspect.h"
 #include "vars.h"
 #include "vm.h"
@@ -430,20 +431,17 @@ look_for_filename(char *buf, const char *name)
 int
 inspect_with_grub(struct inspection *ins)
 {
-	int i;
 	char buf[1024];
 	struct disk_info_head list;
 	struct disk_info *di;
 	struct proc_pipe *pp;
-	const static char *kernels[] = {
-		OPENBSD_UPGRADE_KERNEL,
-		OPENBSD_KERNEL,
-		NETBSD_KERNEL
-	};
-	const static char *methods[] = {
-		"kopenbsd",
-		"kopenbsd",
-		"knetbsd"
+	const static struct {
+		const char *kernel;
+		const char *method;
+	} *p, kernels[] = {
+		{OPENBSD_UPGRADE_KERNEL, "kopenbsd"},
+		{OPENBSD_KERNEL, "kopenbsd"},
+		{NETBSD_KERNEL, "knetbsd"},
 	};
 
 	if ((pp = pp_create()) == NULL)
@@ -474,18 +472,18 @@ inspect_with_grub(struct inspection *ins)
 		    pp_expect(pp, PROMPT, buf, sizeof(buf)) < 0)
 			goto err;
 
-		for (i = 0; i < sizeof(kernels)/sizeof(kernels[0]) ; i++) {
-			if (!look_for_filename(buf, kernels[i]))
+		ARRAY_FOREACH(p, kernels) {
+			if (!look_for_filename(buf, p->kernel))
 				continue;
 			if (asprintf(&ins->load_cmd,
 				     "%s%s -h com0 -r %s0%c (%s)/%s"
 				     "\nboot\n",
-				     methods[i],
+				     p->method,
 				     ins->single_user ? " -s" : "",
-				     strcmp(kernels[i], NETBSD_KERNEL) ?
+				     strcmp(p->kernel, NETBSD_KERNEL) ?
 				     "sd" : "dk",
-				     0x60 + di->index,
-				     di->orig_name, kernels[i]) < 0)
+				     'a' + di->index - 1,
+				     di->orig_name, p->kernel) < 0)
 				goto err;
 			goto loop_end;
 		}
