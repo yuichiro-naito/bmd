@@ -323,7 +323,7 @@ accept_command_socket(int s0)
 static nvlist_t *
 boot0_command(int s, const nvlist_t *nv, int style)
 {
-	int fd;
+	int fd, config_fd = -1;
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
 	struct vm *vm;
@@ -351,19 +351,16 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		goto ret;
 	}
 
-	close(gl_conf.config_fd);
-	while ((gl_conf.config_fd = open(gl_conf.config_dir,
-		 O_DIRECTORY | O_RDONLY)) < 0)
+	while ((config_fd = open(gl_conf.config_dir, O_DIRECTORY | O_RDONLY)) < 0)
 		if (errno != EINTR)
 			break;
-	if (gl_conf.config_fd < 0) {
+	if (config_fd < 0) {
 		error = true;
 		reason = "failed to open config directory";
 		goto ret;
 	}
 
-	while ((fd = openat(gl_conf.config_fd, vm->conf->filename, O_RDONLY)) <
-	       0)
+	while ((fd = openat(config_fd, vm->conf->filename, O_RDONLY)) < 0)
 		if (errno != EINTR)
 			break;
 	if (fd < 0) {
@@ -412,6 +409,8 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	}
 
 ret:
+	if (config_fd != -1)
+		close(config_fd);
 	res = nvlist_create(0);
 	nvlist_add_bool(res, "error", error);
 	if (error)

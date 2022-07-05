@@ -17,7 +17,6 @@ struct global_conf {
 	char *pid_path;
 	char *cmd_sock_path;
 	char *unix_domain_socket_mode;
-	int config_fd;
 	int cmd_sock;
 	int foreground;
 	int kq;
