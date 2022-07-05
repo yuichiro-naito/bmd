@@ -117,4 +117,8 @@ struct vm_entry *lookup_vm_by_name(const char *name);
 int set_timer(struct vm_entry *vm_ent, int second, int flag);
 int start_virtual_machine(struct vm_entry *vm_ent);
 
+#define is_event_boot(e) ((e)->filter == EVFILT_TIMER && (e)->ident & 1)
+#define boot_timer(v, s) set_timer((v), (s), 1)
+#define shutdown_timer(v, s) set_timer((v), (s), 0)
+
 #endif

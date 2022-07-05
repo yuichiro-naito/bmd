@@ -100,17 +100,18 @@ stop_waiting_fd(struct vm_entry *vm_ent)
 int
 set_timer(struct vm_entry *vm_ent, int second, int flag)
 {
-	static int id = 1;
+	static int id = 0;
 	struct kevent ev;
 
-	EV_SET(&ev, (((id++) << 1) + ((flag) ? 1 : 0)), EVFILT_TIMER,
+	EV_SET(&ev, ((id += 2) | (flag & 1)), EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, vm_ent);
 	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
-		if (errno != EINTR) {
-			ERR("failed to set timer (%s)\n", strerror(errno));
-			return -1;
-		}
+		if (errno != EINTR)
+			goto err;
 	return 0;
+err:
+	ERR("failed to set timer (%s)\n", strerror(errno));
+	return -1;
 }
 
 int
@@ -347,7 +348,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	call_plugins(vm_ent);
 	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0 &&
-	    set_timer(vm_ent, conf->loader_timeout, 0) < 0) {
+	    boot_timer(vm_ent, conf->loader_timeout) < 0) {
 		ERR("failed to set timer for vm %s\n", name);
 		return -1;
 	}
@@ -386,7 +387,7 @@ start_virtual_machines()
 		if (conf->boot == NO)
 			continue;
 		if (conf->boot_delay > 0) {
-			if (set_timer(vm_ent, conf->boot_delay, 1) < 0)
+			if (boot_timer(vm_ent, conf->boot_delay) < 0)
 				ERR("failed to set boot delay timer for vm %s\n",
 				    conf->name);
 			continue;
@@ -434,7 +435,7 @@ reload_virtual_machines()
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
-				if (set_timer(vm_ent, conf->boot_delay, 1) < 0)
+				if (boot_timer(vm_ent, conf->boot_delay) < 0)
 					ERR("failed to set timer for %s\n",
 					    conf->name);
 				continue;
@@ -456,13 +457,13 @@ reload_virtual_machines()
 		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
 			switch (VM_STATE(vm_ent)) {
 			case TERMINATE:
-				set_timer(vm_ent, MAX(conf->boot_delay, 1), 1);
+				boot_timer(vm_ent, MAX(conf->boot_delay, 1));
 				break;
 			case LOAD:
 			case RUN:
 				INFO("reboot vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
-				set_timer(vm_ent, conf->stop_timeout, 0);
+				shutdown_timer(vm_ent, conf->stop_timeout);
 				VM_STATE(vm_ent) = RESTART;
 				break;
 			case STOP:
@@ -480,7 +481,7 @@ reload_virtual_machines()
 			    VM_STATE(vm_ent) == RUN) {
 				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
-				set_timer(vm_ent, conf->stop_timeout, 0);
+				shutdown_timer(vm_ent, conf->stop_timeout);
 				VM_STATE(vm_ent) = STOP;
 			} else if (VM_STATE(vm_ent) == RESTART)
 				VM_STATE(vm_ent) = STOP;
@@ -507,7 +508,7 @@ reload_virtual_machines()
 			case RUN:
 				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
-				set_timer(vm_ent, conf->stop_timeout, 0);
+				shutdown_timer(vm_ent, conf->stop_timeout);
 				/* FALLTHROUGH */
 			case STOP:
 			case REMOVE:
@@ -675,7 +676,7 @@ wait:
 		switch (VM_STATE(vm_ent)) {
 		case TERMINATE:
 			/* delayed boot */
-			if (ev.ident & 1)
+			if (is_event_boot(&ev))
 				start_virtual_machine(vm_ent);
 			break;
 		case LOAD:
@@ -719,7 +720,7 @@ wait:
 			call_plugins(vm_ent);
 
 			VM_STATE(vm_ent) = TERMINATE;
-			set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3), 1);
+			boot_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 			break;
 		case RUN:
 			if (VM_CONF(vm_ent)->install == false &&
@@ -786,7 +787,7 @@ stop_virtual_machines()
 		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 			count++;
 			VM_ACPI_POWEROFF(vm_ent);
-			set_timer(vm_ent, VM_CONF(vm_ent)->stop_timeout, 0);
+			shutdown_timer(vm_ent, VM_CONF(vm_ent)->stop_timeout);
 		}
 	}
 
