@@ -18,7 +18,6 @@ struct global_conf {
 	char *cmd_sock_path;
 	char *unix_domain_socket_mode;
 	int config_fd;
-	int plugin_fd;
 	int cmd_sock;
 	int foreground;
 	int kq;

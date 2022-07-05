@@ -90,7 +90,7 @@ read_stdin(struct vm *vm)
 int
 direct_run(const char *name, bool install, bool single)
 {
-	int i, fd, status;
+	int i, status;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
@@ -103,15 +103,6 @@ direct_run(const char *name, bool install, bool single)
 		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
-
-	while ((fd = open(gl_conf.plugin_dir, O_DIRECTORY | O_RDONLY)) < 0)
-		if (errno != EINTR)
-			break;
-	if (fd < 0) {
-		ERR("can not open %s\n", gl_conf.plugin_dir);
-		return 1;
-	}
-	gl_conf.plugin_fd = fd;
 
 	if (load_plugins() < 0)
 		return 1;

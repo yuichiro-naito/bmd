@@ -41,7 +41,7 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
  */
 struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
 	LOCALBASE "/var/cache/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, -1, -1, -1, 0, -1 };
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, -1, -1, 0, -1 };
 
 extern struct vm_methods method_list[];
 
@@ -138,7 +138,7 @@ load_plugins()
 	struct plugin_desc *desc;
 	struct plugin_entry *pl_ent;
 
-	if ((d = fdopendir(gl_conf.plugin_fd)) == NULL) {
+	if ((d = opendir(gl_conf.plugin_dir)) == NULL) {
 		ERR("can not open %s\n", gl_conf.plugin_dir);
 		return -1;
 	}
@@ -147,7 +147,7 @@ load_plugins()
 		if (ent->d_namlen < 4 || ent->d_name[0] == '.' ||
 		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0)
 			continue;
-		while ((fd = openat(gl_conf.plugin_fd, ent->d_name, O_RDONLY)) < 0)
+		while ((fd = openat(dirfd(d), ent->d_name, O_RDONLY)) < 0)
 			if (errno != EINTR)
 				break;
 		if (fd < 0)
@@ -967,16 +967,6 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	while ((gl_conf.plugin_fd = open(gl_conf.plugin_dir,
-					 O_DIRECTORY | O_RDONLY)) < 0)
-		if (errno != EINTR)
-			break;
-
-	if (gl_conf.plugin_fd < 0) {
-		ERR("can not open %s\n", gl_conf.plugin_dir);
-		return 1;
-	}
-
 	if ((gl_conf.cmd_sock = create_command_server(&gl_conf)) < 0) {
 		ERR("can not bind %s\n", gl_conf.cmd_sock_path);
 		return 1;
@@ -1002,7 +992,6 @@ main(int argc, char *argv[])
 	stop_virtual_machines();
 	free_vm_list();
 	close(gl_conf.kq);
-	close(gl_conf.plugin_fd);
 	close(gl_conf.config_fd);
 	remove_plugins();
 	INFO("%s\n", "quit daemon");
