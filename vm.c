@@ -27,6 +27,7 @@
 #include "vm.h"
 #include "inspect.h"
 
+#define UEFI_CSM_FIRMWARE   LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
 #define UEFI_FIRMWARE       LOCALBASE"/share/uefi-firmware/BHYVE_UEFI.fd"
 #define UEFI_FIRMWARE_VARS  LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
 
@@ -544,6 +545,9 @@ exec_bhyve(struct vm *vm)
 			else
 				WRITE_STR(fp, "bootrom,"UEFI_FIRMWARE);
 
+		} else if (strcasecmp(conf->loader, "csm") == 0) {
+			WRITE_STR(fp, "-l");
+			WRITE_STR(fp, "bootrom,"UEFI_CSM_FIRMWARE);
 		}
 		WRITE_STR(fp, "-s");
 		switch (conf->hostbridge) {
@@ -674,6 +678,9 @@ start_bhyve(struct vm *vm)
 			goto err;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
 		if (copy_uefi_vars(vm) < 0 || exec_bhyve(vm) < 0)
+			goto err;
+	} else if (strcasecmp(conf->loader, "csm") == 0) {
+		if (exec_bhyve(vm) < 0)
 			goto err;
 	} else {
 		ERR("unknown loader %s\n", conf->loader);

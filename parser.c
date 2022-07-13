@@ -274,7 +274,7 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	const char **p, *values[] = { "uefi", "bhyveload", "grub" };
+	const char **p, *values[] = { "uefi", "csm", "bhyveload", "grub" };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
