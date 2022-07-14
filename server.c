@@ -386,7 +386,7 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	LIST_REMOVE((struct vm_conf_entry *)VM_CONF(vm_ent), next);
 	LIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
 	free_vm_conf(VM_CONF(vm_ent));
-	VM_CONF(vm_ent) = conf = &conf_ent->conf;
+	VM_CONF(vm_ent) = &conf_ent->conf;
 
 	switch (style) {
 	case 0:
