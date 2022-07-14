@@ -414,7 +414,7 @@ reload_virtual_machines()
 {
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent, *cen;
-	struct vm_entry *vm_ent;
+	struct vm_entry *vm_ent, *vmn;
 	struct vm_conf_head new_list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_files(&new_list) < 0)
@@ -500,7 +500,7 @@ reload_virtual_machines()
 		}
 	}
 
-	SLIST_FOREACH (vm_ent, &vm_list, next)
+	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
 		if (VM_NEWCONF(vm_ent) == NULL) {
 			conf = VM_CONF(vm_ent);
 			switch (VM_STATE(vm_ent)) {
@@ -520,9 +520,8 @@ reload_virtual_machines()
 					    next);
 				break;
 			default:
-				if (SLIST_FIRST(&vm_list))
-					SLIST_REMOVE(&vm_list, vm_ent, vm_entry,
-					    next);
+				SLIST_REMOVE(&vm_list, vm_ent, vm_entry,
+					     next);
 				LIST_REMOVE((struct vm_conf_entry *)conf,
 					    next);
 				free_vm_entry(vm_ent);
