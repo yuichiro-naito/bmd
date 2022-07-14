@@ -36,7 +36,7 @@ struct plugin_data {
  */
 struct vm_conf_entry {
 	struct vm_conf conf;
-	SLIST_ENTRY(vm_conf_entry) next;
+	LIST_ENTRY(vm_conf_entry) next;
 };
 
 enum STRUCT_TYPE { VMENTRY, SOCKBUF };
@@ -103,7 +103,7 @@ struct sock_buf {
 	time_t event_time;
 };
 
-SLIST_HEAD(vm_conf_head, vm_conf_entry);
+LIST_HEAD(vm_conf_head, vm_conf_entry);
 
 int remove_plugins();
 void call_plugins(struct vm_entry *vm_ent);

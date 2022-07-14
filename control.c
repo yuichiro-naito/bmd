@@ -45,14 +45,14 @@ static struct vm_conf_entry *
 lookup_vm_conf(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
-	struct vm_conf_head vm_conf_list = SLIST_HEAD_INITIALIZER();
+	struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_files(&vm_conf_list) < 0) {
 		printf("failed to load VM config files\n");
 		return NULL;
 	}
 
-	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
+	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
 		if (strcmp(conf_ent->conf.name, name) == 0)
 			ret = conf_ent;
 		else

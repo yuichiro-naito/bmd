@@ -28,7 +28,7 @@
 /*
   List of VM configurations.
  */
-struct vm_conf_head vm_conf_list = SLIST_HEAD_INITIALIZER();
+struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
 
 /*
   List of virtual machines.
@@ -263,7 +263,7 @@ load_config_files(struct vm_conf_head *list)
 			free_vm_conf(conf);
 			continue;
 		}
-		SLIST_INSERT_HEAD(list, conf_ent, next);
+		LIST_INSERT_HEAD(list, conf_ent, next);
 	}
 
 	fdclosedir(d);
@@ -276,9 +276,9 @@ free_config_files()
 {
 	struct vm_conf_entry *conf_ent, *cen;
 
-	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
+	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
 		free_vm_conf(&conf_ent->conf);
-	SLIST_INIT(&vm_conf_list);
+	LIST_INIT(&vm_conf_list);
 }
 
 struct vm_entry *
@@ -379,7 +379,7 @@ start_virtual_machines()
 		if (errno != EINTR)
 			return -1;
 
-	SLIST_FOREACH (conf_ent, &vm_conf_list, next) {
+	LIST_FOREACH (conf_ent, &vm_conf_list, next) {
 		vm_ent = create_vm_entry(conf_ent);
 		if (vm_ent == NULL)
 			return -1;
@@ -415,7 +415,7 @@ reload_virtual_machines()
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent, *cen;
 	struct vm_entry *vm_ent;
-	struct vm_conf_head new_list = SLIST_HEAD_INITIALIZER();
+	struct vm_conf_head new_list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_files(&new_list) < 0)
 		return -1;
@@ -424,7 +424,7 @@ reload_virtual_machines()
 	SLIST_FOREACH (vm_ent, &vm_list, next)
 		VM_NEWCONF(vm_ent) = NULL;
 
-	SLIST_FOREACH (conf_ent, &new_list, next) {
+	LIST_FOREACH (conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
 		vm_ent = lookup_vm_by_name(conf->name);
 		if (vm_ent == NULL) {
@@ -516,19 +516,15 @@ reload_virtual_machines()
 				VM_STATE(vm_ent) = REMOVE;
 				/* remove vm_conf_entry from the list
 				   to keep it until actually freed. */
-				if (SLIST_FIRST(&vm_conf_list))
-					SLIST_REMOVE(&vm_conf_list,
-					    (struct vm_conf_entry *)conf,
-					    vm_conf_entry, next);
+				LIST_REMOVE((struct vm_conf_entry *)conf,
+					    next);
 				break;
 			default:
 				if (SLIST_FIRST(&vm_list))
 					SLIST_REMOVE(&vm_list, vm_ent, vm_entry,
 					    next);
-				if (SLIST_FIRST(&vm_conf_list))
-					SLIST_REMOVE(&vm_conf_list,
-					    (struct vm_conf_entry *)conf,
-					    vm_conf_entry, next);
+				LIST_REMOVE((struct vm_conf_entry *)conf,
+					    next);
 				free_vm_entry(vm_ent);
 			}
 
@@ -537,7 +533,7 @@ reload_virtual_machines()
 			VM_NEWCONF(vm_ent) = NULL;
 		}
 
-	SLIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
+	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
 		free_vm_conf(&conf_ent->conf);
 
 	vm_conf_list = new_list;

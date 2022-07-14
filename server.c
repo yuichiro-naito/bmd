@@ -383,9 +383,8 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		goto ret;
 	}
 
-	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry *)VM_CONF(vm_ent),
-	    vm_conf_entry, next);
-	SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
+	LIST_REMOVE((struct vm_conf_entry *)VM_CONF(vm_ent), next);
+	LIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
 	free_vm_conf(VM_CONF(vm_ent));
 	VM_CONF(vm_ent) = conf = &conf_ent->conf;
 
