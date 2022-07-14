@@ -323,10 +323,9 @@ accept_command_socket(int s0)
 static nvlist_t *
 boot0_command(int s, const nvlist_t *nv, int style)
 {
-	int fd, config_fd = -1;
+	int fd, dirfd = -1;
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
-	struct vm *vm;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	nvlist_t *res;
@@ -343,24 +342,23 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		reason = "VM not found";
 		goto ret;
 	}
-	vm = &vm_ent->vm;
 
-	if (style < 2 && vm_ent->vm.state != TERMINATE) {
+	if (style < 2 && VM_STATE(vm_ent) != TERMINATE) {
 		error = true;
 		reason = "already running";
 		goto ret;
 	}
 
-	while ((config_fd = open(gl_conf.config_dir, O_DIRECTORY | O_RDONLY)) < 0)
+	while ((dirfd = open(gl_conf.config_dir, O_DIRECTORY | O_RDONLY)) < 0)
 		if (errno != EINTR)
 			break;
-	if (config_fd < 0) {
+	if (dirfd < 0) {
 		error = true;
 		reason = "failed to open config directory";
 		goto ret;
 	}
 
-	while ((fd = openat(config_fd, vm->conf->filename, O_RDONLY)) < 0)
+	while ((fd = openat(dirfd, VM_CONF(vm_ent)->filename, O_RDONLY)) < 0)
 		if (errno != EINTR)
 			break;
 	if (fd < 0) {
@@ -369,7 +367,7 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		goto ret;
 	}
 
-	conf = parse_file(fd, vm->conf->filename);
+	conf = parse_file(fd, VM_CONF(vm_ent)->filename);
 	close(fd);
 
 	if (conf == NULL) {
@@ -385,17 +383,17 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		goto ret;
 	}
 
-	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry *)vm->conf,
+	SLIST_REMOVE(&vm_conf_list, (struct vm_conf_entry *)VM_CONF(vm_ent),
 	    vm_conf_entry, next);
 	SLIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
-	free_vm_conf(vm->conf);
-	vm->conf = conf = &conf_ent->conf;
+	free_vm_conf(VM_CONF(vm_ent));
+	VM_CONF(vm_ent) = conf = &conf_ent->conf;
 
 	switch (style) {
 	case 0:
 		break;
 	case 1:
-		vm_ent->vm.conf->install = true;
+		VM_CONF(vm_ent)->install = true;
 		break;
 	default:
 		error = true;
@@ -409,8 +407,8 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	}
 
 ret:
-	if (config_fd != -1)
-		close(config_fd);
+	if (dirfd != -1)
+		close(dirfd);
 	res = nvlist_create(0);
 	nvlist_add_bool(res, "error", error);
 	if (error)
