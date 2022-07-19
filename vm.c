@@ -458,6 +458,7 @@ static int
 exec_bhyve(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
+	struct passthru_conf *pc;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
@@ -575,6 +576,10 @@ exec_bhyve(struct vm *vm)
 		STAILQ_FOREACH (nc, &vm->taps, next) {
 			WRITE_STR(fp, "-s");
 			WRITE_FMT(fp, "%d,%s,%s", pcid++, nc->type, nc->tap);
+		}
+		STAILQ_FOREACH (pc, &conf->passthrues, next) {
+			WRITE_STR(fp, "-s");
+			WRITE_FMT(fp, "%d,passthru,%s", pcid++, pc->devid);
 		}
 		if (conf->fbuf->enable) {
 			WRITE_STR(fp, "-s");

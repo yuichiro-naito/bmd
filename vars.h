@@ -22,6 +22,11 @@ struct global_conf {
 	int kq;
 };
 
+struct passthru_conf {
+	STAILQ_ENTRY(passthru_conf) next;
+	char *devid;
+};
+
 struct disk_conf {
 	STAILQ_ENTRY(disk_conf) next;
 	char *type;
@@ -87,9 +92,11 @@ struct vm_conf {
 	int ndisks;
 	int nisoes;
 	int nnets;
+	int npassthrues;
 	STAILQ_HEAD(, disk_conf) disks;
 	STAILQ_HEAD(, iso_conf) isoes;
 	STAILQ_HEAD(, net_conf) nets;
+	STAILQ_HEAD(, passthru_conf) passthrues;
 	char *qemu_arch;
 	char *qemu_machine;
 	char *keymap;
