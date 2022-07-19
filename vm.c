@@ -242,7 +242,7 @@ grub_load(struct vm *vm)
 {
 	int i, ifd[2];
 	pid_t pid;
-	char *args[9];
+	char *args[10];
 	struct vm_conf *conf = vm->conf;
 	size_t len;
 	char *cmd;
@@ -277,6 +277,8 @@ grub_load(struct vm *vm)
 		setenv("TERM", "vt100", 1);
 		i = 0;
 		args[i++] = LOCALBASE"/sbin/grub-bhyve";
+		if (conf->wired_memory == true)
+			args[i++] = "-S";
 		args[i++] = "-r";
 		if (conf->install)
 			args[i++] = "cd0";
@@ -307,7 +309,7 @@ static int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
-	char *args[11];
+	char *args[12];
 	int i, outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
 	bool dopipe = (conf->comport == NULL) ||
@@ -347,6 +349,8 @@ bhyve_load(struct vm *vm)
 		}
 		i = 0;
 		args[i++] = "/usr/sbin/bhyveload";
+		if (conf->wired_memory == true)
+			args[i++] = "-S";
 		if (conf->single_user) {
 			args[i++] = "-e";
 			args[i++] = "boot_single=YES";
