@@ -31,7 +31,9 @@ struct disk_info {
 	char *orig_name;
 	char *disk_name;
 	char *part_name;
-	int index;
+	char *slice_name;
+	int part_index;
+	int slice_index;
 };
 
 SLIST_HEAD(disk_info_head, disk_info);
@@ -53,6 +55,7 @@ free_disk_info(struct disk_info *di)
 	free(di->orig_name);
 	free(di->disk_name);
 	free(di->part_name);
+	free(di->slice_name);
 	free(di);
 }
 
@@ -322,8 +325,18 @@ compare_disk_info(const void *l, const void *r)
 		return -1;
 	if ((c = strcmp(a->part_name, b->part_name)) != 0)
 		return c;
+	if ((c = a->part_index - b->part_index) != 0)
+		return c;
 
-	return a->index - b->index;
+	if (a->slice_name == NULL && b->slice_name == NULL)
+		return 0;
+	if (a->slice_name == NULL)
+		return 1;
+	if (b->slice_name == NULL)
+		return -1;
+	if ((c = strcmp(a->slice_name, b->slice_name)) != 0)
+		return c;
+	return a->slice_index - b->slice_index;
 }
 
 static void
@@ -352,14 +365,17 @@ static int
 parse_disks(char *line, struct disk_info_head *list, int nlist)
 {
 	struct disk_info *di;
-	char *d, *p, *e, *n, t;
+	char *s, *e, *n, t;
+	char *token;
 
 	/*
 	 * example:
 	 *
 	 *  (hd0,openbsd12)
-	 *   ^   ^      ^ ^
-	 *   d   p      n e
+	 *  (hd0,gpt2,bsd1)
+	 *   ^            ^
+	 *   |            |
+	 *   s ==>        e
 	 */
 
 	e = line;
@@ -368,7 +384,7 @@ parse_disks(char *line, struct disk_info_head *list, int nlist)
 		if (*e == '\0' || e[1] == '\0')
 			break;
 		e++;
-		d = e;
+		s = e;
 		for (; *e != ')'  && *e != '\0'; e++);
 		if (*e == '\0')
 			break;
@@ -377,21 +393,27 @@ parse_disks(char *line, struct disk_info_head *list, int nlist)
 		if ((di = create_disk_info()) == NULL)
 			return -1;
 		*e = '\0';
-		if ((di->orig_name = strdup(d)) == NULL)
+		if ((di->orig_name = strdup(s)) == NULL)
 			goto err;
-		if ((p = strchr(d, ','))) {
-			*p = '\0';
-			if ((di->disk_name = strdup(d)) == NULL)
-				goto err;
-			*p++ = ',';
-			for (n = p; !(isnumber(*n)) && *n != '\0'; n++);
-			if ((di->part_name = strndup(p, n - p)) == NULL)
-				goto err;
-			di->index = strtol(n, NULL, 10);
-		} else {
-			if ((di->disk_name = strdup(d)) == NULL)
-				goto err;
-		}
+
+		if ((token = strsep(&s, ",")) == NULL)
+			goto next;
+		if ((di->disk_name = strdup(token)) == NULL)
+			goto err;
+		if ((token = strsep(&s, ",")) == NULL)
+			goto next;
+		for (n = token; !(isnumber(*n)) && *n != '\0'; n++);
+		if ((di->part_name = strndup(token, n - token)) == NULL)
+			goto err;
+		di->part_index = strtol(n, NULL, 10);
+		if ((token = strsep(&s, ",")) == NULL)
+			goto next;
+		for (n = token; !(isnumber(*n)) && *n != '\0'; n++);
+		if ((di->slice_name = strndup(token, n - token)) == NULL)
+			goto err;
+		di->slice_index = strtol(n, NULL, 10);
+
+	next:
 		SLIST_INSERT_HEAD(list, di, next);
 		nlist++;
 		*e = t;
@@ -421,10 +443,36 @@ look_for_filename(char *buf, const char *name)
 	return true;
 }
 
+static char *
+get_diskname(const char *kernel, struct disk_info *di)
+{
+	char *dn;
+
+	if (strcmp(kernel, NETBSD_KERNEL) == 0) {
+		if (asprintf(&dn, "dk0%c", 'a' + di->part_index - 1) < 0)
+			return NULL;
+		return dn;
+	}
+
+	if (strcmp(di->part_name, "openbsd") == 0) {
+		if (asprintf(&dn, "sd0%c", 'a' + di->part_index - 1) < 0)
+			return NULL;
+		return dn;
+	}
+
+	if (di->slice_name == NULL)
+		return strdup("sd0a");
+
+	if (asprintf(&dn, "sd0%c", 'a' + di->slice_index - 1) < 0)
+		return NULL;
+
+	return dn;
+}
+
 int
 inspect_with_grub(struct inspection *ins)
 {
-	char buf[1024];
+	char buf[1024], *dn;
 	struct disk_info_head list;
 	struct disk_info *di;
 	struct proc_pipe *pp;
@@ -468,16 +516,19 @@ inspect_with_grub(struct inspection *ins)
 		ARRAY_FOREACH(p, kernels) {
 			if (!look_for_filename(buf, p->kernel))
 				continue;
+			if ((dn = get_diskname(p->kernel, di)) == NULL)
+				goto err;
 			if (asprintf(&ins->load_cmd,
-				     "%s%s -h com0 -r %s0%c (%s)/%s"
+				     "%s%s -h com0 -r %s (%s)/%s"
 				     "\nboot\n",
 				     p->method,
 				     ins->single_user ? " -s" : "",
-				     strcmp(p->kernel, NETBSD_KERNEL) ?
-				     "sd" : "dk",
-				     'a' + di->index - 1,
-				     di->orig_name, p->kernel) < 0)
+				     dn,
+				     di->orig_name, p->kernel) < 0) {
+				free(dn);
 				goto err;
+			}
+			free(dn);
 			goto loop_end;
 		}
 	}
