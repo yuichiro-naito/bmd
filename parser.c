@@ -8,6 +8,7 @@
 #include "log.h"
 #include "parser.h"
 #include "vars.h"
+#include "bmd.h"
 
 static int
 get_token(FILE *fp, char **token)
@@ -265,13 +266,6 @@ static int
 parse_installcmd(struct vm_conf *conf, char *val)
 {
 	set_installcmd(conf, val);
-	return 0;
-}
-
-static int
-parse_hookcmd(struct vm_conf *conf, char *val)
-{
-	set_hookcmd(conf, val);
 	return 0;
 }
 
@@ -545,7 +539,6 @@ struct parser_entry parser_list[] = {
 	{ "graphics_vga", &parse_graphics_vga, NULL },
 	{ "graphics_wait", &parse_graphics_wait, NULL },
 	{ "grub_run_partition", &parse_grub_run_partition, NULL },
-	{ "hookcmd", &parse_hookcmd, NULL },
 	{ "hostbridge", &parse_hostbridge, NULL },
 	{ "install", &parse_install, NULL },
 	{ "installcmd", &parse_installcmd, NULL },
@@ -577,8 +570,9 @@ compare_parser_entry(const void *a, const void *b)
 }
 
 static int
-parse(struct vm_conf *conf, FILE *fp)
+parse(struct vm_conf *conf, FILE *fp, struct plugin_data_head *head)
 {
+	int rc;
 	char *key;
 	char *val;
 	struct parser_entry *parser;
@@ -604,14 +598,8 @@ parse(struct vm_conf *conf, FILE *fp)
 		parser = bsearch(key, parser_list,
 		    sizeof(parser_list) / sizeof(parser_list[0]),
 		    sizeof(parser_list[0]), compare_parser_entry);
-		if (parser == NULL) {
-			ERR("unknown key %s in %s\n", key, name);
-			goto bad;
-		}
-		free(key);
-		key = NULL;
 		free(val);
-		if (parser->clear != NULL)
+		if (parser && parser->clear != NULL)
 			(*parser->clear)(conf);
 		while (1) {
 			if (get_token(fp, &val) == 1)
@@ -621,12 +609,28 @@ parse(struct vm_conf *conf, FILE *fp)
 				break;
 			}
 
-			if ((*parser->parse)(conf, val) < 0) {
-				ERR("invalid value %s in %s\n", val, name);
-				goto bad;
+			if (parser) {
+				if ((*parser->parse)(conf, val) < 0) {
+					ERR("invalid value %s in %s\n", val,
+					    name);
+					goto bad;
+				}
+			} else {
+				rc = call_plugin_parser(head, key, val);
+				if (rc > 0) {
+					ERR("unknown key %s in %s\n", key,
+					    name);
+					goto bad;
+				}
+				if (rc < 0) {
+					ERR("invalid value %s in %s\n", val,
+					    name);
+					goto bad;
+				}
 			}
 			free(val);
 		}
+		free(key);
 	}
 
 	return 0;
@@ -665,22 +669,21 @@ check_conf(struct vm_conf *conf)
 }
 
 struct vm_conf *
-parse_file(int fd, char *filename)
+parse_file(int fd, const char *filename, struct plugin_data_head *head)
 {
 	int ret;
 	struct vm_conf *c;
+	FILE *fp;
 
-	FILE *fp = fdopen(fd, "r");
-	if (fp == NULL)
+	if ((fp = fdopen(fd, "r")) == NULL)
 		return NULL;
 
-	c = create_vm_conf(filename);
-	if (c == NULL) {
+	if ((c = create_vm_conf(filename)) == NULL) {
 		fclose(fp);
 		return NULL;
 	}
 
-	ret = parse(c, fp);
+	ret = parse(c, fp, head);
 
 	fdclose(fp, NULL);
 	if (ret < 0 || finalize_vm_conf(c) < 0 || check_conf(c) < 0) {

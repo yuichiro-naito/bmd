@@ -2,6 +2,7 @@
 #define _BMD_H_
 
 #include <sys/queue.h>
+#include <sys/nv.h>
 
 #include "vars.h"
 
@@ -25,7 +26,7 @@ struct plugin_entry {
  */
 struct plugin_data {
 	struct plugin_entry *ent;
-	void *data;
+	nvlist_t *pl_conf;
 	SLIST_ENTRY(plugin_data) next;
 };
 
@@ -36,6 +37,7 @@ struct plugin_data {
  */
 struct vm_conf_entry {
 	struct vm_conf conf;
+	SLIST_HEAD(plugin_data_head, plugin_data) pl_data;
 	LIST_ENTRY(vm_conf_entry) next;
 };
 
@@ -48,10 +50,11 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 #define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm)
 #define VM_PTR(v)           (&(v)->vm)
 #define VM_CONF(v)          ((v)->vm.conf)
+#define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
 #define VM_NEWCONF(v)       ((v)->new_conf)
 #define VM_METHOD(v)        ((v)->method)
 #define VM_TYPE(v)          ((v)->type)
-#define VM_PLUGIN_DATA(v)   ((v)->pl_data)
+#define VM_PLUGIN_DATA(v)   (VM_CONF_ENT(v)->pl_data)
 #define VM_PID(v)           ((v)->vm.pid)
 #define VM_TAPS(v)          ((v)->vm.taps)
 #define VM_STATE(v)         ((v)->vm.state)
@@ -78,7 +81,6 @@ struct vm_entry {
 	enum STRUCT_TYPE type;
 	struct vm vm;
 	struct vm_conf *new_conf;
-	SLIST_HEAD(, plugin_data) pl_data;
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_methods *method;
 };
@@ -107,10 +109,15 @@ LIST_HEAD(vm_conf_head, vm_conf_entry);
 
 int remove_plugins();
 void call_plugins(struct vm_entry *vm_ent);
+int call_plugin_parser(struct plugin_data_head *head,
+		       const char *key, const char *val);
 int load_plugins();
 void free_vm_entry(struct vm_entry *vm_ent);
 
+int create_plugin_data(struct plugin_data_head *head);
 struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
+struct vm_conf_entry *load_vm_conf_entry(int fd, const char *filename);
+void free_vm_conf_entry(struct vm_conf_entry *conf_ent);
 int load_config_files(struct vm_conf_head *list);
 void free_config_files();
 struct vm_entry *lookup_vm_by_name(const char *name);

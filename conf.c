@@ -107,7 +107,6 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->loader);
 	free(vc->loadcmd);
 	free(vc->installcmd);
-	free(vc->hookcmd);
 	free(vc->debug_port);
 	free(vc->err_logfile);
 	free_fbuf(vc->fbuf);
@@ -240,6 +239,7 @@ copy_net_conf(const struct net_conf *nc)
 	ret->type = y;
 	ret->bridge = b;
 	ret->tap = t;
+	STAILQ_NEXT(ret, next) = NULL;
 	return ret;
 err:
 	free(t);
@@ -284,14 +284,6 @@ set_installcmd(struct vm_conf *conf, const char *cmd)
 	if (conf == NULL)
 		return 0;
 	return set_string(&conf->installcmd, cmd);
-}
-
-int
-set_hookcmd(struct vm_conf *conf, const char *cmd)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->hookcmd, cmd);
 }
 
 int
@@ -604,7 +596,7 @@ err:
 }
 
 struct vm_conf *
-create_vm_conf(char *filename)
+create_vm_conf(const char *filename)
 {
 	char *name, *fname, *arch;
 	struct vm_conf *ret;
@@ -802,7 +794,6 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_STR(loader);
 	CMP_STR(loadcmd);
 	CMP_STR(installcmd);
-	CMP_STR(hookcmd);
 	CMP_STR(err_logfile);
 	CMP_STR(grub_run_partition);
 

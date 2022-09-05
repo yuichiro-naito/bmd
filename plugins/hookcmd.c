@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+#include <libgen.h>
 
 #include "../vars.h"
 
@@ -20,33 +22,56 @@ hookcmd_finalize(struct global_conf *conf)
 {
 }
 
+static int
+hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
+{
+	if (strcasecmp(key, "hookcmd"))
+		return 1;
+
+	if (access(val, R_OK | X_OK) == 0) {
+		nvlist_add_string(config, "hookcmd", val);
+		return 0;
+	}
+
+	return -1;
+}
+
 static void
-hookcmd_status_change(struct vm *vm, void **data)
+hookcmd_status_change(struct vm *vm, nvlist_t *config)
 {
 	pid_t pid;
 	struct kevent ev;
-	char *args[4];
+	const char *cmd0;
+	char *cmd1, *cmd2, *args[4];
 	static char *state_name[] = { "TERMINATE", "LOAD", "RUN",
 		"STOP", "REMOVE", "RESTART" };
 
-	if (vm->conf->hookcmd == NULL)
+	if (! nvlist_exists_string(config, "hookcmd"))
 		return;
 
-	if ((pid = fork()) < 0)
+	cmd0 = nvlist_get_string(config, "hookcmd");
+	if ((cmd1 = strdup(cmd0)) == NULL)
 		return;
+	cmd2 = basename(cmd1);
+
+	if ((pid = fork()) < 0) {
+		free(cmd1);
+		return;
+	}
 
 	if (pid == 0) {
-		args[0] = vm->conf->hookcmd;
+		args[0] = cmd2;
 		args[1] = vm->conf->name;
 		args[2] = state_name[vm->state];
 		args[3] = NULL;
-		execv(args[0], args);
+		execv(cmd0, args);
 		exit(1);
 	}
+	free(cmd1);
 
 	EV_SET(&ev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
 	kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL);
 }
 
 PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "hookcmd", hookcmd_initialize,
-	hookcmd_finalize, hookcmd_status_change };
+	hookcmd_finalize, hookcmd_status_change, hookcmd_parse_config };

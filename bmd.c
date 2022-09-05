@@ -1,7 +1,6 @@
 #include <sys/param.h>
 #include <sys/dirent.h>
 #include <sys/event.h>
-#include <sys/nv.h>
 #include <sys/procctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
@@ -203,23 +202,34 @@ call_plugins(struct vm_entry *vm_ent)
 
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.on_status_change)
-			(*(pd->ent->desc.on_status_change))(VM_PTR(vm_ent),
-			    &pd->data);
+			(pd->ent->desc.on_status_change)(VM_PTR(vm_ent),
+							 pd->pl_conf);
+}
+
+int
+call_plugin_parser(struct plugin_data_head *head,
+		   const char *key, const char *val)
+{
+	int rc;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, head, next)
+		if (pd->ent->desc.parse_config &&
+		    (rc = (pd->ent->desc.parse_config)(pd->pl_conf, key, val)) <= 0)
+			return rc;
+	return 1;
 }
 
 void
 free_vm_entry(struct vm_entry *vm_ent)
 {
-	struct plugin_data *pd, *pln;
 	struct net_conf *nc, *nnc;
 
-	SLIST_FOREACH_SAFE (pd, &VM_PLUGIN_DATA(vm_ent), next, pln)
-		free(pd);
 	STAILQ_FOREACH_SAFE (nc, &VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_VARSFILE(vm_ent));
-	free_vm_conf(VM_CONF(vm_ent));
+	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 	free(vm_ent);
 }
 
@@ -233,13 +243,59 @@ free_vm_list()
 	SLIST_INIT(&vm_list);
 }
 
+void
+free_plugin_data(struct plugin_data_head *head)
+{
+	struct plugin_data *pld, *pln;
+
+	SLIST_FOREACH_SAFE (pld, head, next, pln) {
+		nvlist_destroy(pld->pl_conf);
+		free(pld);
+	}
+	SLIST_INIT(head);
+}
+
+struct vm_conf_entry *
+load_vm_conf_entry(int fd, const char *filename)
+{
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
+	struct plugin_data_head head;
+
+	if (create_plugin_data(&head) < 0)
+		goto err;
+
+	if ((conf = parse_file(fd, filename, &head)) == NULL)
+		goto err1;
+
+	if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL)
+		goto err2;
+
+	conf_ent->pl_data = head;
+
+	return conf_ent;
+
+err2:
+	free_vm_conf(conf);
+err1:
+	free_plugin_data(&head);
+err:
+	return NULL;
+}
+
+void
+free_vm_conf_entry(struct vm_conf_entry *conf_ent)
+{
+	free_plugin_data(&conf_ent->pl_data);
+	free_vm_conf(&conf_ent->conf);
+}
+
 int
 load_config_files(struct vm_conf_head *list)
 {
 	DIR *d;
 	int fd;
 	struct dirent *ent;
-	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 
 	if ((d = opendir(gl_conf.config_dir)) == NULL) {
@@ -255,14 +311,11 @@ load_config_files(struct vm_conf_head *list)
 				break;
 		if (fd < 0)
 			continue;
-		conf = parse_file(fd, ent->d_name);
+		conf_ent = load_vm_conf_entry(fd, ent->d_name);
 		close(fd);
-		if (conf == NULL)
+		if (conf_ent == NULL)
 			continue;
-		if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL) {
-			free_vm_conf(conf);
-			continue;
-		}
+
 		LIST_INSERT_HEAD(list, conf_ent, next);
 	}
 
@@ -271,22 +324,33 @@ load_config_files(struct vm_conf_head *list)
 	return 0;
 }
 
-void
-free_config_files()
+int
+create_plugin_data(struct plugin_data_head *head)
 {
-	struct vm_conf_entry *conf_ent, *cen;
+	struct plugin_entry *pl_ent;
+	struct plugin_data *pld;
 
-	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
-		free_vm_conf(&conf_ent->conf);
-	LIST_INIT(&vm_conf_list);
+	SLIST_INIT(head);
+	SLIST_FOREACH (pl_ent, &plugin_list, next) {
+		if ((pld = calloc(1, sizeof(*pld))) == NULL)
+			goto err;
+		pld->ent = pl_ent;
+		if ((pld->pl_conf = nvlist_create(0)) == NULL)
+			goto err;
+		SLIST_INSERT_HEAD(head, pld, next);
+	}
+
+	return 0;
+
+err:
+	free_plugin_data(head);
+	return -1;
 }
 
 struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
 	struct vm_entry *vm_ent;
-	struct plugin_entry *pl_ent;
-	struct plugin_data *pld, *pln;
 
 	if ((vm_ent = calloc(1, sizeof(struct vm_entry))) == NULL)
 		return NULL;
@@ -299,22 +363,10 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_OUTFD(vm_ent) = -1;
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
-	SLIST_INIT(&VM_PLUGIN_DATA(vm_ent));
 	STAILQ_INIT(&VM_TAPS(vm_ent));
-	SLIST_FOREACH (pl_ent, &plugin_list, next) {
-		if ((pld = calloc(1, sizeof(*pld))) == NULL)
-			goto err;
-		pld->ent = pl_ent;
-		SLIST_INSERT_HEAD(&VM_PLUGIN_DATA(vm_ent), pld, next);
-	}
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 
 	return vm_ent;
-err:
-	SLIST_FOREACH_SAFE (pld, &VM_PLUGIN_DATA(vm_ent), next, pln)
-		free(pld);
-	free(vm_ent);
-	return NULL;
 }
 
 int
@@ -502,10 +554,10 @@ reload_virtual_machines()
 
 	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
 		if (VM_NEWCONF(vm_ent) == NULL) {
-			conf = VM_CONF(vm_ent);
 			switch (VM_STATE(vm_ent)) {
 			case LOAD:
 			case RUN:
+				conf = VM_CONF(vm_ent);
 				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
 				shutdown_timer(vm_ent, conf->stop_timeout);
@@ -516,14 +568,12 @@ reload_virtual_machines()
 				VM_STATE(vm_ent) = REMOVE;
 				/* remove vm_conf_entry from the list
 				   to keep it until actually freed. */
-				LIST_REMOVE((struct vm_conf_entry *)conf,
-					    next);
+				LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 				break;
 			default:
 				SLIST_REMOVE(&vm_list, vm_ent, vm_entry,
 					     next);
-				LIST_REMOVE((struct vm_conf_entry *)conf,
-					    next);
+				LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 				free_vm_entry(vm_ent);
 			}
 
@@ -533,7 +583,7 @@ reload_virtual_machines()
 		}
 
 	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
-		free_vm_conf(&conf_ent->conf);
+		free_vm_conf_entry(conf_ent);
 
 	vm_conf_list = new_list;
 

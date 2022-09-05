@@ -2,7 +2,6 @@
 #include <sys/event.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <sys/nv.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -56,8 +55,9 @@ lookup_vm_conf(const char *name)
 		if (strcmp(conf_ent->conf.name, name) == 0)
 			ret = conf_ent;
 		else
-			free_vm_conf(&conf_ent->conf);
-
+			free_vm_conf_entry(conf_ent);
+	if (ret)
+		LIST_NEXT(ret, next) = NULL;
 	return ret;
 }
 
@@ -94,7 +94,6 @@ direct_run(const char *name, bool install, bool single)
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
-	struct vm *vm;
 	struct kevent ev, ev2[3];
 
 	LOG_OPEN_PERROR();
@@ -121,20 +120,19 @@ direct_run(const char *name, bool install, bool single)
 
 	vm_ent = create_vm_entry(conf_ent);
 	if (vm_ent == NULL) {
-		free_vm_conf(conf);
+		free_vm_conf_entry(conf_ent);
 		return 1;
 	}
-	vm = &vm_ent->vm;
 
 	if (VM_START(vm_ent) < 0)
 		goto err;
 	i = 0;
-	EV_SET(&ev2[i++], vm->pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	       0, vm_ent);
-	if (vm->state == LOAD && conf->loader_timeout >= 0)
+	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0)
 		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
-		       NOTE_SECONDS, vm->conf->loader_timeout, vm_ent);
-	if (vm->infd != -1)
+		       NOTE_SECONDS, VM_CONF(vm_ent)->loader_timeout, vm_ent);
+	if (VM_INFD(vm_ent) != -1)
 		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
 	while (kevent(gl_conf.kq, ev2, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
@@ -154,12 +152,12 @@ wait:
 
 	switch (ev.filter) {
 	case EVFILT_READ:
-		read_stdin(vm);
+		read_stdin(VM_PTR(vm_ent));
 		goto wait;
 	case EVFILT_PROC:
 		if (waitpid(ev.ident, &status, 0) < 0)
 			goto err;
-		if (ev.ident != vm->pid)
+		if (ev.ident != VM_PID(vm_ent))
 			goto wait;
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 			break;
@@ -170,11 +168,11 @@ wait:
 		goto err;
 	}
 
-	if (vm->state == LOAD) {
+	if (VM_STATE(vm_ent) == LOAD) {
 		if (VM_START(vm_ent) < 0)
 			goto err;
 		call_plugins(vm_ent);
-		if (waitpid(vm->pid, &status, 0) < 0)
+		if (waitpid(VM_PID(vm_ent), &status, 0) < 0)
 			goto err;
 	}
 
@@ -278,7 +276,7 @@ do_inspect(char *name)
 		free(q);
 	}
 
-	free_vm_conf(&conf_ent->conf);
+	free_vm_conf_entry(conf_ent);
 	return 0;
 }
 

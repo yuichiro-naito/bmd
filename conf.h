@@ -31,7 +31,6 @@ int set_ncpu(struct vm_conf *conf, int ncpu);
 int assign_nmdm(struct vm_conf *conf);
 int set_loadcmd(struct vm_conf *conf, const char *cmd);
 int set_installcmd(struct vm_conf *conf, const char *cmd);
-int set_hookcmd(struct vm_conf *conf, const char *cmd);
 int set_err_logfile(struct vm_conf *conf, const char *name);
 int set_loader(struct vm_conf *conf, const char *loader);
 int set_loader_timeout(struct vm_conf *conf, int timeout);
@@ -61,7 +60,7 @@ int set_utctime(struct vm_conf *conf, bool val);
 int set_keymap(struct vm_conf *conf, const char *keymap);
 
 struct fbuf *create_fbuf();
-struct vm_conf *create_vm_conf(char *filename);
+struct vm_conf *create_vm_conf(const char *filename);
 int finalize_vm_conf(struct vm_conf *conf);
 int dump_vm_conf(struct vm_conf *conf, FILE *fp);
 

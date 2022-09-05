@@ -1,4 +1,3 @@
-#include <sys/nv.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -326,7 +325,6 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	int fd, dirfd = -1;
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
-	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	nvlist_t *res;
 	bool error = false;
@@ -367,25 +365,17 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		goto ret;
 	}
 
-	conf = parse_file(fd, VM_CONF(vm_ent)->filename);
+	conf_ent = load_vm_conf_entry(fd, VM_CONF(vm_ent)->filename);
 	close(fd);
-
-	if (conf == NULL) {
-		error = true;
-		reason = "failed to load config file";
-		goto ret;
-	}
-	conf_ent = realloc(conf, sizeof(*conf_ent));
 	if (conf_ent == NULL) {
-		free_vm_conf(conf);
 		error = true;
 		reason = "failed to load config file";
 		goto ret;
 	}
 
-	LIST_REMOVE((struct vm_conf_entry *)VM_CONF(vm_ent), next);
+	LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 	LIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
-	free_vm_conf(VM_CONF(vm_ent));
+	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 	VM_CONF(vm_ent) = &conf_ent->conf;
 
 	switch (style) {
@@ -585,7 +575,7 @@ recv_command(struct sock_buf *sb)
 {
 	const char *cmd;
 	char *reason = "unknown command";
-	nvlist_t *nv, *res;
+	nvlist_t *nv, *res = NULL;
 	cfunc func;
 
 	if ((nv = nvlist_unpack(sb->buf, sb->buf_size, 0)) == NULL)
@@ -606,9 +596,11 @@ recv_command(struct sock_buf *sb)
 	}
 	sb->res_bytes = 0;
 
+	nvlist_destroy(res);
 	nvlist_destroy(nv);
 	return 0;
 err:
+	nvlist_destroy(res);
 	nvlist_destroy(nv);
 	res = nvlist_create(0);
 	nvlist_add_bool(res, "error", true);

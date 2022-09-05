@@ -13,10 +13,6 @@
 
 #define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"
 
-struct avahi_data {
-	pid_t pid;
-};
-
 static struct global_conf *gl_conf;
 static int avahi_enable = 0;
 
@@ -66,44 +62,38 @@ exec_avahi_publish(struct vm *vm)
 }
 
 static void
-avahi_status_change(struct vm *vm, void **data)
+avahi_status_change(struct vm *vm, nvlist_t *config)
 {
 	struct kevent ev;
-	struct avahi_data *ad;
+	pid_t pid;
 
 	if (avahi_enable == 0 || vm->conf->fbuf->enable == false)
 		return;
 
-	if (*data == NULL) {
-		ad = calloc(1, sizeof(*ad));
-		if (ad == NULL)
-			return;
-		*data = ad;
-	} else
-		ad = *data;
+	pid = nvlist_exists_number(config, "pid") ?
+		nvlist_take_number(config, "pid") : 0;
 
 	switch (vm->state) {
 	case LOAD:
 	case RUN:
-		if (ad->pid == 0 &&
-		    (ad->pid = exec_avahi_publish(vm)) > 0) {
-			EV_SET(&ev, ad->pid, EVFILT_PROC,
+		if (pid == 0 && (pid = exec_avahi_publish(vm)) > 0) {
+			EV_SET(&ev, pid, EVFILT_PROC,
 			       EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
 			while(kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
 				if (errno != EINTR)
 					break;
 		}
+		/* FALLTHROUGH */
+	default:
+		if (pid > 0)
+			nvlist_add_number(config, "pid", pid);
 		break;
 	case TERMINATE:
-		if (ad->pid > 0)
-			kill(ad->pid, SIGINT);
-		free(ad);
-		*data = NULL;
-		break;
-	default:
+		if (pid > 0)
+			kill(pid, SIGINT);
 		break;
 	}
 }
 
 PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "avahi", avahi_initialize,
-	avahi_finalize, avahi_status_change };
+	avahi_finalize, avahi_status_change, NULL };

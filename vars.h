@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <sys/nv.h>
 
 #include <stdbool.h>
 
@@ -79,7 +80,6 @@ struct vm_conf {
 	char *loader;
 	char *loadcmd;
 	char *installcmd;
-	char *hookcmd;
 	char *err_logfile;
 	char *grub_run_partition;
 	struct fbuf *fbuf;
@@ -133,14 +133,15 @@ struct vm_methods {
 	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 2
+#define PLUGIN_VERSION 3
 
 typedef struct plugin_desc {
 	int version;
 	char *name;
 	int (*initialize)(struct global_conf *);
 	void (*finalize)(struct global_conf *);
-	void (*on_status_change)(struct vm *, void **);
+	void (*on_status_change)(struct vm *, nvlist_t *);
+	int (*parse_config)(nvlist_t *, const char *, const char *);
 } PLUGIN_DESC;
 
 #endif
