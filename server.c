@@ -423,7 +423,7 @@ list_command(int s, const nvlist_t *nv)
 	size_t i, count = 0;
 	const char *reason;
 	nvlist_t *res, *p;
-	const nvlist_t **list = NULL;
+	nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
 	bool error = false;
 	const static char *state_string[] = { "STOP", "LOAD", "RUN", "STOP",
@@ -456,12 +456,11 @@ list_command(int s, const nvlist_t *nv)
 		list[i++] = p;
 	}
 
-	nvlist_add_nvlist_array(res, "vm_list", list, count);
+	nvlist_move_nvlist_array(res, "vm_list", list, count);
 ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	free(list);
 	return res;
 }
 
