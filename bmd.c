@@ -378,35 +378,63 @@ nmdm_selector(const struct dirent *e)
 		e->d_name[e->d_namlen - 1] == 'B');
 }
 
+static int
+get_nmdm_number(const char *p)
+{
+	int v = 0;
+
+	if (p == NULL)
+		return -1;
+
+	for (; *p != '\0'; p++)
+		if (isnumber(*p))
+			v = v * 10 + *p - '0';
+	return v;
+}
+
 /**
- * Assign new 'nmdm' which has the biggest number in "/dev/" directory.
+ * Assign new 'nmdm' which has a bigger number in all VM configurations and
+ * "/dev/" directory.
  */
 int
 assign_comport(struct vm_entry *vm_ent)
 {
-	int i, j, n, v, max = -1;
+	int fd, i, n, v, max = -1;
 	struct dirent **names;
 	char *new_com;
+	struct vm_entry *e;
 	struct vm_conf *conf = VM_CONF(vm_ent);
 
 	if (conf->comport == NULL)
 		return 0;
 
+	/* Already assigned */
+	if (VM_ASCOMPORT(vm_ent))
+		return 0;
+
+	/* If no need to assign comport, copy from `struct vm_conf.comport`. */
 	if (strcasecmp(conf->comport, "auto")) {
-		if (VM_ASCOMPORT(vm_ent))
-			return 0;
 		if ((VM_ASCOMPORT(vm_ent) = strdup(conf->comport)) == NULL)
 			return -1;
 		return 0;
 	}
 
+	/* Get maximum nmdm number of all VMs. */
+	SLIST_FOREACH (e, &vm_list, next) {
+		v = get_nmdm_number(VM_CONF(e)->comport);
+		if (v > max)
+			max = v;
+		v = get_nmdm_number(VM_ASCOMPORT(e));
+		if (v > max)
+			max = v;
+	}
+
+	/* Get maximum nmdm number in "/dev" directory. */
 	if ((n = scandir("/dev", &names, nmdm_selector, NULL)) < 0)
 		return -1;
 
 	for (i = 0; i < n; i++) {
-		for (v = 0, j = 4; j < names[i]->d_namlen - 1; j++)
-			if (isnumber(names[i]->d_name[j]))
-				v = v * 10 + names[i]->d_name[j] - '0';
+		v = get_nmdm_number(names[i]->d_name);
 		if (v > max)
 			max = v;
 		free(names[i]);
@@ -417,17 +445,16 @@ assign_comport(struct vm_entry *vm_ent)
 		if (asprintf(&new_com, "/dev/nmdm%dB", max + i) < 0)
 			return -1;
 
-		while ((j = open(new_com, O_RDWR|O_NONBLOCK)) < 0)
+		while ((fd = open(new_com, O_RDWR|O_NONBLOCK)) < 0)
 			if (errno != EINTR)
 				break;
-		if (j >= 0)
+		if (fd >= 0)
 			break;
 		free(new_com);
 	}
-	if (j < 0)
+	if (fd < 0)
 		return -1;
-	close(j);
-	free(VM_ASCOMPORT(vm_ent));
+	close(fd);
 	VM_ASCOMPORT(vm_ent) = new_com;
 
 	return 0;
@@ -441,8 +468,12 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	VM_METHOD(vm_ent) = &method_list[conf->backend];
 
-	if (assign_comport(vm_ent) < 0 ||
-	    VM_START(vm_ent) < 0) {
+	if (assign_comport(vm_ent) < 0) {
+		ERR("failed to assign comport for vm %s\n", name);
+		return -1;
+	}
+
+	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
 		VM_CLEANUP(vm_ent);
 		return -1;
