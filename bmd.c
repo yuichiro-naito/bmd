@@ -441,6 +441,9 @@ assign_comport(struct vm_entry *vm_ent)
 	}
 	free(names);
 
+	if (max < NMDM_OFFSET - 1)
+		max = NMDM_OFFSET - 1;
+
 	for (i = 1; i < 6; i++) {
 		if (asprintf(&new_com, "/dev/nmdm%dB", max + i) < 0)
 			return -1;

@@ -12,6 +12,11 @@
 #define COMMAND_TIMEOUT_SEC 30
 
 /*
+ * Nmdm number offset for auto assignment.
+ */
+#define NMDM_OFFSET 200
+
+/*
   Entry of plugins.
   The individual entries refer to the installed plugin.
  */
