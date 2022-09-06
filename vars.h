@@ -123,6 +123,7 @@ struct vm {
 	STAILQ_HEAD(, net_conf) taps;
 	char *mapfile;
 	char *varsfile;
+	char *assigned_comport;
 };
 
 struct vm_methods {

@@ -28,7 +28,6 @@ struct net_conf *copy_net_conf(const struct net_conf *nc);
 int set_name(struct vm_conf *conf, const char *name);
 int set_memory_size(struct vm_conf *conf, const char *memory);
 int set_ncpu(struct vm_conf *conf, int ncpu);
-int assign_nmdm(struct vm_conf *conf);
 int set_loadcmd(struct vm_conf *conf, const char *cmd);
 int set_installcmd(struct vm_conf *conf, const char *cmd);
 int set_err_logfile(struct vm_conf *conf, const char *name);

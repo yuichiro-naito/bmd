@@ -418,6 +418,35 @@ install_command(int s, const nvlist_t *nv)
 }
 
 static nvlist_t *
+showcomport_command(int s, const nvlist_t *nv)
+{
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	nvlist_t *res;
+	bool error = false;
+	char *comport;
+
+	res = nvlist_create(0);
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+		error = true;
+		reason = "VM not found";
+		goto ret;
+	}
+
+	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
+
+	nvlist_add_string(res, "comport", comport ? comport : "(null)");
+
+ret:
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	return res;
+}
+
+static nvlist_t *
 list_command(int s, const nvlist_t *nv)
 {
 	size_t i, count = 0;
@@ -480,10 +509,10 @@ vm_down_command(int s, const nvlist_t *nv, int how)
 		goto ret;
 	}
 
-	if (vm_ent->vm.state != LOAD && vm_ent->vm.state != RUN)
+	if (VM_STATE(vm_ent) != LOAD && VM_STATE(vm_ent) != RUN)
 		goto ret;
 
-	conf = vm_ent->vm.conf;
+	conf = VM_CONF(vm_ent);
 	switch (how) {
 	case 0:
 		INFO("stop vm %s\n", conf->name);
@@ -545,6 +574,7 @@ struct command_entry command_list[] = {
 	{ "list", &list_command },
 	{ "poweroff", &poweroff_command },
 	{ "reset", &reset_command },
+	{ "showcomport", &showcomport_command },
 	{ "shutdown", &shutdown_command },
 };
 

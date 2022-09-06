@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include "bmd.h"
 #include "conf.h"
@@ -229,6 +230,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 		free_net_conf(nc);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_VARSFILE(vm_ent));
+	free(VM_ASCOMPORT(vm_ent));
 	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 	free(vm_ent);
 }
@@ -369,6 +371,68 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	return vm_ent;
 }
 
+static int
+nmdm_selector(const struct dirent *e)
+{
+	return (strncmp(e->d_name, "nmdm", 4) == 0 &&
+		e->d_name[e->d_namlen - 1] == 'B');
+}
+
+/**
+ * Assign new 'nmdm' which has the biggest number in "/dev/" directory.
+ */
+int
+assign_comport(struct vm_entry *vm_ent)
+{
+	int i, j, n, v, max = -1;
+	struct dirent **names;
+	char *new_com;
+	struct vm_conf *conf = VM_CONF(vm_ent);
+
+	if (conf->comport == NULL)
+		return 0;
+
+	if (strcasecmp(conf->comport, "auto")) {
+		if (VM_ASCOMPORT(vm_ent))
+			return 0;
+		if ((VM_ASCOMPORT(vm_ent) = strdup(conf->comport)) == NULL)
+			return -1;
+		return 0;
+	}
+
+	if ((n = scandir("/dev", &names, nmdm_selector, NULL)) < 0)
+		return -1;
+
+	for (i = 0; i < n; i++) {
+		for (v = 0, j = 4; j < names[i]->d_namlen - 1; j++)
+			if (isnumber(names[i]->d_name[j]))
+				v = v * 10 + names[i]->d_name[j] - '0';
+		if (v > max)
+			max = v;
+		free(names[i]);
+	}
+	free(names);
+
+	for (i = 1; i < 6; i++) {
+		if (asprintf(&new_com, "/dev/nmdm%dB", max + i) < 0)
+			return -1;
+
+		while ((j = open(new_com, O_RDWR|O_NONBLOCK)) < 0)
+			if (errno != EINTR)
+				break;
+		if (j >= 0)
+			break;
+		free(new_com);
+	}
+	if (j < 0)
+		return -1;
+	close(j);
+	free(VM_ASCOMPORT(vm_ent));
+	VM_ASCOMPORT(vm_ent) = new_com;
+
+	return 0;
+}
+
 int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
@@ -377,7 +441,8 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	VM_METHOD(vm_ent) = &method_list[conf->backend];
 
-	if (VM_START(vm_ent) < 0) {
+	if (assign_comport(vm_ent) < 0 ||
+	    VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
 		VM_CLEANUP(vm_ent);
 		return -1;

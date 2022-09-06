@@ -60,6 +60,7 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 #define VM_STATE(v)         ((v)->vm.state)
 #define VM_MAPFILE(v)       ((v)->vm.mapfile)
 #define VM_VARSFILE(v)      ((v)->vm.varsfile)
+#define VM_ASCOMPORT(v)     ((v)->vm.assigned_comport)
 #define VM_INFD(v)          ((v)->vm.infd)
 #define VM_OUTFD(v)         ((v)->vm.outfd)
 #define VM_ERRFD(v)         ((v)->vm.errfd)

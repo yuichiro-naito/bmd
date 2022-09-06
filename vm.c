@@ -47,7 +47,7 @@ redirect_to_com(struct vm *vm)
 	int fd;
 	char *com;
 
-	if ((com = vm->conf->comport) == NULL)
+	if ((com = vm->assigned_comport) == NULL)
 		com = "/dev/null";
 
 	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
@@ -246,8 +246,8 @@ grub_load(struct vm *vm)
 	struct vm_conf *conf = vm->conf;
 	size_t len;
 	char *cmd;
-	bool doredirect = (conf->comport == NULL) ||
-	    (strcasecmp(conf->comport, "stdio") != 0);
+	bool doredirect = (vm->assigned_comport == NULL) ||
+	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
 
 	cmd = create_load_command(conf, &len);
 
@@ -312,8 +312,8 @@ bhyve_load(struct vm *vm)
 	char *args[12];
 	int i, outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
-	bool dopipe = (conf->comport == NULL) ||
-	    (strcasecmp(conf->comport, "stdio") != 0);
+	bool dopipe = (vm->assigned_comport == NULL) ||
+	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -356,7 +356,7 @@ bhyve_load(struct vm *vm)
 			args[i++] = "boot_single=YES";
 		}
 		args[i++] = "-c";
-		args[i++] = (conf->comport != NULL) ? conf->comport : "stdio";
+		args[i++] = (vm->assigned_comport != NULL) ? vm->assigned_comport : "stdio";
 		args[i++] = "-m";
 		args[i++] = conf->memory;
 		args[i++] = "-d";
@@ -473,8 +473,8 @@ exec_bhyve(struct vm *vm)
 	char *buf = NULL;
 	size_t buf_size;
 	FILE *fp;
-	bool dopipe = ((conf->comport == NULL) ||
-	    (strcasecmp(conf->comport, "stdio") != 0));
+	bool dopipe = ((vm->assigned_comport == NULL) ||
+	    (strcasecmp(vm->assigned_comport, "stdio") != 0));
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -533,9 +533,9 @@ exec_bhyve(struct vm *vm)
 		WRITE_STR(fp, conf->ncpu);
 		WRITE_STR(fp, "-m");
 		WRITE_STR(fp, conf->memory);
-		if (conf->comport != NULL) {
+		if (vm->assigned_comport != NULL) {
 			WRITE_STR(fp, "-l");
-			WRITE_FMT(fp, "com1,%s", conf->comport);
+			WRITE_FMT(fp, "com1,%s", vm->assigned_comport);
 		}
 
 		if (conf->keymap != NULL) {
@@ -773,8 +773,8 @@ exec_qemu(struct vm *vm)
 	size_t n, buf_size;
 	ssize_t rc;
 	FILE *fp;
-	bool dopipe = ((conf->comport == NULL) ||
-	    (strcasecmp(conf->comport, "stdio") != 0));
+	bool dopipe = ((vm->assigned_comport == NULL) ||
+	    (strcasecmp(vm->assigned_comport, "stdio") != 0));
 
 	if (dopipe) {
 		if (pipe(infd) < 0) {
@@ -865,10 +865,10 @@ exec_qemu(struct vm *vm)
 		WRITE_STR(fp, conf->ncpu);
 		WRITE_STR(fp, "-m");
 		WRITE_STR(fp, conf->memory);
-		if (conf->comport == NULL) {
+		if (vm->assigned_comport == NULL) {
 			WRITE_STR(fp, "-monitor");
 			WRITE_STR(fp, "-stdio");
-		} else if (strcasecmp(conf->comport, "stdio") == 0) {
+		} else if (strcasecmp(vm->assigned_comport, "stdio") == 0) {
 			WRITE_STR(fp, "-chardev");
 			WRITE_STR(fp, "stdio,mux=on,id=char0,signal=off");
 			WRITE_STR(fp, "-mon");
@@ -880,7 +880,7 @@ exec_qemu(struct vm *vm)
 			WRITE_STR(fp, "stdio");
 			WRITE_STR(fp, "-chardev");
 			WRITE_FMT(fp, "serial,path=%s,id=char0,signal=off",
-			    conf->comport);
+			    vm->assigned_comport);
 			WRITE_STR(fp, "-serial");
 			WRITE_STR(fp, "chardev:char0");
 		}

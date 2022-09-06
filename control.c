@@ -190,27 +190,19 @@ err:
 }
 
 int
-do_console(char *name)
+do_console(const char *comport)
 {
-	struct vm_conf_entry *conf_ent;
-	struct vm_conf *conf;
 	int i;
 	char *port;
 
-	if ((conf_ent = lookup_vm_conf(name)) == NULL) {
-		printf("no such VM %s\n", name);
-		return 1;
-	}
-	conf = &conf_ent->conf;
-
-	/* A null modem device has at least 6 characters. */
-	if (conf->comport == NULL ||
-	    (i = strlen(conf->comport) - 1 ) < 5) {
-		printf("VM %s doesn't have com port\n", name);
+	/* A null modem device has at least 11 characters. */
+	if (comport == NULL ||
+	    (i = strlen(comport) - 1 ) < 10) {
+		printf("invalid comport \"%s\"\n", comport);
 		return 1;
 	}
 
-	port = strdup(conf->comport);
+	port = strdup(comport);
 	if (port == NULL) {
 		printf("failed to allocate memory\n");
 		return 1;
@@ -288,18 +280,49 @@ compare_by_name(const void *a, const void *b)
 #undef GETNAME
 }
 
+nvlist_t *
+send_recv(nvlist_t *cmd)
+{
+	int s;
+	nvlist_t *res = NULL;
+	uint32_t sz;
+
+	if ((s = connect_to_server(&gl_conf)) < 0) {
+		printf("can not connect to %s\n", gl_conf.cmd_sock_path);
+		return NULL;
+	}
+
+	sz = htonl(nvlist_size(cmd));
+retry:
+	if (send(s, &sz, sizeof(sz), 0) < 0) {
+		if (errno == EINTR)
+			goto retry;
+		printf("can not send to bmd\n");
+		goto end;
+	}
+	if (nvlist_send(s, cmd) < 0) {
+		printf("can not send to bmd\n");
+		goto end;
+	}
+
+	res = nvlist_recv(s, 0);
+	if (res == NULL) {
+		printf("server returns null\n");
+		goto end;
+	}
+end:
+	close(s);
+	return res;
+}
+
 int
 control(int argc, char *argv[])
 {
-	int s, ret = 0;
+	int ret = 0;
 	nvlist_t *cmd, *res = NULL;
-	int32_t sz;
 
 	if (argc < 2)
 		return usage(argc, argv);
-
-	if (argc == 3 && strcmp(argv[1], "console") == 0)
-		return do_console(argv[2]);
 
 	if (argc == 3 && strcmp(argv[1], "inspect") == 0)
 		return do_inspect(argv[2]);
@@ -338,36 +361,19 @@ control(int argc, char *argv[])
 				 strcmp(argv[1], "install") == 0 ||
 				 strcmp(argv[1], "reset") == 0 ||
 				 strcmp(argv[1], "poweroff") == 0 ||
-				 strcmp(argv[1], "shutdown") == 0)) {
+				 strcmp(argv[1], "shutdown") == 0 ||
+				 strcmp(argv[1], "showcomport") == 0)) {
 		nvlist_add_string(cmd, "command", argv[1]);
+		nvlist_add_string(cmd, "name", argv[2]);
+	} else 	if (argc == 3 && strcmp(argv[1], "console") == 0) {
+		nvlist_add_string(cmd, "command", "showcomport");
 		nvlist_add_string(cmd, "name", argv[2]);
 	} else {
 		return usage(argc, argv);
 	}
 
-	if ((s = connect_to_server(&gl_conf)) < 0) {
-		printf("can not connect to %s\n", gl_conf.cmd_sock_path);
-		return 1;
-	}
-
-	sz = htonl(nvlist_size(cmd));
-retry:
-	ret = send(s, &sz, sizeof(sz), 0);
-	if (ret < 0) {
-		if (errno == EINTR)
-			goto retry;
-		printf("can not send to bmd\n");
-		goto end;
-	}
-	ret = nvlist_send(s, cmd);
-	if (ret < 0) {
-		printf("can not send to bmd\n");
-		goto end;
-	}
-
-	res = nvlist_recv(s, 0);
-	if (res == NULL) {
-		printf("server returns null\n");
+	if ((res = send_recv(cmd)) == NULL) {
+		ret = -1;
 		goto end;
 	}
 
@@ -376,7 +382,11 @@ retry:
 		goto end;
 	}
 
-	if (argc == 2 && strcmp(argv[1], "list") == 0) {
+	if (argc == 3 && strcmp(argv[1], "console") == 0) {
+		return do_console(nvlist_get_string(res, "comport"));
+	} else if (argc == 3 && strcmp(argv[1], "showcomport") == 0) {
+		printf("%s\n", nvlist_get_string(res, "comport"));
+	} else if (argc == 2 && strcmp(argv[1], "list") == 0) {
 		size_t i, count;
 		const struct nvlist *const *list;
 
@@ -400,7 +410,6 @@ retry:
 	}
 
 end:
-	close(s);
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
 	return ret;
