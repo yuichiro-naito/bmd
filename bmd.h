@@ -120,6 +120,7 @@ int call_plugin_parser(struct plugin_data_head *head,
 int load_plugins();
 void free_vm_entry(struct vm_entry *vm_ent);
 
+int assign_comport(struct vm_entry *vm_ent);
 int create_plugin_data(struct plugin_data_head *head);
 struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
 struct vm_conf_entry *load_vm_conf_entry(int fd, const char *filename);
