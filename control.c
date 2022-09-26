@@ -125,6 +125,11 @@ direct_run(const char *name, bool install, bool single)
 		return 1;
 	}
 
+	if (assign_comport(vm_ent) < 0) {
+		ERR("failed to assign comport for vm %s\n", name);
+		goto err;
+	}
+
 	if (VM_START(vm_ent) < 0)
 		goto err;
 	i = 0;
