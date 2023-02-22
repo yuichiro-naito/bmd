@@ -323,8 +323,8 @@ static nvlist_t *
 boot0_command(int s, const nvlist_t *nv, int style)
 {
 	int fd, dirfd = -1;
-	const char *name, *reason;
-	struct vm_entry *vm_ent;
+	const char *name, *reason, *comport;
+	struct vm_entry *vm_ent = NULL;
 	struct vm_conf_entry *conf_ent;
 	nvlist_t *res;
 	bool error = false;
@@ -402,6 +402,9 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
+	if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
+		       (comport = VM_CONF(vm_ent)->comport)))
+		nvlist_add_string(res, "comport", comport);
 	return res;
 }
 

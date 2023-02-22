@@ -27,7 +27,7 @@ usage(int argc, char *argv[])
 {
 	printf(
 	    "usage: %s <subcommand>\n"
-	    "  boot <name>          : boot VM\n"
+	    "  boot [-c] <name>     : boot VM\n"
 	    "  install <name>       : install VM from ISO image\n"
 	    "  shutdown <name>      : ACPI shutdown VM\n"
 	    "  poweroff <name>      : poweroff VM\n"
@@ -196,7 +196,7 @@ err:
 }
 
 int
-do_console(const char *comport)
+attach_console(const char *comport)
 {
 	int i;
 	char *port;
@@ -322,6 +322,86 @@ end:
 }
 
 int
+do_list()
+{
+	int ret = 0;
+	nvlist_t *cmd, *res = NULL;
+	size_t i, count;
+	const static char *fmt = "%20s%5s%7s%10s%12s\n";
+	const struct nvlist *const *list;
+
+	cmd = nvlist_create(0);
+	nvlist_add_string(cmd, "command", "list");
+
+	if ((res = send_recv(cmd)) == NULL) {
+		ret = 1;
+		goto end;
+	}
+
+	if (nvlist_get_bool(res, "error")) {
+		printf("%s\n", nvlist_get_string(res, "reason"));
+		goto end;
+	}
+
+	printf(fmt, "name", "ncpu", "memory", "loader", "state");
+	printf(fmt, "-------------------",
+	       "----", "------", "---------", "-----------");
+
+	list = nvlist_get_nvlist_array(res, "vm_list", &count);
+	qsort((void *)list, count, sizeof(nvlist_t *), compare_by_name);
+	for (i = 0; i < count; i++) {
+		printf(fmt,
+		       nvlist_get_string(list[i], "name"),
+		       nvlist_get_string(list[i], "ncpu"),
+		       nvlist_get_string(list[i], "memory"),
+		       nvlist_get_string(list[i], "loader"),
+		       nvlist_get_string(list[i], "state"));
+	}
+
+end:
+	nvlist_destroy(cmd);
+	nvlist_destroy(res);
+	return ret;
+}
+
+int
+do_boot_console(const char *name, bool boot, bool console, bool show)
+{
+	int ret = 0;
+	nvlist_t *cmd, *res = NULL;
+	const char *comport = NULL;
+
+	cmd = nvlist_create(0);
+	nvlist_add_string(cmd, "command", boot ? "boot" : "showcomport");
+	nvlist_add_string(cmd, "name", name);
+
+	if ((res = send_recv(cmd)) == NULL) {
+		ret = 1;
+		goto end;
+	}
+
+	if (nvlist_get_bool(res, "error")) {
+		ret = 1;
+		printf("%s\n", nvlist_get_string(res, "reason"));
+		goto end;
+	}
+
+	if (nvlist_exists_string(res, "comport"))
+		comport = nvlist_get_string(res, "comport");
+
+	if (show)
+		printf("%s\n", comport ? comport : "no com port");
+
+	if (console && comport)
+		ret = attach_console(comport);
+
+end:
+	nvlist_destroy(cmd);
+	nvlist_destroy(res);
+	return ret;
+}
+
+int
 control(int argc, char *argv[])
 {
 	int ret = 0;
@@ -330,8 +410,40 @@ control(int argc, char *argv[])
 	if (argc < 2)
 		return usage(argc, argv);
 
-	if (argc == 3 && strcmp(argv[1], "inspect") == 0)
-		return do_inspect(argv[2]);
+	/* command name alias */
+	if (strcmp(argv[1], "start") == 0)
+		argv[1] = "boot";
+	else if (strcmp(argv[1], "stop") == 0)
+		argv[1] = "shutdown";
+
+	if (strcmp(argv[1], "list") == 0)
+		return do_list();
+
+	if (argc == 3) {
+		if (strcmp(argv[1], "inspect") == 0)
+			return do_inspect(argv[2]);
+		if (strcmp(argv[1], "console") == 0)
+			return do_boot_console(argv[2], false, true, false);
+		if (strcmp(argv[1], "showcomport") == 0)
+			return do_boot_console(argv[2], false, false, true);
+	}
+
+	if (strcmp(argv[1], "boot") == 0) {
+		char c, *name;
+		bool console = false;
+		while ((c = getopt(argc - 1, argv + 1, "c")) != -1) {
+			switch (c) {
+			case 'c':
+				console = true;
+				break;
+			default:
+				return usage(argc, argv);
+			}
+		}
+		if ((name = argv[optind + 1]) == NULL)
+			return usage(argc, argv);
+		return do_boot_console(name, true, console, false);
+	}
 
 	if (strcmp(argv[1], "run") == 0) {
 		char c, *name;
@@ -354,65 +466,25 @@ control(int argc, char *argv[])
 		return direct_run(name, install, single);
 	}
 
-	cmd = nvlist_create(0);
-
-	if (strcmp(argv[1], "start") == 0)
-		argv[1] = "boot";
-	else if (strcmp(argv[1], "stop") == 0)
-		argv[1] = "shutdown";
-
-	if (argc == 2 && strcmp(argv[1], "list") == 0) {
-		nvlist_add_string(cmd, "command", argv[1]);
-	} else if (argc == 3 && (strcmp(argv[1], "boot") == 0 ||
-				 strcmp(argv[1], "install") == 0 ||
-				 strcmp(argv[1], "reset") == 0 ||
-				 strcmp(argv[1], "poweroff") == 0 ||
-				 strcmp(argv[1], "shutdown") == 0 ||
-				 strcmp(argv[1], "showcomport") == 0)) {
+	if (argc == 3 && (strcmp(argv[1], "install") == 0 ||
+			  strcmp(argv[1], "reset") == 0 ||
+			  strcmp(argv[1], "poweroff") == 0 ||
+			  strcmp(argv[1], "shutdown") == 0)) {
+		cmd = nvlist_create(0);
 		nvlist_add_string(cmd, "command", argv[1]);
 		nvlist_add_string(cmd, "name", argv[2]);
-	} else 	if (argc == 3 && strcmp(argv[1], "console") == 0) {
-		nvlist_add_string(cmd, "command", "showcomport");
-		nvlist_add_string(cmd, "name", argv[2]);
-	} else {
+	} else
 		return usage(argc, argv);
-	}
 
 	if ((res = send_recv(cmd)) == NULL) {
-		ret = -1;
+		ret = 1;
 		goto end;
 	}
 
 	if (nvlist_get_bool(res, "error")) {
+		ret = 1;
 		printf("%s\n", nvlist_get_string(res, "reason"));
 		goto end;
-	}
-
-	if (argc == 3 && strcmp(argv[1], "console") == 0) {
-		return do_console(nvlist_get_string(res, "comport"));
-	} else if (argc == 3 && strcmp(argv[1], "showcomport") == 0) {
-		printf("%s\n", nvlist_get_string(res, "comport"));
-	} else if (argc == 2 && strcmp(argv[1], "list") == 0) {
-		size_t i, count;
-		const struct nvlist *const *list;
-
-#define FORMAT "%20s%5s%7s%10s%12s\n"
-
-		printf(FORMAT, "name", "ncpu", "memory", "loader", "state");
-		printf(FORMAT, "-------------------",
-		       "----", "------", "---------", "-----------");
-
-		list = nvlist_get_nvlist_array(res, "vm_list", &count);
-		qsort((void *)list, count, sizeof(nvlist_t *), compare_by_name);
-		for (i = 0; i < count; i++) {
-			printf(FORMAT,
-			       nvlist_get_string(list[i], "name"),
-			       nvlist_get_string(list[i], "ncpu"),
-			       nvlist_get_string(list[i], "memory"),
-			       nvlist_get_string(list[i], "loader"),
-			       nvlist_get_string(list[i], "state"));
-		}
-#undef FORMAT
 	}
 
 end:
