@@ -1112,6 +1112,7 @@ main(int argc, char *argv[])
 	free_vm_list();
 	close(gl_conf.kq);
 	remove_plugins();
+	free_id_list();
 	INFO("%s\n", "quit daemon");
 	LOG_CLOSE();
 	return 0;

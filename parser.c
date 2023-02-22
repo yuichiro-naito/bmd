@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <ctype.h>
 
 #include "conf.h"
 #include "log.h"
@@ -11,13 +12,14 @@
 #include "bmd.h"
 
 static int
-get_token(FILE *fp, char **token)
+get_token(FILE *fp, char **token, struct vm_conf *conf)
 {
 	int c;
 	enum PSTATE { BEGIN, TOKEN, QUOTE } f;
 	FILE *t;
-	char *buf;
+	char *buf, *key, *val;
 	size_t len;
+	long vstart, vend;
 
 	if (feof(fp))
 		return 1;
@@ -30,6 +32,46 @@ get_token(FILE *fp, char **token)
 	f = BEGIN;
 	while ((c = fgetc(fp)) != EOF) {
 		switch (c) {
+		case '$':
+			if (conf == NULL) {
+				if (f == BEGIN)
+					f = TOKEN;
+				FPUTC(c, t);
+				continue;
+			}
+			c = fgetc(fp);
+			vstart = ftell(fp);
+			if (c != '{')
+				goto next_char;
+			flockfile(fp);
+			while ((c = getc_unlocked(fp)) != '}')
+				if (!(isalnum(c) || c == '_'))
+					break;
+			funlockfile(fp);
+			if (c != '}')
+				goto next_char;
+			vend = ftell(fp);
+			/* ignore very long variable name */
+			if (vend - vstart > 10*1024)
+				goto next_char;
+			if ((key = malloc(vend - vstart)) == NULL)
+				goto next_char;
+			fseek(fp, vstart, SEEK_SET);
+			if (fread(key, 1, vend - vstart, fp) < 0) {
+				free(key);
+				goto next_char;
+			}
+			key[vend - vstart - 1] = '\0';
+			if ((val = get_var(conf, key)) != NULL)
+				fwrite_unlocked(val, 1, strlen(val), t);
+			free(key);
+			continue;
+		next_char:
+			FPUTC('$', t);
+			fseek(fp, vstart - 1, SEEK_SET);
+			if (f == BEGIN)
+				f = TOKEN;
+			continue;
 		case '#':
 			switch (f) {
 			case TOKEN:
@@ -38,8 +80,9 @@ get_token(FILE *fp, char **token)
 				continue;
 			default:
 				flockfile(fp);
-				while ((getc_unlocked(fp)) != '\n')
-					;
+				while ((c = getc_unlocked(fp)) != '\n')
+					if (c == EOF)
+						break;
 				funlockfile(fp);
 				FPUTC('\n', t);
 				goto loop_end;
@@ -579,14 +622,14 @@ parse(struct vm_conf *conf, FILE *fp, struct plugin_data_head *head)
 	char *name = conf->name;
 
 	while (1) {
-		if (get_token(fp, &key) == 1)
+		if (get_token(fp, &key, NULL) == 1)
 			break;
 		if (key[0] == '\n') {
 			free(key);
 			continue;
 		}
 
-		if (get_token(fp, &val) == 1) {
+		if (get_token(fp, &val, NULL) == 1) {
 			free(key);
 			break;
 		}
@@ -602,11 +645,17 @@ parse(struct vm_conf *conf, FILE *fp, struct plugin_data_head *head)
 		if (parser && parser->clear != NULL)
 			(*parser->clear)(conf);
 		while (1) {
-			if (get_token(fp, &val) == 1)
+			if (get_token(fp, &val, conf) == 1)
 				break;
 			if (val[0] == '\n') {
 				free(val);
 				break;
+			}
+
+			if (key[0] == '$') {
+				set_var(conf, &key[1], val);
+				free(val);
+				continue;
 			}
 
 			if (parser) {

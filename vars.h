@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <sys/tree.h>
 #include <sys/nv.h>
 
 #include <stdbool.h>
@@ -64,7 +65,13 @@ enum VM_BACKENDS { BHYVE, QEMU };
 
 enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
 
+struct conf_var {
+	RB_ENTRY(conf_var) entry;
+	char *key, *val;
+};
+
 struct vm_conf {
+	RB_HEAD(vartree, conf_var) vars;
 	int boot_delay;
 	int loader_timeout;
 	int stop_timeout;
@@ -134,7 +141,7 @@ struct vm_methods {
 	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 3
+#define PLUGIN_VERSION 4
 
 typedef struct plugin_desc {
 	int version;

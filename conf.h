@@ -69,4 +69,10 @@ int compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b);
 int compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b);
 int compare_net_conf(const struct net_conf *a, const struct net_conf *b);
 int compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b);
+
+int set_var(struct vm_conf *conf, char *k, const char *v);
+char *get_var(struct vm_conf *conf, char *k);
+
+void free_id_list();
+
 #endif

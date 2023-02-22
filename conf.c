@@ -4,8 +4,58 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
+#include "log.h"
 #include "conf.h"
+
+struct id_entry {
+	SLIST_ENTRY(id_entry) next;
+	char *name;
+	unsigned int id;
+};
+
+/*
+  List of identfiers.
+ */
+SLIST_HEAD(, id_entry) id_list = SLIST_HEAD_INITIALIZER();
+
+static int compare_variable_key(struct conf_var *, struct conf_var *);
+RB_GENERATE(vartree, conf_var, entry, compare_variable_key);
+
+void
+free_id_list()
+{
+	struct id_entry *e, *t;
+
+	SLIST_FOREACH_SAFE(e, &id_list, next, t) {
+		free(e->name);
+		free(e);
+	}
+	SLIST_INIT(&id_list);
+}
+
+static int
+get_id(const char *name, unsigned int *id)
+{
+	static unsigned int lastid = 0;
+	struct id_entry *e;
+
+	SLIST_FOREACH(e, &id_list, next)
+		if (strcmp(e->name, name) == 0) {
+			*id = e->id;
+			return 0;
+		}
+	if ((e = malloc(sizeof(*e))) == NULL)
+		return -1;
+	if ((e->name = strdup(name)) == NULL) {
+		free(e);
+		return -1;
+	}
+	*id = e->id = lastid++;
+	SLIST_INSERT_HEAD(&id_list, e, next);
+	return 0;
+}
 
 void
 free_passthru_conf(struct passthru_conf *c)
@@ -95,10 +145,28 @@ clear_net_conf(struct vm_conf *vc)
 }
 
 void
+free_var(struct conf_var *c)
+{
+	if (c == NULL)
+		return;
+	free(c->key);
+	free(c->val);
+	free(c);
+}
+
+void
 free_vm_conf(struct vm_conf *vc)
 {
+	struct conf_var *v, *tv;
+
 	if (vc == NULL)
 		return;
+
+	RB_FOREACH_SAFE(v, vartree, &vc->vars, tv) {
+		RB_REMOVE(vartree, &vc->vars, v);
+		free_var(v);
+	}
+
 	free(vc->name);
 	free(vc->filename);
 	free(vc->ncpu);
@@ -267,6 +335,9 @@ set_name(struct vm_conf *conf, const char *name)
 {
 	if (conf == NULL)
 		return 0;
+	if (set_var(conf, "NAME", name) < 0)
+		ERR("failed to set \"NAME\" variable! (%s)\n",
+		    strerror(errno));
 	return set_string(&conf->name, name);
 }
 
@@ -598,9 +669,10 @@ err:
 struct vm_conf *
 create_vm_conf(const char *filename)
 {
-	char *name, *fname, *arch;
+	char *name, *fname, *arch, idnum[12];
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
+	unsigned int id;
 
 	ret = calloc(1, sizeof(typeof(*ret)));
 	fbuf = create_fbuf();
@@ -611,6 +683,18 @@ create_vm_conf(const char *filename)
 	    arch == NULL)
 		goto err;
 
+	RB_INIT(&ret->vars);
+	if (set_var(ret, "NAME", name) < 0)
+		ERR("failed to set \"NAME\" variable! (%s)\n",
+		    strerror(errno));
+	if (get_id(name, &id) == 0) {
+		snprintf(idnum, sizeof(idnum), "%u", id);
+		if (set_var(ret, "ID", idnum) < 0)
+			ERR("failed to set \"NAME\" variable! (%s)\n",
+			    strerror(errno));
+	} else
+		ERR("failed to allocate \"ID\" number! (%s)\n",
+		    strerror(errno));
 	ret->hostbridge = INTEL;
 	ret->fbuf = fbuf;
 	ret->name = name;
@@ -626,6 +710,7 @@ create_vm_conf(const char *filename)
 
 	return ret;
 err:
+	ERR("failed to create VM config! (%s)\n", strerror(errno));
 	free(ret);
 	free(fbuf);
 	free(name);
@@ -855,4 +940,57 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 		return -1;
 
 	return 0;
+}
+
+static int
+compare_variable_key(struct conf_var *a, struct conf_var *b)
+{
+	if (a == NULL && b == NULL)
+		return 0;
+	if (a == NULL)
+		return -1;
+	if (b == NULL)
+		return 1;
+	return compare_string(a->key, b->key);
+}
+
+int
+set_var(struct vm_conf *conf, char *k, const char *v)
+{
+	struct conf_var *n, key = {.key = k, .val = NULL};
+	char *nk, *nv;
+
+	if (k == NULL || v == NULL)
+		return -1;
+
+	if ((n = RB_FIND(vartree, &conf->vars, &key))) {
+		if ((nv = strdup(v)) == NULL)
+			return -1;
+		free(n->val);
+		n->val = nv;
+	} else {
+		n = malloc(sizeof(*n));
+		nk = strdup(k);
+		nv = strdup(v);
+		if (n == NULL || nk == NULL || nv == NULL) {
+			free(nv);
+			free(nk);
+			free(n);
+			return -1;
+		}
+		n->key = nk;
+		n->val = nv;
+		RB_INSERT(vartree, &conf->vars, n);
+	}
+	return 0;
+}
+
+char *
+get_var(struct vm_conf *conf, char *k)
+{
+	struct conf_var *r, key = {.key = k, .val = NULL};
+
+	if ((r = RB_FIND(vartree, &conf->vars, &key)) == NULL)
+		return NULL;
+	return r->val;
 }
