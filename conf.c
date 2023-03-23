@@ -11,8 +11,8 @@
 
 struct id_entry {
 	SLIST_ENTRY(id_entry) next;
-	char *name;
 	unsigned int id;
+	char name[0];
 };
 
 /*
@@ -28,10 +28,8 @@ free_id_list()
 {
 	struct id_entry *e, *t;
 
-	SLIST_FOREACH_SAFE(e, &id_list, next, t) {
-		free(e->name);
+	SLIST_FOREACH_SAFE(e, &id_list, next, t)
 		free(e);
-	}
 	SLIST_INIT(&id_list);
 }
 
@@ -46,12 +44,9 @@ get_id(const char *name, unsigned int *id)
 			*id = e->id;
 			return 0;
 		}
-	if ((e = malloc(sizeof(*e))) == NULL)
+	if ((e = malloc(sizeof(*e) + strlen(name) + 1)) == NULL)
 		return -1;
-	if ((e->name = strdup(name)) == NULL) {
-		free(e);
-		return -1;
-	}
+	strcpy(e->name, name);
 	*id = e->id = lastid++;
 	SLIST_INSERT_HEAD(&id_list, e, next);
 	return 0;
