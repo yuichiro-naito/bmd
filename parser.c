@@ -1,33 +1,118 @@
-#include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <ctype.h>
 
 #include "conf.h"
 #include "log.h"
 #include "parser.h"
-#include "vars.h"
 #include "bmd.h"
+
+#define FPUTC fputc_unlocked
+
+static int
+arithmetic_calc(FILE *fp, struct vm_conf *conf, int *ret) {
+	int c, s = 0;
+	FILE *t;
+	char *buf;
+	size_t len;
+
+	t = open_memstream(&buf, &len);
+	flockfile(t);
+
+	while ((c = fgetc(fp)) != EOF) {
+		FPUTC(c, t);
+		switch (c) {
+		case '(':
+			++s;
+			break;
+		case ')':
+			if (--s == 0)
+				goto loop_end;
+		}
+	}
+loop_end:
+	funlockfile(t);
+	fclose(t);
+	if (c == ')') {
+		t = fmemopen(buf, len, "r");
+		c = reverse_polish_notation(t, conf, ret);
+		fclose(t);
+	} else
+		c = -2;
+	free(buf);
+	return c;
+}
+
+int
+parse_variable(FILE *fp, struct vm_conf *conf, char **value, long *num)
+{
+	char c, *key, *val, *p;
+	long vstart, n;
+	size_t buflen;
+
+	vstart = ftell(fp);
+	if (fgetc(fp) != '{')
+		goto err;
+	flockfile(fp);
+	while ((c = getc_unlocked(fp)) != '}')
+		if (!(isalnum(c) || c == '_'))
+			break;
+	funlockfile(fp);
+	if (c != '}')
+		goto err;
+	buflen = ftell(fp) - vstart - 1;
+	/* ignore very long variable name */
+	if (buflen > 10*1024 ||
+	    (key = malloc(buflen)) == NULL)
+		goto err;
+	fseek(fp, vstart + 1, SEEK_SET);
+	if (fread(key, 1, buflen, fp) < 0) {
+		free(key);
+		goto err;
+	}
+	key[buflen - 1] = '\0';
+	if ((val = get_var(conf, key)) == NULL) {
+		ERR("%s: ${%s} is undefined", conf->name, key);
+		free(key);
+		return 0;
+	}
+
+	if (value)
+		*value = val;
+
+	if (num) {
+		n = strtol(val, &p, 10);
+		if (*p != '\0')
+			ERR("%s: ${%s} is not a number",
+			    conf->name, key);
+		else
+			*num = n;
+	}
+
+	free(key);
+	return strlen(val);
+
+err:
+	fseek(fp, vstart, SEEK_SET);
+	return -1;
+}
+
 
 static int
 get_token(FILE *fp, char **token, struct vm_conf *conf)
 {
-	int c;
+	int c, num, rc;
 	enum PSTATE { BEGIN, TOKEN, QUOTE } f;
 	FILE *t;
-	char *buf, *key, *val;
+	char *buf, *val;
 	size_t len;
-	long vstart, vend;
+	long vstart;
 
 	if (feof(fp))
 		return 1;
 
 	t = open_memstream(&buf, &len);
 	flockfile(t);
-
-#define FPUTC fputc_unlocked
 
 	f = BEGIN;
 	while ((c = fgetc(fp)) != EOF) {
@@ -39,38 +124,27 @@ get_token(FILE *fp, char **token, struct vm_conf *conf)
 				FPUTC(c, t);
 				continue;
 			}
-			c = fgetc(fp);
 			vstart = ftell(fp);
-			if (c != '{')
-				goto next_char;
-			flockfile(fp);
-			while ((c = getc_unlocked(fp)) != '}')
-				if (!(isalnum(c) || c == '_'))
-					break;
-			funlockfile(fp);
-			if (c != '}')
-				goto next_char;
-			vend = ftell(fp);
-			/* ignore very long variable name */
-			if (vend - vstart > 10*1024)
-				goto next_char;
-			if ((key = malloc(vend - vstart)) == NULL)
-				goto next_char;
-			fseek(fp, vstart, SEEK_SET);
-			if (fread(key, 1, vend - vstart, fp) < 0) {
-				free(key);
-				goto next_char;
+			if (fgetc(fp) == '(' && fgetc(fp) == '(') {
+				fseek(fp, vstart, SEEK_SET);
+				rc = arithmetic_calc(fp, conf, &num);
+				if (rc == -2) {
+					fwrite("$((", 1, 3, t);
+					fseek(fp, vstart + 2, SEEK_SET);
+					continue;
+				}
+				if (rc < 0 || fprintf(t, "%d", num) < 0)
+					continue;
+				goto loop_end;
 			}
-			key[vend - vstart - 1] = '\0';
-			if ((val = get_var(conf, key)) != NULL)
-				fwrite_unlocked(val, 1, strlen(val), t);
-			free(key);
-			continue;
-		next_char:
-			FPUTC('$', t);
-			fseek(fp, vstart - 1, SEEK_SET);
 			if (f == BEGIN)
 				f = TOKEN;
+			fseek(fp, vstart, SEEK_SET);
+			rc = parse_variable(fp, conf, &val, NULL);
+			if (rc < 0)
+				FPUTC('$', t);
+			else if (rc > 0)
+				fwrite_unlocked(val, 1, rc, t);
 			continue;
 		case '#':
 			switch (f) {
@@ -634,7 +708,7 @@ parse(struct vm_conf *conf, FILE *fp, struct plugin_data_head *head)
 			break;
 		}
 		if (val[0] != '=') {
-			ERR("value not found for %s in %s\n", key, name);
+			ERR("%s: value not found : %s\n", name, key);
 			goto bad;
 		}
 
@@ -660,20 +734,20 @@ parse(struct vm_conf *conf, FILE *fp, struct plugin_data_head *head)
 
 			if (parser) {
 				if ((*parser->parse)(conf, val) < 0) {
-					ERR("invalid value %s in %s\n", val,
-					    name);
+					ERR("%s: invalid value: %s = %s\n",
+					    name, key, val);
 					goto bad;
 				}
 			} else {
 				rc = call_plugin_parser(head, key, val);
 				if (rc > 0) {
-					ERR("unknown key %s in %s\n", key,
-					    name);
+					ERR("%s: unknown key %s\n",
+					    name, key);
 					goto bad;
 				}
 				if (rc < 0) {
-					ERR("invalid value %s in %s\n", val,
-					    name);
+					ERR("%s: invalid value: %s = %s\n",
+					    name, key, val);
 					goto bad;
 				}
 			}

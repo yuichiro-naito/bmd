@@ -34,6 +34,7 @@ usage(int argc, char *argv[])
 	    "  reset <name>         : reset VM\n"
 	    "  console <name>       : connect to com port\n"
 	    "  showcomport <name>   : show comport\n"
+	    "  showconfig [<name>]  : show VM config\n"
 	    "  inspect <name>       : inspect and print installcmd & loadcmd\n"
 	    "  run [-i] [-s] <name> : directly run with serial console\n"
 	    "  list                 : list VM name & status\n",
@@ -186,12 +187,14 @@ wait:
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	remove_plugins();
+	free_id_list();
 	return 0;
 err:
 	VM_CLEANUP(vm_ent);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	remove_plugins();
+	free_id_list();
 	return 1;
 }
 
@@ -275,6 +278,7 @@ do_inspect(char *name)
 	}
 
 	free_vm_conf_entry(conf_ent);
+	free_id_list();
 	return 0;
 }
 
@@ -402,6 +406,34 @@ end:
 }
 
 int
+do_showconfig(const char *name)
+{
+	struct vm_conf_entry *conf_ent, *cen;
+	struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
+	int count = 0;
+
+	LOG_OPEN_PERROR();
+
+	if (load_config_files(&vm_conf_list) < 0) {
+		printf("failed to load VM config files\n");
+		return 1;
+	}
+
+	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen) {
+		if (name == NULL || strcmp(conf_ent->conf.name, name) == 0) {
+			if (count)
+				fputs("\n", stdout);
+			dump_vm_conf(&conf_ent->conf, stdout);
+			count++;
+		}
+		free_vm_conf_entry(conf_ent);
+	}
+
+	free_id_list();
+	return 0;
+}
+
+int
 control(int argc, char *argv[])
 {
 	int ret = 0;
@@ -418,6 +450,9 @@ control(int argc, char *argv[])
 
 	if (strcmp(argv[1], "list") == 0)
 		return do_list();
+
+	if (strcmp(argv[1], "showconfig") == 0)
+		return do_showconfig(argv[2]);
 
 	if (argc == 3) {
 		if (strcmp(argv[1], "inspect") == 0)

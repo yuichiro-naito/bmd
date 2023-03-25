@@ -1,7 +1,3 @@
-#include <sys/queue.h>
-
-#include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -732,36 +728,67 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
+	struct passthru_conf *pc;
 	struct fbuf *fb;
-	static char *btype[] = { "no", "yes", "oneshot", "install", "always",
-		"reboot" };
+	const static char *btype[] = { "no", "yes", "oneshot", "install",
+				       "always", "reboot" };
+	const static char *hostbridge_str[] = {"none", "intel", "amd"};
+	const static char *bool_str[] ={"false", "true"};
+	const static char *fmt = "%18s = %s\n";
+	const static char *dfmt = "%18s = %d\n";
+	const static char *lfmt = "%18s = %s,%s\n";
+	char buf[32];
 
-	fprintf(fp, "name: %s\n", conf->name);
-	fprintf(fp, "ncpu: %s\n", conf->ncpu);
-	fprintf(fp, "memory: %s\n", conf->memory);
-	fprintf(fp, "comport: %s\n", conf->comport);
-	fprintf(fp, "debug_port: %s\n", conf->debug_port);
-	fprintf(fp, "boot: %s\n", btype[conf->boot]);
-	fprintf(fp, "loader: %s\n", conf->loader);
-	fprintf(fp, "loader_timeout: %d\n", conf->loader_timeout);
-	fprintf(fp, "loadcmd: %s\n", conf->loadcmd);
-	fprintf(fp, "installcmd: %s\n", conf->installcmd);
-	i = 0;
-	STAILQ_FOREACH (dc, &conf->disks, next)
-		fprintf(fp, "disk%d: %s,%s\n", i++, dc->type, dc->path);
-	i = 0;
-	STAILQ_FOREACH (ic, &conf->isoes, next)
-		fprintf(fp, "iso%d: %s,%s\n", i++, ic->type, ic->path);
-	i = 0;
-	STAILQ_FOREACH (nc, &conf->nets, next)
-		fprintf(fp, "net%d: %s,%s\n", i++, nc->type, nc->bridge);
+	fprintf(fp, fmt, "name", conf->name);
+	fprintf(fp, fmt, "ncpu", conf->ncpu);
+	fprintf(fp, fmt, "memory", conf->memory);
+	fprintf(fp, fmt, "wired_memory", bool_str[conf->wired_memory]);
+	fprintf(fp, fmt, "utctime", bool_str[conf->utctime]);
+	fprintf(fp, fmt, "reboot_on_change", bool_str[conf->reboot_on_change]);
+	fprintf(fp, fmt, "single_user", bool_str[conf->single_user]);
+	fprintf(fp, fmt, "install", bool_str[conf->install]);
+	fprintf(fp, fmt, "comport", conf->comport);
+	fprintf(fp, fmt, "debug_port", conf->debug_port);
+	fprintf(fp, fmt, "boot", btype[conf->boot]);
+	fprintf(fp, dfmt, "boot_delay", conf->boot_delay);
+	fprintf(fp, dfmt, "loader_timeout", conf->loader_timeout);
+	fprintf(fp, dfmt, "stop_timeout", conf->stop_timeout);
+	fprintf(fp, fmt, "loader", conf->loader);
+	fprintf(fp, fmt, "loadcmd", conf->loadcmd);
+	fprintf(fp, fmt, "installcmd", conf->installcmd);
+	fprintf(fp, fmt, "hostbrigde", hostbridge_str[conf->hostbridge]);
 
+	if (!STAILQ_EMPTY(&conf->passthrues)) {
+		fprintf(fp, "%18s =" , "passthru");
+		STAILQ_FOREACH (pc, &conf->passthrues, next)
+			fprintf(fp, " %s", pc->devid);
+		fprintf(fp, "\n");
+	}
+
+	i = 0;
+	STAILQ_FOREACH (dc, &conf->disks, next) {
+		snprintf(buf, sizeof(buf), "disk%d", i++);
+		fprintf(fp, lfmt, buf, dc->type, dc->path);
+	}
+	i = 0;
+	STAILQ_FOREACH (ic, &conf->isoes, next) {
+		snprintf(buf, sizeof(buf), "iso%d", i++);
+		fprintf(fp, lfmt, buf, ic->type, ic->path);
+	}
+	i = 0;
+	STAILQ_FOREACH (nc, &conf->nets, next) {
+		snprintf(buf, sizeof(buf), "net%d", i++);
+		fprintf(fp, lfmt, buf, nc->type, nc->bridge);
+	}
 	fb = conf->fbuf;
-	if (fb->enable)
-		fprintf(fp, "graphics: %s:%d, %dx%d, %s, %s\n", fb->ipaddr,
+	if (fb->enable) {
+		fprintf(fp, "%18s = %s:%d, %dx%d, %s, %s\n", "graphics",
+		    fb->ipaddr,
 		    fb->port, fb->width, fb->height, fb->vgaconf,
 		    fb->wait ? "wait" : "nowait");
-	fprintf(fp, "xhci_mouse: %s\n", conf->mouse ? "true" : "false");
+		fprintf(fp, fmt, "xhci_mouse", bool_str[conf->mouse]);
+		fprintf(fp, fmt, "keymap", conf->keymap);
+	}
 	return 0;
 }
 
