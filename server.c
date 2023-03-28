@@ -269,7 +269,8 @@ create_command_server(const struct global_conf *gc)
 	if (getaddrinfo(gc->cmd_sock_path, NULL, &hints, &r))
 		return -1;
 
-	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
+	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
+			   r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
@@ -307,7 +308,7 @@ accept_command_socket(int s0)
 {
 	int s;
 
-	while ((s = accept(s0, NULL, 0)) < 0)
+	while ((s = accept4(s0, NULL, 0, SOCK_CLOEXEC)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			return -1;
 

@@ -176,7 +176,7 @@ load_plugins()
 		close(fd);
 	}
 
-	fdclosedir(d);
+	closedir(d);
 
 	return 0;
 }
@@ -321,7 +321,7 @@ load_config_files(struct vm_conf_head *list)
 		LIST_INSERT_HEAD(list, conf_ent, next);
 	}
 
-	fdclosedir(d);
+	closedir(d);
 
 	return 0;
 }
@@ -506,7 +506,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	if (VM_LOGFD(vm_ent) == -1)
 		while ((VM_LOGFD(vm_ent) = open(conf->err_logfile,
-						O_WRONLY | O_APPEND | O_CREAT,
+						O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
 						0644)) < 0)
 			if (errno != EINTR)
 				break;
@@ -599,7 +599,8 @@ reload_virtual_machines()
 			VM_CLOSE(vm_ent, LOGFD);
 			while ((VM_LOGFD(vm_ent) =
 				open(VM_CONF(vm_ent)->err_logfile,
-				     O_WRONLY | O_APPEND | O_CREAT, 0644)) < 0)
+				     O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
+				     0644)) < 0)
 				if (errno != EINTR)
 					break;
 		}
