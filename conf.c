@@ -706,6 +706,7 @@ err:
 	free(fbuf);
 	free(name);
 	free(fname);
+	free(arch);
 	return NULL;
 }
 

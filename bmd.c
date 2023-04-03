@@ -337,8 +337,10 @@ create_plugin_data(struct plugin_data_head *head)
 		if ((pld = calloc(1, sizeof(*pld))) == NULL)
 			goto err;
 		pld->ent = pl_ent;
-		if ((pld->pl_conf = nvlist_create(0)) == NULL)
+		if ((pld->pl_conf = nvlist_create(0)) == NULL) {
+			free(pld);
 			goto err;
+		}
 		SLIST_INSERT_HEAD(head, pld, next);
 	}
 

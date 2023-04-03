@@ -228,6 +228,7 @@ calc(struct arith_list *rpn, int *ret)
 	return 0;
 
 err:
+	free(tk);
 	SLIST_FOREACH_SAFE(a, &stack, next, b)
 		free(a);
 	SLIST_FOREACH_SAFE(a, rpn, next, b)
