@@ -189,9 +189,17 @@ retry:
 	if (strnstr(pp->buf, "Error", pp->nread))
 		return -1;
 
-	if ((p = strnstr(pp->buf, expect, pp->nread)) == NULL)
-		if (pp->nread < pp->size)
-			goto retry;
+	if ((p = strnstr(pp->buf, expect, pp->nread)) == NULL) {
+		/* Invalid buffer read size */
+		if (pp->nread > pp->size)
+			return -1;
+		if (pp->nread == pp->size) {
+			n = pp->size / 2;
+			memcpy(pp->buf, &pp->buf[n], n);
+			pp->nread = n;
+		}
+		goto retry;
+	}
 
 	if (buf != NULL && size > 0) {
 		n = p - pp->buf;
@@ -454,7 +462,7 @@ get_diskname(const char *kernel, struct disk_info *di)
 		return dn;
 	}
 
-	if (strcmp(di->part_name, "openbsd") == 0) {
+	if (di->part_name && strcmp(di->part_name, "openbsd") == 0) {
 		if (asprintf(&dn, "sd0%c", 'a' + di->part_index - 1) < 0)
 			return NULL;
 		return dn;
