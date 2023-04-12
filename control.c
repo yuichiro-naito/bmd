@@ -28,7 +28,7 @@ usage(int argc, char *argv[])
 	printf(
 	    "usage: %s <subcommand>\n"
 	    "  boot [-c] <name>     : boot VM\n"
-	    "  install <name>       : install VM from ISO image\n"
+	    "  install [-c] <name>  : install VM from ISO image\n"
 	    "  shutdown <name>      : ACPI shutdown VM\n"
 	    "  poweroff <name>      : poweroff VM\n"
 	    "  reset <name>         : reset VM\n"
@@ -368,15 +368,22 @@ end:
 	return ret;
 }
 
+/*
+ * boot_style= 0: showcomport, 1: boot, 2: install
+ */
 int
-do_boot_console(const char *name, bool boot, bool console, bool show)
+do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
 {
 	int ret = 0;
 	nvlist_t *cmd, *res = NULL;
 	const char *comport = NULL;
+	const static char *command[] = {"showcomport", "boot", "install"};
+
+	if (boot_style > sizeof(command)/sizeof(command[0]))
+		return -1;
 
 	cmd = nvlist_create(0);
-	nvlist_add_string(cmd, "command", boot ? "boot" : "showcomport");
+	nvlist_add_string(cmd, "command", command[boot_style]);
 	nvlist_add_string(cmd, "name", name);
 
 	if ((res = send_recv(cmd)) == NULL) {
@@ -436,7 +443,7 @@ do_showconfig(const char *name)
 int
 control(int argc, char *argv[])
 {
-	int ret = 0;
+	int boot_style, ret = 0;
 	nvlist_t *cmd, *res = NULL;
 
 	if (argc < 2)
@@ -458,12 +465,19 @@ control(int argc, char *argv[])
 		if (strcmp(argv[1], "inspect") == 0)
 			return do_inspect(argv[2]);
 		if (strcmp(argv[1], "console") == 0)
-			return do_boot_console(argv[2], false, true, false);
+			return do_boot_console(argv[2], 0, true, false);
 		if (strcmp(argv[1], "showcomport") == 0)
-			return do_boot_console(argv[2], false, false, true);
+			return do_boot_console(argv[2], 0, false, true);
 	}
 
-	if (strcmp(argv[1], "boot") == 0) {
+	if (strcmp(argv[1], "boot") == 0)
+		boot_style = 1;
+	else if (strcmp(argv[1], "install") == 0)
+		boot_style = 2;
+	else
+		boot_style = 0;
+
+	if (boot_style > 0) {
 		char c, *name;
 		bool console = false;
 		while ((c = getopt(argc - 1, argv + 1, "c")) != -1) {
@@ -477,7 +491,7 @@ control(int argc, char *argv[])
 		}
 		if ((name = argv[optind + 1]) == NULL)
 			return usage(argc, argv);
-		return do_boot_console(name, true, console, false);
+		return do_boot_console(name, boot_style, console, false);
 	}
 
 	if (strcmp(argv[1], "run") == 0) {
@@ -501,8 +515,7 @@ control(int argc, char *argv[])
 		return direct_run(name, install, single);
 	}
 
-	if (argc == 3 && (strcmp(argv[1], "install") == 0 ||
-			  strcmp(argv[1], "reset") == 0 ||
+	if (argc == 3 && (strcmp(argv[1], "reset") == 0 ||
 			  strcmp(argv[1], "poweroff") == 0 ||
 			  strcmp(argv[1], "shutdown") == 0)) {
 		cmd = nvlist_create(0);
