@@ -351,6 +351,9 @@ do_list()
 	printf(fmt, "-------------------",
 	       "----", "------", "---------", "-----------");
 
+	if (!nvlist_exists(res, "vm_list"))
+		goto end;
+
 	list = nvlist_get_nvlist_array(res, "vm_list", &count);
 	qsort((void *)list, count, sizeof(nvlist_t *), compare_by_name);
 	for (i = 0; i < count; i++) {

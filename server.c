@@ -468,6 +468,9 @@ list_command(int s, const nvlist_t *nv)
 	SLIST_FOREACH (vm_ent, &vm_list, next)
 		count++;
 
+	if (count == 0)
+		goto ret;
+
 	list = malloc(count * sizeof(nvlist_t *));
 	if (list == NULL) {
 		error = true;
