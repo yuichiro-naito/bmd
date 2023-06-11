@@ -687,7 +687,7 @@ reload_virtual_machines()
 	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
 		free_vm_conf_entry(conf_ent);
 
-	vm_conf_list = new_list;
+	LIST_CONCAT(&vm_conf_list, &new_list, vm_conf_entry, next);
 
 	return 0;
 }
