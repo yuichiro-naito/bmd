@@ -101,17 +101,42 @@ int
 set_timer(struct vm_entry *vm_ent, int second, int flag)
 {
 	static int id = 0;
-	struct kevent ev;
+	struct event_list *el = NULL;
 
-	EV_SET(&ev, ((id += 2) | (flag & 1)), EVFILT_TIMER,
+	if ((el = malloc(sizeof(*el))) == NULL)
+		goto err;
+
+	EV_SET(&el->ev, ((id += 2) | (flag & 1)), EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, vm_ent);
-	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf.kq, &el->ev, 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR)
 			goto err;
+	SLIST_INSERT_HEAD(VM_EVLIST(vm_ent), el, next);
 	return 0;
 err:
+	free(el);
 	ERR("failed to set timer (%s)\n", strerror(errno));
 	return -1;
+}
+
+/**
+ * Clear all timers for VM.
+ */
+int
+clear_all_timers(struct vm_entry *vm_ent)
+{
+	struct event_list *el, *eln;
+
+	SLIST_FOREACH_SAFE (el, VM_EVLIST(vm_ent), next, eln) {
+		el->ev.flags = EV_DELETE;
+		while (kevent(gl_conf.kq, &el->ev, 1, NULL, 0, NULL) < 0)
+			if (errno != EINTR)
+				ERR("failed to clear timer (%s)\n",
+				    strerror(errno));
+		free(el);
+	}
+	SLIST_INIT(VM_EVLIST(vm_ent));
+	return 0;
 }
 
 int
@@ -225,9 +250,12 @@ void
 free_vm_entry(struct vm_entry *vm_ent)
 {
 	struct net_conf *nc, *nnc;
+	struct event_list *el, *eln;
 
-	STAILQ_FOREACH_SAFE (nc, &VM_TAPS(vm_ent), next, nnc)
+	STAILQ_FOREACH_SAFE (nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
+	SLIST_FOREACH_SAFE (el, VM_EVLIST(vm_ent), next, eln)
+		free(el);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_VARSFILE(vm_ent));
 	free(VM_ASCOMPORT(vm_ent));
@@ -367,7 +395,8 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_OUTFD(vm_ent) = -1;
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
-	STAILQ_INIT(&VM_TAPS(vm_ent));
+	STAILQ_INIT(VM_TAPS(vm_ent));
+	SLIST_INIT(VM_EVLIST(vm_ent));
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 
 	return vm_ent;
@@ -857,12 +886,14 @@ wait:
 				ERR("failed loading vm %s (status:%d)\n",
 				    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
 				stop_waiting_fd(vm_ent);
+				clear_all_timers(vm_ent);
 				VM_CLEANUP(vm_ent);
 				call_plugins(vm_ent);
 			}
 			break;
 		case RESTART:
 			stop_waiting_fd(vm_ent);
+			clear_all_timers(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 
@@ -885,6 +916,7 @@ wait:
 			     (rs == NULL ? "" : rs));
 			free(rs);
 			stop_waiting_fd(vm_ent);
+			clear_all_timers(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			VM_CONF(vm_ent)->install = false;
@@ -892,6 +924,7 @@ wait:
 		case REMOVE:
 			INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
 			stop_waiting_fd(vm_ent);
+			clear_all_timers(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
@@ -953,6 +986,7 @@ stop_virtual_machines()
 				continue;
 			INFO("stop vm %s\n", VM_CONF(vm_ent)->name);
 			stop_waiting_fd(vm_ent);
+			clear_all_timers(vm_ent);
 			VM_CLEANUP(vm_ent);
 			call_plugins(vm_ent);
 			count--;

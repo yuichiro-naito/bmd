@@ -3,6 +3,7 @@
 
 #include <sys/queue.h>
 #include <sys/nv.h>
+#include <sys/event.h>
 
 #include "vars.h"
 
@@ -53,6 +54,7 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 #define VM_POWEROFF(v)      (v)->method->vm_poweroff(&(v)->vm)
 #define VM_ACPI_POWEROFF(v) (v)->method->vm_acpi_poweroff(&(v)->vm)
 #define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm)
+#define VM_EVLIST(v)        (&(v)->event_list)
 #define VM_PTR(v)           (&(v)->vm)
 #define VM_CONF(v)          ((v)->vm.conf)
 #define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
@@ -61,7 +63,7 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 #define VM_TYPE(v)          ((v)->type)
 #define VM_PLUGIN_DATA(v)   (VM_CONF_ENT(v)->pl_data)
 #define VM_PID(v)           ((v)->vm.pid)
-#define VM_TAPS(v)          ((v)->vm.taps)
+#define VM_TAPS(v)          (&(v)->vm.taps)
 #define VM_STATE(v)         ((v)->vm.state)
 #define VM_MAPFILE(v)       ((v)->vm.mapfile)
 #define VM_VARSFILE(v)      ((v)->vm.varsfile)
@@ -78,6 +80,11 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 		}                          \
 	} while (0)
 
+struct event_list {
+	struct kevent ev;
+	SLIST_ENTRY(event_list) next;
+};
+
 /*
   Entry of vm list.
   The individual entries indicate the virtual machine process.
@@ -89,6 +96,7 @@ struct vm_entry {
 	struct vm_conf *new_conf;
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_methods *method;
+	SLIST_HEAD(, event_list) event_list;
 };
 
 /*
