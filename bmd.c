@@ -101,7 +101,7 @@ int
 set_timer(struct vm_entry *vm_ent, int second, int flag)
 {
 	static int id = 0;
-	struct event_list *el = NULL;
+	struct event_list *el;
 
 	if ((el = malloc(sizeof(*el))) == NULL)
 		goto err;
