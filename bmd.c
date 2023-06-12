@@ -131,8 +131,7 @@ clear_all_timers(struct vm_entry *vm_ent)
 		el->ev.flags = EV_DELETE;
 		while (kevent(gl_conf.kq, &el->ev, 1, NULL, 0, NULL) < 0)
 			if (errno != EINTR)
-				ERR("failed to clear timer (%s)\n",
-				    strerror(errno));
+				break;
 		free(el);
 	}
 	SLIST_INIT(VM_EVLIST(vm_ent));
