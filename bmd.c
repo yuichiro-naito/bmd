@@ -579,6 +579,15 @@ start_virtual_machines()
 	return 0;
 }
 
+void
+stop_virtual_machine(struct vm_entry *vm_ent)
+{
+	stop_waiting_fd(vm_ent);
+	clear_all_timers(vm_ent);
+	VM_CLEANUP(vm_ent);
+	call_plugins(vm_ent);
+}
+
 struct vm_entry *
 lookup_vm_by_name(const char *name)
 {
@@ -884,18 +893,11 @@ wait:
 			else {
 				ERR("failed loading vm %s (status:%d)\n",
 				    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
-				stop_waiting_fd(vm_ent);
-				clear_all_timers(vm_ent);
-				VM_CLEANUP(vm_ent);
-				call_plugins(vm_ent);
+				stop_virtual_machine(vm_ent);
 			}
 			break;
 		case RESTART:
-			stop_waiting_fd(vm_ent);
-			clear_all_timers(vm_ent);
-			VM_CLEANUP(vm_ent);
-			call_plugins(vm_ent);
-
+			stop_virtual_machine(vm_ent);
 			VM_STATE(vm_ent) = TERMINATE;
 			boot_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 			break;
@@ -914,18 +916,12 @@ wait:
 			INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
 			     (rs == NULL ? "" : rs));
 			free(rs);
-			stop_waiting_fd(vm_ent);
-			clear_all_timers(vm_ent);
-			VM_CLEANUP(vm_ent);
-			call_plugins(vm_ent);
+			stop_virtual_machine(vm_ent);
 			VM_CONF(vm_ent)->install = false;
 			break;
 		case REMOVE:
 			INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
-			stop_waiting_fd(vm_ent);
-			clear_all_timers(vm_ent);
-			VM_CLEANUP(vm_ent);
-			call_plugins(vm_ent);
+			stop_virtual_machine(vm_ent);
 			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 			free_vm_entry(vm_ent);
 			break;
@@ -984,10 +980,7 @@ stop_virtual_machines()
 				// maybe plugin's child process
 				continue;
 			INFO("stop vm %s\n", VM_CONF(vm_ent)->name);
-			stop_waiting_fd(vm_ent);
-			clear_all_timers(vm_ent);
-			VM_CLEANUP(vm_ent);
-			call_plugins(vm_ent);
+			stop_virtual_machine(vm_ent);
 			count--;
 		} else if (ev.filter == EVFILT_TIMER) {
 			/* force to poweroff VM */
