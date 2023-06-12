@@ -459,7 +459,7 @@ list_command(int s, const nvlist_t *nv)
 	nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
 	bool error = false;
-	const static char *state_string[] = { "STOP", "LOAD", "RUN", "STOP",
+	const static char *state_string[] = { "STOP", "LOAD", "RUN",
 		"TERMINATING", "TERMINATING", "REBOOTING" };
 	const static char *backend_string[] = { "bhyve", "qemu" };
 
