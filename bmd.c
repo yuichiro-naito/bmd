@@ -529,7 +529,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	call_plugins(vm_ent);
 	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0 &&
-	    boot_timer(vm_ent, conf->loader_timeout) < 0) {
+	    shutdown_timer(vm_ent, conf->loader_timeout) < 0) {
 		ERR("failed to set timer for vm %s\n", name);
 		return -1;
 	}
