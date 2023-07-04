@@ -121,19 +121,22 @@ struct sock_buf {
 
 LIST_HEAD(vm_conf_head, vm_conf_entry);
 
+int init_gl_conf();
+int merge_gl_conf(struct global_conf *gc);
+void free_gl_conf(struct global_conf *gl);
+
 int remove_plugins();
 void call_plugins(struct vm_entry *vm_ent);
 int call_plugin_parser(struct plugin_data_head *head,
 		       const char *key, const char *val);
-int load_plugins();
+int load_plugins(const char *plugin_dir);
 void free_vm_entry(struct vm_entry *vm_ent);
 
 int assign_comport(struct vm_entry *vm_ent);
 int create_plugin_data(struct plugin_data_head *head);
+void free_plugin_data(struct plugin_data_head *head);
 struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
-struct vm_conf_entry *load_vm_conf_entry(int fd, const char *filename);
 void free_vm_conf_entry(struct vm_conf_entry *conf_ent);
-int load_config_files(struct vm_conf_head *list);
 void free_config_files();
 struct vm_entry *lookup_vm_by_name(const char *name);
 int set_timer(struct vm_entry *vm_ent, int second, int flag);

@@ -13,12 +13,13 @@
 #endif
 
 struct global_conf {
-	char *config_dir;
+	char *config_file;
 	char *plugin_dir;
 	char *vars_dir;
 	char *pid_path;
 	char *cmd_sock_path;
 	char *unix_domain_socket_mode;
+	int nmdm_offset;
 	int cmd_sock;
 	int foreground;
 	int kq;
@@ -70,15 +71,21 @@ struct conf_var {
 	char *key, *val;
 };
 
+RB_HEAD(vartree, conf_var);
+
+struct variables {
+	struct vartree *global;
+	struct vartree *local;
+};
+
 struct vm_conf {
-	RB_HEAD(vartree, conf_var) vars;
+	struct variables vars;
 	int boot_delay;
 	int loader_timeout;
 	int stop_timeout;
 	enum HOSTBRIDGE_TYPE hostbridge;
 	enum VM_BACKENDS backend;
 	char *debug_port;
-	char *filename;
 	char *ncpu;
 	char *memory;
 	char *name;
@@ -141,7 +148,7 @@ struct vm_methods {
 	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 4
+#define PLUGIN_VERSION 5
 
 typedef struct plugin_desc {
 	int version;

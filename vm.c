@@ -141,10 +141,10 @@ copy_uefi_vars(struct vm *vm)
 	off_t len = 0;
 	struct stat st;
 	const char *origin = UEFI_FIRMWARE_VARS;
-	extern struct global_conf gl_conf;
+	extern struct global_conf *gl_conf;
 
 	fn = vm->varsfile;
-	if (fn == NULL && asprintf(&fn, "/%s/%s.vars", gl_conf.vars_dir,
+	if (fn == NULL && asprintf(&fn, "%s/%s.vars", gl_conf->vars_dir,
 				   vm->conf->name) < 0)
 		return -1;
 

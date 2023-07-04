@@ -9,6 +9,7 @@
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)
 
+void free_vartree(struct vartree *vt);
 void free_passthru_conf(struct passthru_conf *c);
 void free_disk_conf(struct disk_conf *c);
 void free_iso_conf(struct iso_conf *c);
@@ -59,7 +60,7 @@ int set_utctime(struct vm_conf *conf, bool val);
 int set_keymap(struct vm_conf *conf, const char *keymap);
 
 struct fbuf *create_fbuf();
-struct vm_conf *create_vm_conf(const char *filename);
+struct vm_conf *create_vm_conf(const char *vm_name);
 int finalize_vm_conf(struct vm_conf *conf);
 int dump_vm_conf(struct vm_conf *conf, FILE *fp);
 
@@ -70,8 +71,13 @@ int compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b);
 int compare_net_conf(const struct net_conf *a, const struct net_conf *b);
 int compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b);
 
-int set_var(struct vm_conf *conf, char *k, const char *v);
-char *get_var(struct vm_conf *conf, char *k);
+int set_var0(struct vartree *vars, char *k, const char *v);
+int set_var(struct variables *vars, char *k, const char *v);
+char *get_var0(struct vartree *vars, char *k);
+char *get_var(struct variables *vars, char *k);
+int init_global_vars();
+void set_global_vars(struct vartree *gv);
+void free_global_vars();
 
 void free_id_list();
 

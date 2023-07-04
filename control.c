@@ -20,7 +20,7 @@
 #include "bmd.h"
 #include "inspect.h"
 
-extern struct global_conf gl_conf;
+extern struct global_conf *gl_conf;
 
 int
 usage(int argc, char *argv[])
@@ -46,14 +46,14 @@ static struct vm_conf_entry *
 lookup_vm_conf(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
-	struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
+	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
 
-	if (load_config_files(&vm_conf_list) < 0) {
+	if (load_config_file(&list, false) < 0) {
 		printf("failed to load VM config files\n");
 		return NULL;
 	}
 
-	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
+	LIST_FOREACH_SAFE (conf_ent, &list, next, cen)
 		if (strcmp(conf_ent->conf.name, name) == 0)
 			ret = conf_ent;
 		else
@@ -100,13 +100,10 @@ direct_run(const char *name, bool install, bool single)
 
 	LOG_OPEN_PERROR();
 
-	if ((gl_conf.kq = kqueue()) < 0) {
+	if ((gl_conf->kq = kqueue()) < 0) {
 		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
-
-	if (load_plugins() < 0)
-		return 1;
 
 	conf_ent = lookup_vm_conf(name);
 	if (conf_ent == NULL) {
@@ -141,7 +138,7 @@ direct_run(const char *name, bool install, bool single)
 		       NOTE_SECONDS, VM_CONF(vm_ent)->loader_timeout, vm_ent);
 	if (VM_INFD(vm_ent) != -1)
 		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
-	while (kevent(gl_conf.kq, ev2, i, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf->kq, ev2, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait process (%s)\n", strerror(errno));
 			VM_POWEROFF(vm_ent);
@@ -150,7 +147,7 @@ direct_run(const char *name, bool install, bool single)
 	call_plugins(vm_ent);
 
 wait:
-	while (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0)
+	while (kevent(gl_conf->kq, NULL, 0, &ev, 1, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("kevent failure (%s)\n", strerror(errno));
 			VM_POWEROFF(vm_ent);
@@ -297,8 +294,8 @@ send_recv(nvlist_t *cmd)
 	nvlist_t *res = NULL;
 	uint32_t sz;
 
-	if ((s = connect_to_server(&gl_conf)) < 0) {
-		printf("can not connect to %s\n", gl_conf.cmd_sock_path);
+	if ((s = connect_to_server(gl_conf)) < 0) {
+		printf("can not connect to %s\n", gl_conf->cmd_sock_path);
 		return NULL;
 	}
 
@@ -419,17 +416,17 @@ int
 do_showconfig(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen;
-	struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
+	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
 	int count = 0;
 
 	LOG_OPEN_PERROR();
 
-	if (load_config_files(&vm_conf_list) < 0) {
+	if (load_config_file(&list, false) < 0) {
 		printf("failed to load VM config files\n");
 		return 1;
 	}
 
-	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen) {
+	LIST_FOREACH_SAFE (conf_ent, &list, next, cen) {
 		if (name == NULL || strcmp(conf_ent->conf.name, name) == 0) {
 			if (count)
 				fputs("\n", stdout);

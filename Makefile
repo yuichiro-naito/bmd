@@ -9,8 +9,10 @@ UEFIVARDIR=$(LOCALBASE)/var/cache/bmd
 PROG=	bmd
 LINKS=  ${BINDIR}/bmd ${BINDIR}/bmdctl
 SRCS=	bmd.c conf.c tap.c parser.c vm.c server.c control.c inspect.c \
-	inspect_grub.c arith.c
+	inspect_grub.c confparse.h confparse.y conflex.l y.tab.h
 CFLAGS+=-Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LDADD=	-lnv
+
+CLEANFILES= y.output
 
 .include <bsd.prog.mk>

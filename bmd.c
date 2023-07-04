@@ -39,11 +39,86 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 /*
   Global configuration.
  */
-struct global_conf gl_conf = { LOCALBASE "/etc/bmd.d", LOCALBASE "/libexec/bmd",
-	LOCALBASE "/var/cache/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, -1, 0, -1 };
+struct global_conf gl_conf0 = { LOCALBASE "/etc/bmd.conf",
+	LOCALBASE "/libexec/bmd", LOCALBASE "/var/cache/bmd",
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NMDM_OFFSET, -1, 0, -1 };
+
+struct global_conf *gl_conf = &gl_conf0;
 
 extern struct vm_methods method_list[];
+
+void
+free_gl_conf(struct global_conf *gl)
+{
+	free(gl->config_file);
+	free(gl->pid_path);
+	free(gl->plugin_dir);
+	free(gl->vars_dir);
+	free(gl->cmd_sock_path);
+	free(gl->unix_domain_socket_mode);
+	free(gl);
+}
+
+int
+init_gl_conf()
+{
+	struct global_conf *t;
+	if ((t = calloc(1, sizeof(*t))) == NULL)
+		return -1;
+#define COPY_ATTR_STRING(attr) \
+	if (gl_conf0.attr != NULL &&				\
+	    (t->attr = strdup(gl_conf0.attr)) == NULL)		\
+		goto err;
+#define COPY_ATTR_INT(attr) t->attr = gl_conf0.attr
+
+	COPY_ATTR_STRING(config_file);
+	COPY_ATTR_STRING(pid_path);
+	COPY_ATTR_STRING(plugin_dir);
+	COPY_ATTR_STRING(vars_dir);
+	COPY_ATTR_STRING(cmd_sock_path);
+	COPY_ATTR_STRING(unix_domain_socket_mode);
+	COPY_ATTR_INT(nmdm_offset);
+	COPY_ATTR_INT(cmd_sock);
+	COPY_ATTR_INT(foreground);
+	COPY_ATTR_INT(kq);
+#undef COPY_ATTR_STRING
+#undef COPY_ATTR_INT
+
+	gl_conf = t;
+	return 0;
+
+err:
+	free_gl_conf(t);
+	return -1;
+}
+
+int
+merge_gl_conf(struct global_conf *gc)
+{
+#define REPLACE_STR(attr)	\
+	if (gc->attr) {							\
+		if (gl_conf->attr)					\
+			free(gl_conf->attr);				\
+		gl_conf->attr = gc->attr;				\
+		gc->attr = NULL;					\
+	}
+#define REPLACE_INT(attr)  \
+	if (gc->attr != 0)			\
+		gl_conf->attr = gc->attr;
+
+	REPLACE_STR(config_file);
+	REPLACE_STR(pid_path);
+	REPLACE_STR(plugin_dir);
+	REPLACE_STR(vars_dir);
+	REPLACE_STR(cmd_sock_path);
+	REPLACE_STR(unix_domain_socket_mode);
+	REPLACE_INT(nmdm_offset);
+#undef REPLACE_INT
+#undef REPLACE_STR
+
+	free(gc);
+	return 0;
+}
 
 int
 wait_for_reading(struct vm_entry *vm_ent)
@@ -57,7 +132,7 @@ wait_for_reading(struct vm_entry *vm_ent)
 	if (VM_ERRFD(vm_ent) != -1)
 		EV_SET(&ev[i++], VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
 		    vm_ent);
-	while (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf->kq, ev, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait reading fd (%s)\n",
 			    strerror(errno));
@@ -79,7 +154,7 @@ stop_waiting_fd(struct vm_entry *vm_ent)
 	if (VM_ERRFD(vm_ent) != -1)
 		EV_SET(&ev[i++], VM_ERRFD(vm_ent), EVFILT_READ, EV_DELETE, 0, 0,
 		    vm_ent);
-	while (kevent(gl_conf.kq, ev, i, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf->kq, ev, i, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to delete waiting fd (%s)\n",
 			    strerror(errno));
@@ -108,7 +183,7 @@ set_timer(struct vm_entry *vm_ent, int second, int flag)
 
 	EV_SET(&el->ev, ((id += 2) | (flag & 1)), EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, vm_ent);
-	while (kevent(gl_conf.kq, &el->ev, 1, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf->kq, &el->ev, 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR)
 			goto err;
 	SLIST_INSERT_HEAD(VM_EVLIST(vm_ent), el, next);
@@ -129,7 +204,7 @@ clear_all_timers(struct vm_entry *vm_ent)
 
 	SLIST_FOREACH_SAFE (el, VM_EVLIST(vm_ent), next, eln) {
 		el->ev.flags = EV_DELETE;
-		while (kevent(gl_conf.kq, &el->ev, 1, NULL, 0, NULL) < 0)
+		while (kevent(gl_conf->kq, &el->ev, 1, NULL, 0, NULL) < 0)
 			if (errno != EINTR)
 				break;
 		free(el);
@@ -145,7 +220,7 @@ wait_for_process(struct vm_entry *vm_ent)
 
 	EV_SET(&ev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
 	    0, vm_ent);
-	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR) {
 			ERR("failed to wait process (%s)\n", strerror(errno));
 			return -1;
@@ -154,7 +229,7 @@ wait_for_process(struct vm_entry *vm_ent)
 }
 
 int
-load_plugins()
+load_plugins(const char *plugin_dir)
 {
 	DIR *d;
 	void *hdl;
@@ -162,9 +237,13 @@ load_plugins()
 	struct dirent *ent;
 	struct plugin_desc *desc;
 	struct plugin_entry *pl_ent;
+	static int loaded = 0;
 
-	if ((d = opendir(gl_conf.plugin_dir)) == NULL) {
-		ERR("can not open %s\n", gl_conf.plugin_dir);
+	if (loaded != 0)
+		return 0;
+
+	if ((d = opendir(plugin_dir)) == NULL) {
+		ERR("can not open %s\n", gl_conf->plugin_dir);
 		return -1;
 	}
 
@@ -188,7 +267,7 @@ load_plugins()
 			goto next;
 		}
 
-		if (desc->initialize && (*(desc->initialize))(&gl_conf) < 0) {
+		if (desc->initialize && (*(desc->initialize))(gl_conf) < 0) {
 			free(pl_ent);
 			dlclose(hdl);
 			goto next;
@@ -196,6 +275,7 @@ load_plugins()
 		pl_ent->desc = *desc;
 		pl_ent->handle = hdl;
 		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+		loaded++;
 	next:
 		close(fd);
 	}
@@ -212,10 +292,11 @@ remove_plugins()
 
 	SLIST_FOREACH_SAFE (pl_ent, &plugin_list, next, pln) {
 		if (pl_ent->desc.finalize)
-			(*pl_ent->desc.finalize)(&gl_conf);
+			(*pl_ent->desc.finalize)(gl_conf);
 		dlclose(pl_ent->handle);
 		free(pl_ent);
 	}
+	SLIST_INIT(&plugin_list);
 
 	return 0;
 }
@@ -284,73 +365,11 @@ free_plugin_data(struct plugin_data_head *head)
 	SLIST_INIT(head);
 }
 
-struct vm_conf_entry *
-load_vm_conf_entry(int fd, const char *filename)
-{
-	struct vm_conf *conf;
-	struct vm_conf_entry *conf_ent;
-	struct plugin_data_head head;
-
-	if (create_plugin_data(&head) < 0)
-		goto err;
-
-	if ((conf = parse_file(fd, filename, &head)) == NULL)
-		goto err1;
-
-	if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL)
-		goto err2;
-
-	conf_ent->pl_data = head;
-
-	return conf_ent;
-
-err2:
-	free_vm_conf(conf);
-err1:
-	free_plugin_data(&head);
-err:
-	return NULL;
-}
-
 void
 free_vm_conf_entry(struct vm_conf_entry *conf_ent)
 {
 	free_plugin_data(&conf_ent->pl_data);
 	free_vm_conf(&conf_ent->conf);
-}
-
-int
-load_config_files(struct vm_conf_head *list)
-{
-	DIR *d;
-	int fd;
-	struct dirent *ent;
-	struct vm_conf_entry *conf_ent;
-
-	if ((d = opendir(gl_conf.config_dir)) == NULL) {
-		ERR("can not open %s\n", gl_conf.config_dir);
-		return -1;
-	}
-
-	while ((ent = readdir(d)) != NULL) {
-		if (ent->d_namlen > 0 && ent->d_name[0] == '.')
-			continue;
-		while ((fd = openat(dirfd(d), ent->d_name, O_RDONLY)) < 0)
-			if (errno != EINTR)
-				break;
-		if (fd < 0)
-			continue;
-		conf_ent = load_vm_conf_entry(fd, ent->d_name);
-		close(fd);
-		if (conf_ent == NULL)
-			continue;
-
-		LIST_INSERT_HEAD(list, conf_ent, next);
-	}
-
-	closedir(d);
-
-	return 0;
 }
 
 int
@@ -471,8 +490,8 @@ assign_comport(struct vm_entry *vm_ent)
 	}
 	free(names);
 
-	if (max < NMDM_OFFSET - 1)
-		max = NMDM_OFFSET - 1;
+	if (max < gl_conf->nmdm_offset - 1)
+		max = gl_conf->nmdm_offset - 1;
 
 	for (i = 1; i < 6; i++) {
 		if (asprintf(&new_com, "/dev/nmdm%dB", max + i) < 0)
@@ -556,7 +575,7 @@ start_virtual_machines()
 	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 
-	while (kevent(gl_conf.kq, sigev, 3, NULL, 0, NULL) < 0)
+	while (kevent(gl_conf->kq, sigev, 3, NULL, 0, NULL) < 0)
 		if (errno != EINTR)
 			return -1;
 
@@ -607,7 +626,7 @@ reload_virtual_machines()
 	struct vm_entry *vm_ent, *vmn;
 	struct vm_conf_head new_list = LIST_HEAD_INITIALIZER();
 
-	if (load_config_files(&new_list) < 0)
+	if (load_config_file(&new_list, false) < 0)
 		return -1;
 
 	/* make sure new_conf is NULL */
@@ -723,6 +742,7 @@ reload_virtual_machines()
 
 	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
 		free_vm_conf_entry(conf_ent);
+	LIST_INIT(&vm_conf_list);
 
 	LIST_CONCAT(&vm_conf_list, &new_list, vm_conf_entry, next);
 
@@ -756,14 +776,14 @@ event_loop()
 	struct sock_buf *sb;
 	struct timespec *to, timeout;
 
-	EV_SET(&ev, gl_conf.cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
-	while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+	EV_SET(&ev, gl_conf->cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
+	while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
 		if (errno != EINTR)
 			return -1;
 
 wait:
 	to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
-	while ((n = kevent(gl_conf.kq, NULL, 0, &ev, 1, to)) < 0)
+	while ((n = kevent(gl_conf->kq, NULL, 0, &ev, 1, to)) < 0)
 		if (errno != EINTR) {
 			ERR("kevent failure (%s)\n", strerror(errno));
 			return -1;
@@ -785,7 +805,7 @@ wait:
 				    EV_ENABLE, 0, 0, sb);
 				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
 				    EV_DELETE, 0, 0, sb);
-				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
+				while (kevent(gl_conf->kq, ev2, 2, NULL, 0,
 					   NULL) < 0)
 					if (errno != EINTR)
 						break;
@@ -797,7 +817,7 @@ wait:
 				    EV_DELETE, 0, 0, NULL);
 				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
 				    EV_DELETE, 0, 0, NULL);
-				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
+				while (kevent(gl_conf->kq, ev2, 2, NULL, 0,
 					   NULL) < 0)
 					if (errno != EINTR)
 						break;
@@ -806,12 +826,12 @@ wait:
 		}
 		break;
 	case EVFILT_READ:
-		if (ev.ident == gl_conf.cmd_sock) {
+		if (ev.ident == gl_conf->cmd_sock) {
 			if ((n = accept_command_socket(ev.ident)) < 0)
 				break;
 			sb = create_sock_buf(n);
 			EV_SET(&ev, n, EVFILT_READ, EV_ADD, 0, 0, sb);
-			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+			while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
 				if (errno != EINTR) {
 					destroy_sock_buf(sb);
 					break;
@@ -828,7 +848,7 @@ wait:
 					    EV_DISABLE, 0, 0, sb);
 					EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
 					    EV_ADD, 0, 0, sb);
-					while (kevent(gl_conf.kq, ev2, 2, NULL,
+					while (kevent(gl_conf->kq, ev2, 2, NULL,
 						   0, NULL) < 0)
 						if (errno != EINTR)
 							break;
@@ -841,7 +861,7 @@ wait:
 				destroy_sock_buf(sb);
 				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
 				    0, NULL);
-				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
+				while (kevent(gl_conf->kq, &ev, 1, NULL, 0,
 					   NULL) < 0)
 					if (errno != EINTR)
 						break;
@@ -851,7 +871,7 @@ wait:
 		if (write_err_log(ev.ident, VM_PTR(vm_ent)) == 0) {
 			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
 			    NULL);
-			while (kevent(gl_conf.kq, &ev, 1, NULL, 0, NULL) < 0)
+			while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
 				if (errno != EINTR)
 					break;
 		}
@@ -967,7 +987,7 @@ stop_virtual_machines()
 	}
 
 	while (count > 0) {
-		if (kevent(gl_conf.kq, NULL, 0, &ev, 1, NULL) < 0) {
+		if (kevent(gl_conf->kq, NULL, 0, &ev, 1, NULL) < 0) {
 			if (errno == EINTR)
 				continue;
 			return -1;
@@ -993,7 +1013,7 @@ stop_virtual_machines()
 				    EV_DELETE, 0, 0, NULL);
 				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
 				    EV_DELETE, 0, 0, NULL);
-				while (kevent(gl_conf.kq, ev2, 2, NULL, 0,
+				while (kevent(gl_conf->kq, ev2, 2, NULL, 0,
 					   NULL) < 0)
 					if (errno != EINTR)
 						break;
@@ -1003,7 +1023,7 @@ stop_virtual_machines()
 				destroy_sock_buf((struct sock_buf *)vm_ent);
 				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
 				    0, NULL);
-				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
+				while (kevent(gl_conf->kq, &ev, 1, NULL, 0,
 					   NULL) < 0)
 					if (errno != EINTR)
 						break;
@@ -1012,7 +1032,7 @@ stop_virtual_machines()
 			if (write_err_log(ev.ident, VM_PTR(vm_ent)) == 0) {
 				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
 				    0, NULL);
-				while (kevent(gl_conf.kq, &ev, 1, NULL, 0,
+				while (kevent(gl_conf->kq, &ev, 1, NULL, 0,
 					   NULL) < 0)
 					if (errno != EINTR)
 						break;
@@ -1032,35 +1052,39 @@ parse_opt(int argc, char *argv[])
 {
 	int ch;
 
-	while ((ch = getopt(argc, argv, "Ff:p:m:")) != -1) {
+	while ((ch = getopt(argc, argv, "Fc:f:p:m:")) != -1) {
 		switch (ch) {
 		case 'F':
-			gl_conf.foreground = 1;
+			gl_conf->foreground = 1;
 			break;
 		case 'c':
-			gl_conf.config_dir = strdup(optarg);
+			free(gl_conf->config_file);
+			gl_conf->config_file = strdup(optarg);
 			break;
 		case 'f':
-			gl_conf.pid_path = strdup(optarg);
+			free(gl_conf->pid_path);
+			gl_conf->pid_path = strdup(optarg);
 			break;
 		case 'p':
-			gl_conf.plugin_dir = strdup(optarg);
+			free(gl_conf->plugin_dir);
+			gl_conf->plugin_dir = strdup(optarg);
 			break;
 		case 'm':
-			gl_conf.unix_domain_socket_mode = strdup(optarg);
+			free(gl_conf->unix_domain_socket_mode);
+			gl_conf->unix_domain_socket_mode = strdup(optarg);
 			break;
 		default:
 			fprintf(stderr,
 			    "usage: %s [-F] [-f pid file] "
 			    "[-p plugin directory] \n"
 			    "\t[-m unix domain socket permission] \n"
-			    "\t[-c vm config directory]\n",
+			    "\t[-c config file]\n",
 			    argv[0]);
 			return -1;
 		}
 	}
 
-	if (gl_conf.foreground == 0)
+	if (gl_conf->foreground == 0)
 		daemon(0, 0);
 
 	return 0;
@@ -1087,20 +1111,34 @@ main(int argc, char *argv[])
 	FILE *fp;
 	sigset_t nmask, omask;
 
+	if (init_gl_conf() < 0) {
+		fprintf(stderr, "failed to allocate memory "
+			"for global configuration\n");
+		return 1;
+	}
+
+	if (init_global_vars() < 0) {
+		fprintf(stderr,	"failed to allocate memory "
+			"for global variables\n");
+		free_gl_conf(gl_conf);
+		return 1;
+	}
+
 	if (strendswith(argv[0], "ctl") == 0)
 		return control(argc, argv);
 
 	if (parse_opt(argc, argv) < 0)
 		return 1;
 
-	if (gl_conf.foreground)
+	if (gl_conf->foreground)
 		LOG_OPEN_PERROR();
 	else
 		LOG_OPEN();
 
+
 	sigemptyset(&nmask);
 	sigaddset(&nmask, SIGTERM);
-	if (gl_conf.foreground)
+	if (gl_conf->foreground)
 		sigaddset(&nmask, SIGINT);
 	sigaddset(&nmask, SIGHUP);
 	sigaddset(&nmask, SIGPIPE);
@@ -1110,38 +1148,45 @@ main(int argc, char *argv[])
 	    0)
 		WARN("%s\n", "can not protect from OOM killer");
 
-	if ((gl_conf.kq = kqueue()) < 0) {
+	if (load_config_file(&vm_conf_list, true) < 0)
+		return 1;
+
+	if ((gl_conf->kq = kqueue()) < 0) {
 		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
 
-	if ((gl_conf.cmd_sock = create_command_server(&gl_conf)) < 0) {
-		ERR("can not bind %s\n", gl_conf.cmd_sock_path);
+	if ((gl_conf->cmd_sock = create_command_server(gl_conf)) < 0) {
+		ERR("can not bind %s\n", gl_conf->cmd_sock_path);
 		return 1;
 	}
 
-	if (gl_conf.foreground == 0 &&
-	    (fp = fopen(gl_conf.pid_path, "w")) != NULL) {
+	if (gl_conf->foreground == 0 &&
+	    (fp = fopen(gl_conf->pid_path, "w")) != NULL) {
 		fprintf(fp, "%d\n", getpid());
 		fclose(fp);
 	}
 
 	INFO("%s\n", "start daemon");
 
-	if (load_plugins() < 0 || load_config_files(&vm_conf_list) < 0 ||
-	    start_virtual_machines())
+	if (start_virtual_machines() < 0) {
+		ERR("%s\n", "failed to start virtual machines");
 		return 1;
+	}
 
 	event_loop();
 
-	unlink(gl_conf.cmd_sock_path);
-	close(gl_conf.cmd_sock);
+	unlink(gl_conf->cmd_sock_path);
+	close(gl_conf->cmd_sock);
 
 	stop_virtual_machines();
 	free_vm_list();
-	close(gl_conf.kq);
+	close(gl_conf->kq);
 	remove_plugins();
 	free_id_list();
+	free_global_vars();
+	free_gl_conf(gl_conf);
+	gl_conf = &gl_conf0;
 	INFO("%s\n", "quit daemon");
 	LOG_CLOSE();
 	return 0;

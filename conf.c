@@ -18,6 +18,7 @@ SLIST_HEAD(, id_entry) id_list = SLIST_HEAD_INITIALIZER();
 
 static int compare_variable_key(struct conf_var *, struct conf_var *);
 RB_GENERATE(vartree, conf_var, entry, compare_variable_key);
+struct vartree *global_vars = NULL;
 
 void
 free_id_list()
@@ -146,20 +147,27 @@ free_var(struct conf_var *c)
 }
 
 void
+free_vartree(struct vartree *vt)
+{
+	struct conf_var *v, *vn;
+
+	RB_FOREACH_SAFE(v, vartree, vt, vn) {
+		RB_REMOVE(vartree, vt, v);
+		free_var(v);
+	}
+	free(vt);
+}
+
+void
 free_vm_conf(struct vm_conf *vc)
 {
-	struct conf_var *v, *tv;
 
 	if (vc == NULL)
 		return;
 
-	RB_FOREACH_SAFE(v, vartree, &vc->vars, tv) {
-		RB_REMOVE(vartree, &vc->vars, v);
-		free_var(v);
-	}
+	free_vartree(vc->vars.local);
 
 	free(vc->name);
-	free(vc->filename);
 	free(vc->ncpu);
 	free(vc->memory);
 	free(vc->comport);
@@ -326,7 +334,7 @@ set_name(struct vm_conf *conf, const char *name)
 {
 	if (conf == NULL)
 		return 0;
-	if (set_var(conf, "NAME", name) < 0)
+	if (set_var(&conf->vars, "NAME", name) < 0)
 		ERR("failed to set \"NAME\" variable! (%s)\n",
 		    strerror(errno));
 	return set_string(&conf->name, name);
@@ -658,29 +666,31 @@ err:
 }
 
 struct vm_conf *
-create_vm_conf(const char *filename)
+create_vm_conf(const char *vm_name)
 {
-	char *name, *fname, *arch, idnum[12];
+	char *name, *arch, idnum[12];
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
 	unsigned int id;
+	struct vartree *local;
 
 	ret = calloc(1, sizeof(typeof(*ret)));
 	fbuf = create_fbuf();
-	name = strdup(filename);
-	fname = strdup(filename);
+	name = strdup(vm_name);
 	arch = strdup("x86_64");
-	if (ret == NULL || fbuf == NULL || name == NULL || fname == NULL ||
-	    arch == NULL)
+	local = malloc(sizeof(*local));
+	if (ret == NULL || fbuf == NULL || name == NULL || arch == NULL ||
+	    local == NULL)
 		goto err;
 
-	RB_INIT(&ret->vars);
-	if (set_var(ret, "NAME", name) < 0)
+	RB_INIT(local);
+	ret->vars.local = local;
+	if (set_var0(local, "NAME", name) < 0)
 		ERR("failed to set \"NAME\" variable! (%s)\n",
 		    strerror(errno));
 	if (get_id(name, &id) == 0) {
 		snprintf(idnum, sizeof(idnum), "%u", id);
-		if (set_var(ret, "ID", idnum) < 0)
+		if (set_var0(local, "ID", idnum) < 0)
 			ERR("failed to set \"NAME\" variable! (%s)\n",
 			    strerror(errno));
 	} else
@@ -689,7 +699,6 @@ create_vm_conf(const char *filename)
 	ret->hostbridge = INTEL;
 	ret->fbuf = fbuf;
 	ret->name = name;
-	ret->filename = fname;
 	ret->loader_timeout = 3;
 	ret->stop_timeout = 300;
 	ret->utctime = true;
@@ -705,7 +714,6 @@ err:
 	free(ret);
 	free(fbuf);
 	free(name);
-	free(fname);
 	free(arch);
 	return NULL;
 }
@@ -757,6 +765,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, fmt, "loader", conf->loader);
 	fprintf(fp, fmt, "loadcmd", conf->loadcmd);
 	fprintf(fp, fmt, "installcmd", conf->installcmd);
+	fprintf(fp, fmt, "err_logfile", conf->err_logfile);
 	fprintf(fp, fmt, "hostbrigde", hostbridge_str[conf->hostbridge]);
 
 	if (!STAILQ_EMPTY(&conf->passthrues)) {
@@ -893,7 +902,6 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(stop_timeout);
 	CMP_NUM(hostbridge);
 	CMP_STR(debug_port);
-	CMP_STR(filename);
 	CMP_STR(ncpu);
 	CMP_STR(memory);
 	CMP_STR(name);
@@ -978,7 +986,7 @@ compare_variable_key(struct conf_var *a, struct conf_var *b)
 }
 
 int
-set_var(struct vm_conf *conf, char *k, const char *v)
+set_var0(struct vartree *vars, char *k, const char *v)
 {
 	struct conf_var *n, key = {.key = k, .val = NULL};
 	char *nk, *nv;
@@ -986,7 +994,7 @@ set_var(struct vm_conf *conf, char *k, const char *v)
 	if (k == NULL || v == NULL)
 		return -1;
 
-	if ((n = RB_FIND(vartree, &conf->vars, &key))) {
+	if ((n = RB_FIND(vartree, vars, &key))) {
 		if ((nv = strdup(v)) == NULL)
 			return -1;
 		free(n->val);
@@ -1003,17 +1011,75 @@ set_var(struct vm_conf *conf, char *k, const char *v)
 		}
 		n->key = nk;
 		n->val = nv;
-		RB_INSERT(vartree, &conf->vars, n);
+		RB_INSERT(vartree, vars, n);
 	}
 	return 0;
 }
 
+int
+set_var(struct variables *vars, char *k, const char *v)
+{
+	if (vars->local)
+		return set_var0(vars->local, k, v);
+	if (vars->global)
+		return set_var0(vars->global, k, v);
+	return -1;
+}
+
+int
+init_global_vars()
+{
+	struct vartree *gv;
+
+	if ((gv = malloc(sizeof(*gv))) == NULL)
+		return -1;
+	RB_INIT(gv);
+	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)
+		ERR("%s\n", "failed to set \"LOCALBASE\" variable!");
+	global_vars = gv;
+	return 0;
+}
+
+void
+set_global_vars(struct vartree *gv)
+{
+	if (global_vars != NULL)
+		free_global_vars();
+	global_vars = gv;
+}
+
+void
+free_global_vars()
+{
+	if (global_vars == NULL)
+		return;
+
+	free_vartree(global_vars);
+
+	global_vars = NULL;
+}
+
 char *
-get_var(struct vm_conf *conf, char *k)
+get_var0(struct vartree *vars, char *k)
 {
 	struct conf_var *r, key = {.key = k, .val = NULL};
 
-	if ((r = RB_FIND(vartree, &conf->vars, &key)) == NULL)
+	if (vars == NULL)
 		return NULL;
-	return r->val;
+
+	if ((r = RB_FIND(vartree, vars, &key)) != NULL)
+		return r->val;
+	return NULL;
+}
+
+char *
+get_var(struct variables *vars, char *k)
+{
+	char *ret;
+
+	if ((ret = get_var0(vars->global, k)) == NULL &&
+	    (ret = get_var0(vars->local, k)) == NULL)
+		return NULL;
+
+	return ret;
 }

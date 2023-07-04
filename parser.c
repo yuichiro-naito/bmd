@@ -1,254 +1,38 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <glob.h>
+#include <libgen.h>
 
 #include "conf.h"
 #include "log.h"
 #include "parser.h"
+#include "confparse.h"
 #include "bmd.h"
 
-#define FPUTC fputc_unlocked
+extern struct global_conf *gl_conf;
 
-static int
-arithmetic_calc(FILE *fp, struct vm_conf *conf, int *ret) {
-	int c, s = 0;
-	FILE *t;
-	char *buf;
-	size_t len;
+extern FILE *yyin;
+extern int yynerrs;
+extern int lineno;
+extern struct cfsections cfglobals;
+extern struct cfsections cftemplates;
+extern struct cfsections cfvms;
+extern struct vartree *global_vars;
 
-	t = open_memstream(&buf, &len);
-	flockfile(t);
+struct input_file {
+	FILE *fp;
+	char *filename;
+	int line;
+	TAILQ_ENTRY(input_file) next;
+};
 
-	while ((c = fgetc(fp)) != EOF) {
-		FPUTC(c, t);
-		switch (c) {
-		case '(':
-			++s;
-			break;
-		case ')':
-			if (--s == 0)
-				goto loop_end;
-		}
-	}
-loop_end:
-	funlockfile(t);
-	fclose(t);
-	if (c == ')') {
-		t = fmemopen(buf, len, "r");
-		c = reverse_polish_notation(t, conf, ret);
-		fclose(t);
-	} else
-		c = -2;
-	free(buf);
-	return c;
-}
+TAILQ_HEAD(input_file_head, input_file);
+static struct input_file_head input_file_list = TAILQ_HEAD_INITIALIZER(input_file_list);
+static struct input_file *cur_file;
 
-int
-parse_variable(FILE *fp, struct vm_conf *conf, char **value, long *num)
-{
-	char c, *key, *val, *p;
-	long vstart, n;
-	size_t buflen;
-
-	vstart = ftell(fp);
-	if (fgetc(fp) != '{')
-		goto err;
-	flockfile(fp);
-	while ((c = getc_unlocked(fp)) != '}')
-		if (!(isalnum(c) || c == '_'))
-			break;
-	funlockfile(fp);
-	if (c != '}')
-		goto err;
-	buflen = ftell(fp) - vstart - 1;
-	/* ignore very long variable name */
-	if (buflen > 10*1024 ||
-	    (key = malloc(buflen)) == NULL)
-		goto err;
-	fseek(fp, vstart + 1, SEEK_SET);
-	if (fread(key, 1, buflen, fp) < 0) {
-		free(key);
-		goto err;
-	}
-	key[buflen - 1] = '\0';
-	if ((val = get_var(conf, key)) == NULL) {
-		ERR("%s: ${%s} is undefined", conf->name, key);
-		free(key);
-		return 0;
-	}
-
-	if (value)
-		*value = val;
-
-	if (num) {
-		n = strtol(val, &p, 10);
-		if (*p != '\0')
-			ERR("%s: ${%s} is not a number",
-			    conf->name, key);
-		else
-			*num = n;
-	}
-
-	free(key);
-	return strlen(val);
-
-err:
-	fseek(fp, vstart, SEEK_SET);
-	return -1;
-}
-
-
-static int
-get_token(FILE *fp, char **token, struct vm_conf *conf)
-{
-	int c, num, rc;
-	enum PSTATE { BEGIN, TOKEN, QUOTE } f;
-	FILE *t;
-	char *buf, *val;
-	size_t len;
-	long vstart;
-
-	if (feof(fp))
-		return 1;
-
-	t = open_memstream(&buf, &len);
-	flockfile(t);
-
-	f = BEGIN;
-	while ((c = fgetc(fp)) != EOF) {
-		switch (c) {
-		case '$':
-			if (conf == NULL) {
-				if (f == BEGIN)
-					f = TOKEN;
-				FPUTC(c, t);
-				continue;
-			}
-			vstart = ftell(fp);
-			if (fgetc(fp) == '(' && fgetc(fp) == '(') {
-				fseek(fp, vstart, SEEK_SET);
-				rc = arithmetic_calc(fp, conf, &num);
-				if (rc == -2) {
-					fwrite("$((", 1, 3, t);
-					fseek(fp, vstart + 2, SEEK_SET);
-					continue;
-				}
-				if (rc < 0 || fprintf(t, "%d", num) < 0)
-					continue;
-				goto loop_end;
-			}
-			if (f == BEGIN)
-				f = TOKEN;
-			fseek(fp, vstart, SEEK_SET);
-			rc = parse_variable(fp, conf, &val, NULL);
-			if (rc < 0)
-				FPUTC('$', t);
-			else if (rc > 0)
-				fwrite_unlocked(val, 1, rc, t);
-			continue;
-		case '#':
-			switch (f) {
-			case TOKEN:
-			case QUOTE:
-				FPUTC(c, t);
-				continue;
-			default:
-				flockfile(fp);
-				while ((c = getc_unlocked(fp)) != '\n')
-					if (c == EOF)
-						break;
-				funlockfile(fp);
-				FPUTC('\n', t);
-				goto loop_end;
-			}
-		case '"':
-			switch (f) {
-			case QUOTE:
-				f = BEGIN;
-				goto loop_end;
-			case TOKEN:
-				FPUTC(c, t);
-				continue;
-			default:
-				f = QUOTE;
-			}
-			break;
-		case '=':
-		case '\n':
-			switch (f) {
-			case QUOTE:
-				FPUTC(c, t);
-				continue;
-			case TOKEN:
-				ungetc(c, fp);
-				break;
-			default:
-				FPUTC(c, t);
-			}
-			goto loop_end;
-		case '\\':
-			c = fgetc(fp);
-			switch (c) {
-			case 'f':
-				FPUTC('\f', t);
-				break;
-			case 't':
-				FPUTC('\t', t);
-				break;
-			case 'n':
-				FPUTC('\n', t);
-				break;
-			case 'r':
-				FPUTC('\r', t);
-				break;
-			case 'v':
-				FPUTC('\v', t);
-				break;
-			case '\r':
-			case '\n':
-				if (f == QUOTE)
-					FPUTC(c, t);
-				continue;
-			default:
-				FPUTC(c, t);
-			}
-			break;
-		case ' ':
-		case '\t':
-		case '\r':
-		case '\v':
-		case '\f':
-			switch (f) {
-			case QUOTE:
-				FPUTC(c, t);
-				continue;
-			case TOKEN:
-				goto loop_end;
-			default:
-				break;
-			}
-			break;
-		default:
-			if (f == BEGIN)
-				f = TOKEN;
-			FPUTC(c, t);
-		}
-	}
-
-loop_end:
-	funlockfile(t);
-
-	if (ftell(t) == 0) {
-		fclose(t);
-		free(buf);
-		return 1;
-	}
-
-	fclose(t);
-	*token = buf;
-
-	return 0;
-}
+static struct cfsection *lookup_template(const char *name);
+static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
 
 static int
 parse_int(int *val, char *value)
@@ -261,6 +45,25 @@ parse_int(int *val, char *value)
 		return -1;
 	*val = n;
 	return 0;
+}
+
+static int
+parse_apply(struct vm_conf *conf, char *val)
+{
+	struct cfsection *tp;
+
+	tp = lookup_template(val);
+	if (tp == NULL) {
+		ERR("%s: unknown template %s\n", conf->name, val);
+		return -1;
+	}
+	if (tp->applied) {
+		ERR("%s: template %s is already applied\n", conf->name, val);
+		return 0;
+	}
+
+	tp->applied++;
+	return vm_conf_set_params(conf, tp);
 }
 
 static int
@@ -641,6 +444,7 @@ struct parser_entry {
 
 /* must be sorted by name */
 struct parser_entry parser_list[] = {
+	{ ".apply",  &parse_apply, NULL },
 	{ "backend", &parse_backend, NULL },
 	{ "boot", &parse_boot, NULL },
 	{ "boot_delay", &parse_boot_delay, NULL },
@@ -687,83 +491,6 @@ compare_parser_entry(const void *a, const void *b)
 }
 
 static int
-parse(struct vm_conf *conf, FILE *fp, struct plugin_data_head *head)
-{
-	int rc;
-	char *key;
-	char *val;
-	struct parser_entry *parser;
-	char *name = conf->name;
-
-	while (1) {
-		if (get_token(fp, &key, NULL) == 1)
-			break;
-		if (key[0] == '\n') {
-			free(key);
-			continue;
-		}
-
-		if (get_token(fp, &val, NULL) == 1) {
-			free(key);
-			break;
-		}
-		if (val[0] != '=') {
-			ERR("%s: value not found : %s\n", name, key);
-			goto bad;
-		}
-
-		parser = bsearch(key, parser_list,
-		    sizeof(parser_list) / sizeof(parser_list[0]),
-		    sizeof(parser_list[0]), compare_parser_entry);
-		free(val);
-		if (parser && parser->clear != NULL)
-			(*parser->clear)(conf);
-		while (1) {
-			if (get_token(fp, &val, conf) == 1)
-				break;
-			if (val[0] == '\n') {
-				free(val);
-				break;
-			}
-
-			if (key[0] == '$') {
-				set_var(conf, &key[1], val);
-				free(val);
-				continue;
-			}
-
-			if (parser) {
-				if ((*parser->parse)(conf, val) < 0) {
-					ERR("%s: invalid value: %s = %s\n",
-					    name, key, val);
-					goto bad;
-				}
-			} else {
-				rc = call_plugin_parser(head, key, val);
-				if (rc > 0) {
-					ERR("%s: unknown key %s\n",
-					    name, key);
-					goto bad;
-				}
-				if (rc < 0) {
-					ERR("%s: invalid value: %s = %s\n",
-					    name, key, val);
-					goto bad;
-				}
-			}
-			free(val);
-		}
-		free(key);
-	}
-
-	return 0;
-bad:
-	free(key);
-	free(val);
-	return -1;
-}
-
-int
 check_conf(struct vm_conf *conf)
 {
 	char *name = conf->name;
@@ -791,27 +518,595 @@ check_conf(struct vm_conf *conf)
 	return 0;
 }
 
-struct vm_conf *
-parse_file(int fd, const char *filename, struct plugin_data_head *head)
+static struct cfsection *
+lookup_template(const char *name)
 {
-	int ret;
-	struct vm_conf *c;
+	struct cfsection *tp;
+
+	TAILQ_FOREACH (tp, &cftemplates, next)
+		if (strcmp(tp->name, name) == 0)
+			return tp;
+	return NULL;
+}
+
+static long
+calc_expr(struct variables *vars, struct cfexpr *ex, char *fn, int ln)
+{
+	char *p, *val;
+	long n, left, right;
+
+	switch (ex->type) {
+	case CF_NUM:
+		n = strtol(ex->val, &p, 0);
+		if (*p != '\0')
+			n = 0;
+		return n;
+	case CF_VAR:
+		if (vars == NULL)
+			return 0;
+		if ((val = get_var(vars, ex->val)) == NULL) {
+			ERR("%s line %d: ${%s} is undefined\n",
+			    fn, ln, ex->val);
+			return 0;
+		}
+		n = strtol(val, &p, 0);
+		if (*p != '\0') {
+			ERR("%s line %d: ${%s} is not a number\n",
+			    fn, ln, ex->val);
+			return 0;
+		}
+		return n;
+	case CF_EXPR:
+		if (ex->op == '~')
+			return -1 * calc_expr(vars, ex->left, fn, ln);
+		left = calc_expr(vars, ex->left, fn, ln);
+		right = calc_expr(vars, ex->right, fn, ln);
+		switch (ex->op) {
+		case '+':
+			return left + right;
+		case '-':
+			return left - right;
+		case '/':
+			return left / right;
+		case '*':
+			return left * right;
+		case '%':
+			return left % right;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+static char *
+token_to_string(struct variables *vars, struct cftokens *tokens)
+{
 	FILE *fp;
+	char *str, *val;
+	size_t len;
+	struct cftoken *tk;
+	long num;
 
-	if ((fp = fdopen(fd, "r")) == NULL)
-		return NULL;
+	fp = open_memstream(&str, &len);
 
-	if ((c = create_vm_conf(filename)) == NULL) {
-		fclose(fp);
-		return NULL;
+	TAILQ_FOREACH(tk, tokens, next) {
+		switch (tk->type) {
+		case CF_STR:
+			fwrite(tk->s, 1, tk->len, fp);
+			break;
+		case CF_VAR:
+			if (vars == NULL)
+				continue;
+			if ((val = get_var(vars, tk->s)) == NULL) {
+				ERR("%s line %d: ${%s} is undefined",
+				    tk->filename, tk->lineno, tk->s);
+				goto err;
+			}
+			fwrite(val, 1, strlen(val), fp);
+			break;
+		case CF_EXPR:
+			num = calc_expr(vars, tk->expr, tk->filename, tk->lineno);
+			fprintf(fp, "%ld", num);
+			break;
+		case CF_NUM:
+			/* Unused */
+			break;
+		}
 	}
 
-	ret = parse(c, fp, head);
 
-	fdclose(fp, NULL);
-	if (ret < 0 || finalize_vm_conf(c) < 0 || check_conf(c) < 0) {
-		free_vm_conf(c);
-		return NULL;
+	fclose(fp);
+	return str;
+err:
+	fclose(fp);
+	free(str);
+	return NULL;
+}
+
+int
+apply_global_vars(struct cfsection *sc)
+{
+	struct cfparam *pr;
+	struct cfvalue *vl;
+	char *key, *val;
+	struct variables vars;
+
+	vars.global = global_vars;
+	vars.local = NULL;
+
+	TAILQ_FOREACH(pr, &sc->params, next) {
+		key = pr->key->s;
+		if (pr->key->type == CF_VAR) {
+			vl = TAILQ_FIRST(&pr->vals);
+			val = token_to_string(&vars, &vl->tokens);
+			if (val == NULL)
+				continue;
+			set_var(&vars, key, val);
+			free(val);
+		}
 	}
-	return c;
+
+	return 0;
+}
+
+static int
+gl_conf_set_params(struct global_conf *gc, struct variables *vars,
+		   struct cfsection *sc)
+{
+	struct cfparam *pr;
+	struct cfvalue *vl;
+	char *key, *val, **t, *p, *nmdm_offset_s = NULL;
+
+	TAILQ_FOREACH(pr, &sc->params, next) {
+		key = pr->key->s;
+		if (pr->key->type == CF_VAR) {
+			vl = TAILQ_FIRST(&pr->vals);
+			val = token_to_string(vars, &vl->tokens);
+			if (val == NULL)
+				continue;
+			set_var(vars, key, val);
+			free(val);
+			continue;
+		}
+		switch (key[0]) {
+		case 'c':
+			if (strcmp(key, "cmd_socket_mode") == 0)
+				t = &gc->unix_domain_socket_mode;
+			else if (strcmp(key, "cmd_socket_path") == 0)
+				t = &gc->cmd_sock_path;
+			else
+				goto unknown;
+			break;
+		case 'v':
+			if (strcmp(key, "vars_directory") == 0)
+				t = &gc->vars_dir;
+			else
+				goto unknown;
+			break;
+		case 'n':
+			if (strcmp(key, "nmdm_offset") == 0)
+				t = &nmdm_offset_s;
+			else
+				goto unknown;
+			break;
+		case 'p':
+			if (strcmp(key, "pid_file") == 0)
+				t = &gc->pid_path;
+			else if (strcmp(key, "plugin_directory") == 0)
+				t = &gc->plugin_dir;
+			else
+				goto unknown;
+			break;
+		default:
+			goto unknown;
+		}
+
+		TAILQ_FOREACH(vl, &pr->vals, next) {
+			val = token_to_string(vars, &vl->tokens);
+			if (val == NULL)
+				continue;
+			if (*t == NULL)
+				*t = val;
+			else
+				free(val);
+		}
+		continue;
+
+	unknown:
+		ERR("%s: unknown key %s\n", "global", key);
+
+	}
+
+	if (nmdm_offset_s) {
+		gc->nmdm_offset = strtol(nmdm_offset_s, &p, 0);
+		if (*p != '\0')
+			gc->nmdm_offset = NMDM_OFFSET;
+		free(nmdm_offset_s);
+	}
+
+	return 0;
+}
+
+static int
+vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
+{
+	struct cfparam *pr;
+	struct cfvalue *vl;
+	struct parser_entry *parser;
+	struct vm_conf_entry *conf_ent = (struct vm_conf_entry *)conf;
+	char *key, *val;
+	int rc;
+
+	TAILQ_FOREACH(pr, &sc->params, next) {
+		key = pr->key->s;
+		if (pr->key->type == CF_VAR) {
+			vl = TAILQ_FIRST(&pr->vals);
+			val = token_to_string(&conf->vars, &vl->tokens);
+			if (val == NULL)
+				continue;
+			set_var(&conf->vars, key, val);
+			free(val);
+			continue;
+		}
+		parser = bsearch(key, parser_list,
+				 sizeof(parser_list) / sizeof(parser_list[0]),
+				 sizeof(parser_list[0]), compare_parser_entry);
+		if (parser && parser->clear != NULL && pr->operator == 0)
+			(*parser->clear)(conf);
+		TAILQ_FOREACH(vl, &pr->vals, next) {
+			val = token_to_string(&conf->vars, &vl->tokens);
+			if (val == NULL)
+				continue;
+			if (parser) {
+				if ((*parser->parse)(conf, val) < 0) {
+					struct cftoken *tk = TAILQ_FIRST(&vl->tokens);
+					if (tk == NULL)
+						tk = pr->key;
+					ERR("%s line %d: vm %s: invalid value: %s = %s\n",
+					    tk->filename, tk->lineno,
+					    sc->name, key, val);
+				}
+			} else {
+				rc = call_plugin_parser(&conf_ent->pl_data, key, val);
+				if (rc > 0) {
+					ERR("%s line %d: %s: unknown key %s\n",
+					    pr->key->filename, pr->key->lineno,
+					    sc->name, key);
+				} else	if (rc < 0) {
+					struct cftoken *tk = TAILQ_FIRST(&vl->tokens);
+					if (tk == NULL)
+						tk = pr->key;
+					ERR("%s line %d: %s: invalid value: %s = %s\n",
+					    tk->filename, tk->lineno,
+					    sc->name, key, val);
+				}
+			}
+			free(val);
+		}
+	}
+
+	return 0;
+}
+
+static void
+free_cfexpr(struct cfexpr *ex)
+{
+	if (ex == NULL)
+		return;
+	free(ex->val);
+	free_cfexpr(ex->left);
+	free_cfexpr(ex->right);
+	free(ex);
+}
+
+static void
+free_cftoken(struct cftoken *tk)
+{
+	if (tk == NULL)
+		return;
+	free_cfexpr(tk->expr);
+	free(tk->s);
+	free(tk);
+}
+
+static void
+free_cfvalue(struct cfvalue *vl)
+{
+	struct cftoken *tk, *tn;
+	TAILQ_FOREACH_SAFE(tk, &vl->tokens, next, tn)
+		free_cftoken(tk);
+	free(vl);
+}
+
+static void
+free_cfparam(struct cfparam *pr)
+{
+	struct cfvalue	*vl, *vn;
+	TAILQ_FOREACH_SAFE(vl, &pr->vals, next, vn)
+		free_cfvalue(vl);
+	free_cftoken(pr->key);
+	free(pr);
+}
+
+static void
+free_cfsection(struct cfsection *sec)
+{
+	struct cfparam *pr, *pn;
+	TAILQ_FOREACH_SAFE(pr, &sec->params, next, pn)
+		free_cfparam(pr);
+
+	free(sec->name);
+	free(sec);
+}
+
+static int
+push_file(char *fn)
+{
+	FILE *fp;
+	struct input_file *file;
+
+	if (fn == NULL)
+		return 0;
+
+	if ((file = malloc(sizeof(*file))) == NULL)
+		return -1;
+
+	if ((file->filename = strdup(fn)) == NULL) {
+		free(file);
+		return -1;
+	}
+
+	if ((fp = fopen(fn, "r")) == NULL) {
+		ERR("failed to open %s\n", fn);
+		free(file->filename);
+		free(file);
+		return -1;
+	}
+	file->line = 0;
+	file->fp = fp;
+	TAILQ_INSERT_TAIL(&input_file_list, file, next);
+	if (cur_file == NULL)
+		cur_file = TAILQ_FIRST(&input_file_list);
+	INFO("load config %s\n", fn);
+	return 0;
+}
+
+static struct input_file *
+pop_file()
+{
+	struct input_file *ret;
+
+	ret = cur_file;
+	if (ret)
+		cur_file = TAILQ_NEXT(cur_file, next);
+	return ret;
+}
+
+static struct input_file *
+peek_file()
+{
+	return cur_file;
+}
+
+char *
+peek_filename()
+{
+	return cur_file ? cur_file->filename :
+		TAILQ_LAST_FAST(&input_file_list, input_file, next)->filename;
+}
+
+static void
+free_file(struct input_file *file)
+{
+	if (file == NULL)
+		return;
+	fclose(file->fp);
+	free(file->filename);
+	free(file);
+}
+
+static void
+clean_file()
+{
+	struct input_file *inf, *n;
+	TAILQ_FOREACH_SAFE(inf, &input_file_list, next ,n)
+		free_file(inf);
+	TAILQ_INIT(&input_file_list);
+}
+
+void
+glob_path(struct cftokens *ts)
+{
+	struct cftoken *tk, *tn;
+	char *path, *conf, *dir, *npath;
+	struct variables vars;
+	glob_t g;
+	int i;
+
+	vars.global = global_vars;
+	vars.local = NULL;
+
+	path = token_to_string(&vars, ts);
+	if (path == NULL)
+		return;
+
+	if (path[0] != '/' &&
+	    (conf = strdup(gl_conf->config_file)) != NULL) {
+		dir = dirname(conf);
+		if (asprintf(&npath, "%s/%s", dir, path) >= 0) {
+			free(path);
+			path = npath;
+		}
+		free(conf);
+	}
+
+	if (glob(path, 0, NULL, &g) < 0) {
+		ERR("failed to glob %s\n", path);
+		free(path);
+		return;
+	}
+
+	for (i = 0; i < g.gl_pathc; i++)
+		push_file(g.gl_pathv[i]);
+
+	globfree(&g);
+	free(path);
+	TAILQ_FOREACH_SAFE (tk, ts, next, tn)
+		free_cftoken(tk);
+	free(ts);
+}
+
+int
+yywrap(void) {
+	struct input_file *ifp;
+
+	if ((ifp = pop_file()) == NULL)
+		return 1;
+
+	if ((ifp = peek_file()) == NULL)
+		return 1;
+	yyin = ifp->fp;
+	lineno = 1;
+	return 0;
+}
+
+static void
+clear_applied()
+{
+	struct cfsection *sc;
+
+	TAILQ_FOREACH (sc, &cftemplates, next)
+		sc->applied = 0;
+}
+
+static int
+check_duplicate()
+{
+	struct cfsection *sc;
+
+	TAILQ_FOREACH (sc, &cftemplates, next)
+		if (sc->duplicate)
+			return -1;
+	return 0;
+}
+
+int
+load_config_file(struct vm_conf_head *list, bool update_gl_conf)
+{
+	struct cfsection *sc, *sn;
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent, *cen;
+	struct input_file *inf;
+	struct global_conf *global_conf;
+	struct vartree *gv;
+	struct variables vars;
+	int rc = 0;
+	struct plugin_data_head head;
+
+	gv = malloc(sizeof(*gv));
+	global_conf = calloc(1, sizeof(*global_conf));
+	if (global_conf == NULL || gv == NULL) {
+		free(global_conf);
+		free(gv);
+		ERR("%s\n", "failed to allocate global config memory.");
+		return -1;
+	}
+	RB_INIT(gv);
+	vars.local = NULL;
+	vars.global = gv;
+	cur_file = NULL;
+
+	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)
+		ERR("%s\n", "failed to set \"LOCALBASE\" variable!");
+
+	if (push_file(gl_conf->config_file) < 0)
+		return -1;
+
+	inf = peek_file();
+	yyin = inf->fp;
+
+	if (yyparse() || yynerrs) {
+		fclose(yyin);
+		rc = -1;
+		goto cleanup;
+	}
+
+	if (check_duplicate() != 0) {
+		rc = -1;
+		goto cleanup;
+	}
+
+	TAILQ_FOREACH(sc, &cfglobals, next)
+		gl_conf_set_params(global_conf, &vars, sc);
+
+	load_plugins(global_conf->plugin_dir ?
+		     global_conf->plugin_dir : gl_conf->plugin_dir);
+
+	TAILQ_FOREACH(sc, &cfvms, next) {
+		if (create_plugin_data(&head) < 0) {
+			rc = -1;
+			goto cleanup2;
+		}
+		if ((conf = create_vm_conf(sc->name)) == NULL) {
+			free_plugin_data(&head);
+			rc = -1;
+			goto cleanup2;
+		}
+		conf->vars.global = gv;
+		if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL) {
+			free_plugin_data(&head);
+			free_vm_conf(conf);
+			rc = -1;
+			goto cleanup2;
+		}
+		conf_ent->pl_data = head;
+		conf = &conf_ent->conf;
+		clear_applied();
+		if (vm_conf_set_params(conf, sc) < 0 ||
+		    finalize_vm_conf(conf) < 0 || check_conf(conf) < 0) {
+			free_plugin_data(&head);
+			free_vm_conf(conf);
+			rc = -1;
+			goto cleanup2;
+		}
+		LIST_INSERT_HEAD(list, conf_ent, next);
+	}
+
+	set_global_vars(gv);
+	if (update_gl_conf)
+		merge_gl_conf(global_conf);
+	else
+		free_gl_conf(global_conf);
+
+	goto cleanup;
+
+cleanup2:
+	LIST_FOREACH_SAFE (conf_ent, list, next, cen) {
+		free_vm_conf(&conf_ent->conf);
+		free_plugin_data(&conf_ent->pl_data);
+	}
+	LIST_INIT(list);
+
+cleanup:
+	yylex_destroy();
+	clean_file();
+
+	TAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
+		free_cfsection(sc);
+	TAILQ_INIT(&cfglobals);
+
+	TAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
+		free_cfsection(sc);
+	TAILQ_INIT(&cftemplates);
+
+	TAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
+		free_cfsection(sc);
+	TAILQ_INIT(&cfvms);
+
+	if (rc != 0)
+		ERR("%s\n", "failed to parse config file");
+	return rc;
 }

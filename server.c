@@ -24,7 +24,7 @@
 
 extern struct vm_conf_head vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
-extern struct global_conf gl_conf;
+extern struct global_conf *gl_conf;
 
 LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
 
@@ -315,6 +315,34 @@ accept_command_socket(int s0)
 	return s;
 }
 
+static struct vm_conf_entry *
+search_and_replace_vm_conf(struct vm_entry *vm_ent)
+{
+	char *name = VM_CONF(vm_ent)->name;
+	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
+	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
+
+	if (load_config_file(&list, false) < 0) {
+		printf("failed to load VM config files\n");
+		return NULL;
+	}
+
+	LIST_FOREACH_SAFE (conf_ent, &list, next, cen)
+		if (strcmp(conf_ent->conf.name, name) == 0)
+			ret = conf_ent;
+		else
+			free_vm_conf_entry(conf_ent);
+
+	if (ret) {
+		LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
+		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
+		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
+		VM_CONF(vm_ent) = &ret->conf;
+
+	}
+	return ret;
+}
+
 /*
  * The argument `style` must be one of followings.
  *  -  0 = boot
@@ -323,10 +351,8 @@ accept_command_socket(int s0)
 static nvlist_t *
 boot0_command(int s, const nvlist_t *nv, int style)
 {
-	int fd, dirfd = -1;
 	const char *name, *reason, *comport;
 	struct vm_entry *vm_ent = NULL;
-	struct vm_conf_entry *conf_ent;
 	nvlist_t *res;
 	bool error = false;
 
@@ -348,36 +374,11 @@ boot0_command(int s, const nvlist_t *nv, int style)
 		goto ret;
 	}
 
-	while ((dirfd = open(gl_conf.config_dir, O_DIRECTORY | O_RDONLY)) < 0)
-		if (errno != EINTR)
-			break;
-	if (dirfd < 0) {
-		error = true;
-		reason = "failed to open config directory";
-		goto ret;
-	}
-
-	while ((fd = openat(dirfd, VM_CONF(vm_ent)->filename, O_RDONLY)) < 0)
-		if (errno != EINTR)
-			break;
-	if (fd < 0) {
+	if (search_and_replace_vm_conf(vm_ent) == NULL) {
 		error = true;
 		reason = "failed to load config file";
 		goto ret;
 	}
-
-	conf_ent = load_vm_conf_entry(fd, VM_CONF(vm_ent)->filename);
-	close(fd);
-	if (conf_ent == NULL) {
-		error = true;
-		reason = "failed to load config file";
-		goto ret;
-	}
-
-	LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
-	LIST_INSERT_HEAD(&vm_conf_list, conf_ent, next);
-	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
-	VM_CONF(vm_ent) = &conf_ent->conf;
 
 	switch (style) {
 	case 0:
@@ -397,8 +398,6 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	}
 
 ret:
-	if (dirfd != -1)
-		close(dirfd);
 	res = nvlist_create(0);
 	nvlist_add_bool(res, "error", error);
 	if (error)

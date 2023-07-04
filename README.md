@@ -70,23 +70,79 @@ BMD can take following options. Write the options after "bmd_flags=" in /etc/rc.
 | option | description | default |
 |:-------|:------------|:--------|
 | -F | foreground mode | (none) |
-| -c dirname | VM configuration directory | $LOCALBASE/etc/bmd.d |
+| -c filename | configuration filename | $LOCALBASE/etc/bmd.conf |
 | -f filename |  PID filename | /var/run/bmd.pid |
 | -p dirname | plugin install directory | $LOCALBASE/libexec/bmd |
 | -m perm| unixdomain socket permission | 0600 |
 
-## VM Config files
+## Configuration file
 
-VM configuration files are written in simple text format "key = value(s)".
-Multiple values are written separated by white space.
-A backslash preceding a newline is treated as a line continuation.
+Bmd configuration file consists of 3 types of sections. Each section has
+key-value parameters and variables settings.
 
-One configuration file is for one VM.
+### Sections
 
-By default VM Config files are written in `${LOCALBASE}/etc/bmd.d`.
-The filename is a virtual machine name by default.
+1. Global section
 
-### Configuration keys
+   Global section contains bmd options and global variables.
+
+2. Template section
+
+   Template is a part of configuration for Virtual Machines. Configurations
+   common to multiple VMs can be written in one template.
+
+3. VM section
+
+   Virtual Machine Configuration is written in this section.
+
+### Macros
+
+Following 2 macros are available.
+
+1. .apply
+
+   This macro takes one or more template names to apply onto VM configuration.
+   This macro can be written in template or vm sections.
+
+2. .include
+
+	This macro takes one file path to include another configurations. A file
+	path can contain '*' and '?' literals for pattern matting. '.include'
+	macro can not be written in sections, must be written outside of section.
+
+### Variables
+
+All variables belongs to global or local scope. A global scope variable is
+defined in global section and referred in all sections. A local scope variable
+is defined in VM section or template section and independent for each
+individual VM configurations. Variables defined in template section is
+available after applied from VM section. Before applying template, no variables
+are available written in template section.
+In template section, variables that defined before apply macro in VM section is
+available.
+
+Bmd always sets following variables.
+
+| Variable name | scope  | value |
+|---------------|--------|-------|
+| LOCALBASE     | global | As same as LOCALBASE macro in compile time.<br> Default value is '/usr/local'  |
+| ID            | local | Unique number for each individual VMs that starts from 0. |
+| NAME          | local | VM name |
+
+
+### Arithmetic Calculation
+
+Arithmetic calculations are performed by enclosing with `$((` `))`. It's
+similar to /bin/sh. Numbers must be integers. Variables must contain integer
+number strings. Number format is decimal or octal or hexmal as same as
+C language. Supported operators are '+' '-' '*' '/' '%'. '(' and ')' are
+also available.
+
+### VM Configurations
+
+Configurations are simply written "key = value;". If a key takes one or more
+values, multiple values can be written with comma separated. Or, '+=' operator
+can be used.
 
 Following keys are available.
 
@@ -94,7 +150,7 @@ Following keys are available.
 |----:|:------------|:---------|:--------------|
 | boot | One of followings<br>"no": don't boot <br>"yes": boot at daemon start or reload<br>"oneshot": boot at daemon start only<br>"always": always reboot after shutdown VM | no | no |
 | boot_delay | boot delay in seconds | no | 0 |
-| comport | Specify com1 port<br> e.g. /dev/nmdm0B | no | (none) |
+| comport | Specify com1 port<br> e.g. /dev/nmdm0B <br> "auto" assigns nmdm number automatically | no | (none) |
 | debug_port | gdb debug port | no | (none) |
 | disk | disk image filename(s)<br>e.g.<br>/var/images/vm-disk-0 nvme:/var/images/vm-disk-1 | yes | (none) |
 | error_logfile | log filename of bhyve messages | no | (none) |
@@ -107,99 +163,145 @@ Following keys are available.
 | hookcmd | hook command filepath | no | (none) |
 | hostbridge | "standard" or "amd" | no | standard |
 | install | set "yes" to boot from ISO | no | no |
-| installcmd | install script for grub-bhyve<br>e.g. "kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd" | no | (none) |
+| installcmd | install script for grub-bhyve<br>e.g. "kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd" <br> "auto" inspects iso image. | no | (none) |
 | iso | ISO image filename | no | (none) |
-| loadcmd | boot script for grub-bhyve<br>e.g. "kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd" | no | (none)
+| keymap | keymap for vnc | no | (none) |
+| loadcmd | boot script for grub-bhyve<br>e.g. "kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd" <br> "auto" inspects disk image. | no | (none)
 | loader | "bhyveload": use bhyveload<br>"grub": use grub-bhyve<br>"uefi": uefi boot | yes | (none) |
 | loader_timeout | loader timeout in seconds | no | 3 |
 | memory | memory size<br>e.g. 2G | yes | (none) |
-| name | Virtual machine name| no | same as filename |
+| name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs | yes | (none) |
 | network | bridge name(s)<br>e.g. bridge0 e1000:bridge1 | no | (none) |
+| passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |
 | reboot_on_change | set "yes" to force ACPI reboot if VM config file is changed when bmd reloads it| no | no |
 | stop_timeout | VM exit timeout in seconds<br>if expired, force to kill VM | no | 300 |
 | utctime | "yes": RTC keeps UTC time<br>"no" : RTC keeps localtime | no | yes |
 | wired_memory | set "yes" to wire VM memory | no | no |
 | xhci_mouse | set "yes" to use xhci tablet | no | no |
 
+### Global Configurations
+
+Following keys are available for bmd.
+
+| key | description | required | default value |
+|----:|:------------|:---------|:--------------|
+| cmd_socket_path | unix domain socket path | no | /var/run/bmd.sock |
+| cmd_socket_mode | unix domain socket mode | no | 0600 |
+| vars_directory | in which directory to write UEFI variables | no | /usr/local/var/cache/bmd |
+| nmdm_offset | basic offset of auto assigned nmdm | no | 200 |
+| pid_file | file to write bmd's pid | no | /var/run/bmd.pid |
+
 ## Example configurations
+
+### Global Variables
+
+```
+global {
+	$imgpath = /dev/zpol/zpool/images;
+	$isopath = /zpool/iso;
+}
+```
+
+### Templates
+
+```
+template default_disk {
+	disk = ${imgpath}/${NAME};
+}
+
+template graphics {
+	graphics=yes;
+	graphics_port=$((5900 + ${ID}));
+	xhci_mouse=yes;
+}
+
+template serial {
+	comport = auto;
+}
+
+template internet {
+	network = bridge0;
+}
+
+template grub_inspect {
+	loader=grub;
+	loadcmd="auto";
+	installcmd="auto";
+}
+
+```
 
 ### FreeBSD Guest
 
 ```
-boot=yes
-loader_timeout=15
-comport=/dev/nmdm0B
-ncpu=2
-memory=2G
-disk=/dev/zvol/zpool/images/freebsd
-iso=/zpool/iso/FreeBSD-13.0-RELEASE-amd64-disc1.iso
-network=bridge0
-loader=bhyveload
+vm freebsd {
+	boot=yes;
+	loader_timeout=15;
+	ncpu=2;
+	memory=2G;
+	iso=/zpool/iso/FreeBSD-13.0-RELEASE-amd64-disc1.iso;
+	loader=bhyveload;
+	.apply default_disk, serial, internet;
+}
 ```
 
 ### NetBSD Guest
 
 ```
-boot=yes
-ncpu=2
-memory=2G
-comport=/dev/nmdm1B
-disk=/dev/zvol/zpool/images/netbsd
-iso=/zpool/iso/NetBSD-9.2-amd64.iso
-network=bridge0
-loader=grub
-installcmd="knetbsd -h -r cd0a (cd0)/netbsd"
-loadcmd="knetbsd -h -r dk0a (hd0,gpt1)/netbsd"
+vm netbsd {
+	boot=yes;
+	ncpu=2;
+	memory=2G;
+	iso=/zpool/iso/NetBSD-9.2-amd64.iso;
+	.apply default_disk, serial, internet, grub_inspect;
+}
 ```
 
 ### OpenBSD Guest
 
 ```
-boot=yes
-ncpu=2
-memory=2G
-comport=/dev/nmdm2B
-iso=/zpool/iso/OpenBSD-6.9-amd64.iso
-disk=/dev/zvol/zpool/images/openbsd
-network=bridge0
-loader=grub
-installcmd="kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd"
-loadcmd="kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd"
-# after `sysupgrade -n`
-#loadcmd="kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd.upgrade"
+vm openbsd {
+	boot=yes;
+	ncpu=2;
+	memory=2G;
+	iso=/zpool/iso/OpenBSD-6.9-amd64.iso;
+	.apply default_disk, serial, internet, grub_inspect;
+}
 ```
 
 ### CentOS Guest
 
 ```
-boot=yes
-ncpu=2
-memory=4G
-disk=/dev/zvol/zpool/images/centos
-#iso=/zpool/iso/CentOS-8.2.2004-x86_64-dvd1.iso
-network = bridge0
-loader = uefi
-graphics=yes
-graphics_port=5901
-xhci_mouse=yes
+vm centos {
+	boot=yes;
+	ncpu=2;
+	memory=4G;
+	#iso=${isopath}/CentOS-8.2.2004-x86_64-dvd1.iso;
+	loader = uefi;
+	.apply default_disk, internet, graphics;
+}
 ```
 
 ### Ubuntu Guest
 
 ```
-boot=yes
-ncpu=2
-memory=4G
-disk=/dev/zvol/zpool/images/ubuntu
-#iso=/zpool/iso/ubuntu-20.04.2.0-desktop-amd64.iso
-network=bridge0
-loader=uefi
-graphics=yes
-graphics_port=5903
-graphics_res=1280x720
-xhci_mouse=yes
+vm ubuntu {
+	boot=yes;
+	ncpu=2;
+	memory=4G;
+	#iso=${isopath}/ubuntu-20.04.2.0-desktop-amd64.iso;
+	loader=uefi;
+	graphics_res=1280x720;
+	.apply default_disk, internet, graphics;
+}
 ```
+
+# Auto Inspection
+
+When `loadcmd` or `installcmd` is set to `auto`, bmd inspects disk and iso
+images and generates loadcmd and installcmd values. This feature supports
+NetBSD and OpenBSD disk and iso images for now, and requires `loader=grub;`.
 
 # plugins
 
@@ -249,12 +351,15 @@ Following subcommands are available.
 
 | subcommand | parameter | description |
 |:-----------|:----------|:------------|
-| boot<br>start | VM name | boot VM |
-| install | VM name | boot VM from ISO |
+| boot [-c]<br>start [-c] | VM name | boot VM and [-c] takes console via `cu -l` |
+| install [-c] | VM name | boot VM from ISO and [-c] takes console via `cu -l`.|
 | shutdown<br>stop | VM name | ACPI shutdown VM |
 | poweroff | VM name | force to power off VM<br>***Warning: damage to disk image*** |
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
 | console | VM name | get comport console via `cu -l` |
+| showcomport | VM name | show current comport device to see which is assigned automatically |
+| showconfig | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
+| inspect | VM name | run auto inspection manually |
 | run | [-i] [-s] VM name | boot directly with serial console that is redirect to stdio.<br>VM booted from this subcommand is independent from bmd.<br>-i: install mode<br>-s: single user mode|
 | list | (none) | list VMs |
 
