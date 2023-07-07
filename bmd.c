@@ -905,12 +905,11 @@ wait:
 			break;
 		switch (VM_STATE(vm_ent)) {
 		case LOAD:
-			VM_CLOSE(vm_ent, INFD);
-			VM_CLOSE(vm_ent, OUTFD);
-			VM_CLOSE(vm_ent, ERRFD);
-			if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+			if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+				VM_CLOSE(vm_ent, INFD);
+				stop_waiting_fd(vm_ent);
 				start_virtual_machine(vm_ent);
-			else {
+			} else {
 				ERR("failed loading vm %s (status:%d)\n",
 				    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
 				stop_virtual_machine(vm_ent);
