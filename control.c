@@ -22,6 +22,8 @@
 
 extern struct global_conf *gl_conf;
 
+int attach_console(const char *vmname, const char *comport);
+
 int
 usage(int argc, char *argv[])
 {
@@ -196,41 +198,6 @@ err:
 }
 
 int
-attach_console(const char *comport)
-{
-	int i;
-	char *port;
-
-	/* A null modem device has at least 11 characters. */
-	if (comport == NULL ||
-	    (i = strlen(comport) - 1 ) < 10) {
-		printf("invalid comport \"%s\"\n", comport);
-		return 1;
-	}
-
-	port = strdup(comport);
-	if (port == NULL) {
-		printf("failed to allocate memory\n");
-		return 1;
-	}
-
-	switch (port[i]) {
-	case 'A':
-		port[i] = 'B';
-		break;
-	case 'B':
-		port[i] = 'A';
-		break;
-	default:
-		break;
-	}
-
-	execlp("/usr/bin/cu", "cu", "-l", port, NULL);
-	printf("failed to execute cu\n");
-	return 1;
-}
-
-int
 do_inspect(char *name)
 {
 	int i;
@@ -328,7 +295,7 @@ do_list()
 	int ret = 0;
 	nvlist_t *cmd, *res = NULL;
 	size_t i, count;
-	const static char *fmt = "%20s%5s%7s%10s%12s\n";
+	const static char *fmt = "%20s%5s%7s%10s%12s%12s\n";
 	const struct nvlist *const *list;
 
 	cmd = nvlist_create(0);
@@ -344,9 +311,9 @@ do_list()
 		goto end;
 	}
 
-	printf(fmt, "name", "ncpu", "memory", "loader", "state");
+	printf(fmt, "name", "ncpu", "memory", "loader", "state", "owner");
 	printf(fmt, "-------------------",
-	       "----", "------", "---------", "-----------");
+	       "----", "------", "---------", "-----------", "----------");
 
 	if (!nvlist_exists(res, "vm_list"))
 		goto end;
@@ -359,12 +326,15 @@ do_list()
 		       nvlist_get_string(list[i], "ncpu"),
 		       nvlist_get_string(list[i], "memory"),
 		       nvlist_get_string(list[i], "loader"),
-		       nvlist_get_string(list[i], "state"));
+		       nvlist_get_string(list[i], "state"),
+		       nvlist_get_string(list[i], "owner"));
 	}
 
 end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
+	free_global_vars();
+	free_gl_conf(gl_conf);
 	return ret;
 }
 
@@ -404,11 +374,13 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 		printf("%s\n", comport ? comport : "no com port");
 
 	if (console && comport)
-		ret = attach_console(comport);
+		ret = attach_console(name, comport);
 
 end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
+	free_global_vars();
+	free_gl_conf(gl_conf);
 	return ret;
 }
 
@@ -436,7 +408,11 @@ do_showconfig(const char *name)
 		free_vm_conf_entry(conf_ent);
 	}
 
+	remove_plugins();
 	free_id_list();
+	free_global_vars();
+	free_gl_conf(gl_conf);
+
 	return 0;
 }
 

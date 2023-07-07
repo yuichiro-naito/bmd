@@ -1,8 +1,10 @@
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <glob.h>
 #include <libgen.h>
+#include <pwd.h>
 
 #include "conf.h"
 #include "log.h"
@@ -242,6 +244,17 @@ parse_debug_port(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_owner(struct vm_conf *conf, char *val)
+{
+	struct passwd *pwd;
+
+	if ((pwd = getpwnam(val)) < 0)
+		return -1;
+
+	return set_owner(conf, pwd->pw_uid);
+}
+
+static int
 parse_boot(struct vm_conf *conf, char *val)
 {
 	const char **p, *values[] = { "yes", "true", "oneshot", "always" };
@@ -472,6 +485,7 @@ struct parser_entry parser_list[] = {
 	{ "name", &parse_name, NULL },
 	{ "ncpu", &parse_ncpu, NULL },
 	{ "network", &parse_net, &clear_net_conf },
+	{ "owner", &parse_owner, NULL },
 	{ "passthru", &parse_passthru, &clear_passthru_conf },
 	{ "qemu_arch", &parse_qemu_arch, NULL },
 	{ "qemu_machine", &parse_qemu_machine, NULL },
@@ -891,6 +905,15 @@ peek_file()
 	return cur_file;
 }
 
+uid_t
+peek_fileowner()
+{
+	struct stat st;
+	char *fn = cur_file ? cur_file->filename :
+		TAILQ_LAST_FAST(&input_file_list, input_file, next)->filename;
+	return stat(fn, &st) < 0 ? UID_NOBODY: st.st_uid;
+}
+
 char *
 peek_filename()
 {
@@ -1056,6 +1079,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 			goto cleanup2;
 		}
 		conf->vars.global = gv;
+		conf->owner = sc->owner;
 		if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL) {
 			free_plugin_data(&head);
 			free_vm_conf(conf);

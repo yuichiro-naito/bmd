@@ -80,6 +80,7 @@ struct variables {
 
 struct vm_conf {
 	struct variables vars;
+	uid_t owner;
 	int boot_delay;
 	int loader_timeout;
 	int stop_timeout;
@@ -148,7 +149,7 @@ struct vm_methods {
 	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 5
+#define PLUGIN_VERSION 6
 
 typedef struct plugin_desc {
 	int version;

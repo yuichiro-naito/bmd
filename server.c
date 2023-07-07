@@ -1,5 +1,6 @@
 #include <sys/queue.h>
 #include <sys/socket.h>
+#include <sys/ucred.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 
@@ -14,6 +15,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #include "bmd.h"
 #include "conf.h"
@@ -343,13 +345,61 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 	return ret;
 }
 
+char *
+get_peer_comport(const char *comport)
+{
+	int i;
+	char *peer;
+
+	/* A null modem device has at least 11 characters. */
+	if (comport == NULL ||
+	    (i = strlen(comport) - 1 ) < 10)
+		return 0;
+
+	if ((peer = strdup(comport)) == NULL)
+		return NULL;
+
+	switch (peer[i]) {
+	case 'A':
+		peer[i] = 'B';
+		break;
+	case 'B':
+		peer[i] = 'A';
+		break;
+	default:
+		break;
+	}
+
+	return peer;
+}
+
+static int
+chown_comport(const char *comport, uid_t user)
+{
+	int rc;
+	struct stat st;
+	char *fn = get_peer_comport(comport);
+
+	if (fn == NULL)
+		return 0;
+
+	if (stat(fn, &st) < 0 ||
+	    chown(fn, user, st.st_gid) < 0) {
+		rc = -1;
+	} else
+		rc = 0;
+
+	free(fn);
+	return rc;
+}
+
 /*
  * The argument `style` must be one of followings.
  *  -  0 = boot
  *  -  1 = install
  */
 static nvlist_t *
-boot0_command(int s, const nvlist_t *nv, int style)
+boot0_command(int s, const nvlist_t *nv, int style, uid_t user)
 {
 	const char *name, *reason, *comport;
 	struct vm_entry *vm_ent = NULL;
@@ -362,7 +412,8 @@ boot0_command(int s, const nvlist_t *nv, int style)
 	}
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
-	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
+	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -403,25 +454,27 @@ ret:
 	if (error)
 		nvlist_add_string(res, "reason", reason);
 	if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
-		       (comport = VM_CONF(vm_ent)->comport)))
+		       (comport = VM_CONF(vm_ent)->comport))) {
+		chown_comport(comport, user);
 		nvlist_add_string(res, "comport", comport);
+	}
 	return res;
 }
 
 static nvlist_t *
-boot_command(int s, const nvlist_t *nv)
+boot_command(int s, const nvlist_t *nv, uid_t user)
 {
-	return boot0_command(s, nv, 0);
+	return boot0_command(s, nv, 0, user);
 }
 
 static nvlist_t *
-install_command(int s, const nvlist_t *nv)
+install_command(int s, const nvlist_t *nv, uid_t user)
 {
-	return boot0_command(s, nv, 1);
+	return boot0_command(s, nv, 1, user);
 }
 
 static nvlist_t *
-showcomport_command(int s, const nvlist_t *nv)
+showcomport_command(int s, const nvlist_t *nv, uid_t user)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -432,13 +485,16 @@ showcomport_command(int s, const nvlist_t *nv)
 	res = nvlist_create(0);
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
-	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
+	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
 	}
 
 	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
+
+	chown_comport(comport, user);
 
 	nvlist_add_string(res, "comport", comport ? comport : "(null)");
 
@@ -450,7 +506,7 @@ ret:
 }
 
 static nvlist_t *
-list_command(int s, const nvlist_t *nv)
+list_command(int s, const nvlist_t *nv, uid_t user)
 {
 	size_t i, count = 0;
 	const char *reason;
@@ -458,14 +514,18 @@ list_command(int s, const nvlist_t *nv)
 	nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
 	bool error = false;
+	struct passwd *pwd;
 	const static char *state_string[] = { "STOP", "LOAD", "RUN",
 		"TERMINATING", "TERMINATING", "REBOOTING" };
 	const static char *backend_string[] = { "bhyve", "qemu" };
 
 	res = nvlist_create(0);
 
-	SLIST_FOREACH (vm_ent, &vm_list, next)
+	SLIST_FOREACH (vm_ent, &vm_list, next) {
+		if (user > 0 && VM_CONF(vm_ent)->owner != user)
+			continue;
 		count++;
+	}
 
 	if (count == 0)
 		goto ret;
@@ -479,6 +539,8 @@ list_command(int s, const nvlist_t *nv)
 
 	i = 0;
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
+		if (user > 0 && VM_CONF(vm_ent)->owner != user)
+			continue;
 		p = nvlist_create(0);
 		nvlist_add_string(p, "name", vm_ent->vm.conf->name);
 		nvlist_add_string(p, "ncpu", vm_ent->vm.conf->ncpu);
@@ -488,6 +550,10 @@ list_command(int s, const nvlist_t *nv)
 			vm_ent->vm.conf->loader :
 			      backend_string[vm_ent->vm.conf->backend]);
 		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
+		if ((pwd = getpwuid(VM_CONF(vm_ent)->owner)) == NULL)
+			nvlist_add_string(p, "owner", "nobody");
+		else
+			nvlist_add_string(p, "owner", pwd->pw_name);
 		list[i++] = p;
 	}
 
@@ -500,7 +566,7 @@ ret:
 }
 
 static nvlist_t *
-vm_down_command(int s, const nvlist_t *nv, int how)
+vm_down_command(int s, const nvlist_t *nv, int how, uid_t user)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -509,7 +575,8 @@ vm_down_command(int s, const nvlist_t *nv, int how)
 	bool error = false;
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
-	    (vm_ent = lookup_vm_by_name(name)) == NULL) {
+	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
+	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -549,24 +616,24 @@ ret:
 }
 
 static nvlist_t *
-shutdown_command(int s, const nvlist_t *nv)
+shutdown_command(int s, const nvlist_t *nv, uid_t user)
 {
-	return vm_down_command(s, nv, 0);
+	return vm_down_command(s, nv, 0, user);
 }
 
 static nvlist_t *
-reset_command(int s, const nvlist_t *nv)
+reset_command(int s, const nvlist_t *nv, uid_t user)
 {
-	return vm_down_command(s, nv, 1);
+	return vm_down_command(s, nv, 1, user);
 }
 
 static nvlist_t *
-poweroff_command(int s, const nvlist_t *nv)
+poweroff_command(int s, const nvlist_t *nv, uid_t user)
 {
-	return vm_down_command(s, nv, 2);
+	return vm_down_command(s, nv, 2, user);
 }
 
-typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv);
+typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv, uid_t user);
 
 struct command_entry {
 	char *name;
@@ -612,6 +679,13 @@ recv_command(struct sock_buf *sb)
 	char *reason = "unknown command";
 	nvlist_t *nv, *res = NULL;
 	cfunc func;
+	struct xucred peer;
+	socklen_t sz;
+	uid_t user;
+
+	sz = sizeof(peer);
+	user = (getsockopt(sb->fd, SOL_LOCAL, LOCAL_PEERCRED, &peer, &sz) < 0) ?
+		UID_NOBODY : peer.cr_uid;
 
 	if ((nv = nvlist_unpack(sb->buf, sb->buf_size, 0)) == NULL)
 		return -1;
@@ -622,7 +696,7 @@ recv_command(struct sock_buf *sb)
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	res = (*func)(sb->fd, nv);
+	res = (*func)(sb->fd, nv, user);
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {

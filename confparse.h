@@ -86,6 +86,7 @@ struct cfsection {
 	struct cfparams		params;
 	int			applied;
 	int			duplicate;
+	uid_t                   owner;
 };
 
 STAILQ_HEAD(cffiles, cffile);
@@ -108,3 +109,4 @@ int yylex_destroy(void);
 void glob_path(struct cftokens *ts);
 int apply_global_vars(struct cfsection *sc);
 char *peek_filename();
+uid_t peek_fileowner();

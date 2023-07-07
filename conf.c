@@ -443,6 +443,16 @@ set_ncpu(struct vm_conf *conf, int ncpu)
 }
 
 int
+set_owner(struct vm_conf *conf, uid_t owner)
+{
+	if (conf == NULL)
+		return 0;
+
+	conf->owner = owner;
+	return 0;
+}
+
+int
 set_boot(struct vm_conf *conf, enum BOOT boot)
 {
 	if (conf == NULL)
@@ -749,6 +759,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	char buf[32];
 
 	fprintf(fp, fmt, "name", conf->name);
+	fprintf(fp, dfmt, "owner", conf->owner);
 	fprintf(fp, fmt, "ncpu", conf->ncpu);
 	fprintf(fp, fmt, "memory", conf->memory);
 	fprintf(fp, fmt, "wired_memory", bool_str[conf->wired_memory]);
