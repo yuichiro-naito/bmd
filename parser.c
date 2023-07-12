@@ -12,8 +12,6 @@
 #include "confparse.h"
 #include "bmd.h"
 
-extern struct global_conf *gl_conf;
-
 extern FILE *yyin;
 extern int yynerrs;
 extern int lineno;
