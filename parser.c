@@ -1063,6 +1063,9 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	TAILQ_FOREACH(sc, &cfglobals, next)
 		gl_conf_set_params(global_conf, &vars, sc);
 
+	if (list == NULL)
+		goto set_global;
+
 	load_plugins(global_conf->plugin_dir ?
 		     global_conf->plugin_dir : gl_conf->plugin_dir);
 
@@ -1097,6 +1100,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		LIST_INSERT_HEAD(list, conf_ent, next);
 	}
 
+set_global:
 	set_global_vars(gv);
 	if (update_gl_conf)
 		merge_global_conf(global_conf);

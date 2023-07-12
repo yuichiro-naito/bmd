@@ -317,6 +317,11 @@ control(int argc, char *argv[])
 	if (argc < 2)
 		return usage(argc, argv);
 
+	if (load_config_file(NULL, 1) < 0) {
+		printf("failed to load VM config files\n");
+		return 1;
+	}
+
 	/* command name alias */
 	if (strcmp(argv[1], "start") == 0)
 		argv[1] = "boot";
