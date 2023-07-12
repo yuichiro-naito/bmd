@@ -24,7 +24,6 @@ struct global_conf {
 	int nmdm_offset;
 	int cmd_sock;
 	int foreground;
-	int kq;
 };
 
 struct passthru_conf {

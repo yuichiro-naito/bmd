@@ -46,9 +46,14 @@ struct events events = LIST_HEAD_INITIALIZER(events);
  */
 struct global_conf gl_conf0 = { LOCALBASE "/etc/bmd.conf",
 	LOCALBASE "/libexec/bmd", LOCALBASE "/var/cache/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NMDM_OFFSET, -1, 0, -1 };
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, NMDM_OFFSET, -1, 0};
 
 struct global_conf *gl_conf = &gl_conf0;
+
+/*
+  Global event queue;
+ */
+static int eventq;
 
 extern struct vm_methods method_list[];
 
@@ -85,7 +90,6 @@ init_gl_conf()
 	COPY_ATTR_INT(nmdm_offset);
 	COPY_ATTR_INT(cmd_sock);
 	COPY_ATTR_INT(foreground);
-	COPY_ATTR_INT(kq);
 #undef COPY_ATTR_STRING
 #undef COPY_ATTR_INT
 
@@ -129,7 +133,7 @@ static int
 kevent_set(struct kevent *kev, int n)
 {
 	int rc;
-	while ((rc = kevent(gl_conf->kq, kev, n, NULL, 0, NULL)) < 0)
+	while ((rc = kevent(eventq, kev, n, NULL, 0, NULL)) < 0)
 		if (errno != EINTR)
 			return -1;
 	return rc;
@@ -139,7 +143,7 @@ static int
 kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 {
 	int rc;
-	while ((rc = kevent(gl_conf->kq, NULL, 0 , kev, n, timeout)) < 0)
+	while ((rc = kevent(eventq, NULL, 0 , kev, n, timeout)) < 0)
 		if (errno != EINTR)
 			return -1;
 	return rc;
@@ -1336,6 +1340,8 @@ strendswith(const char *t, const char *s)
 }
 
 int control(int argc, char *argv[]);
+struct vm_conf_entry *lookup_vm_conf(const char *name);
+int read_stdin(struct vm *vm);
 
 int
 main(int argc, char *argv[])
@@ -1383,7 +1389,7 @@ main(int argc, char *argv[])
 	if (load_config_file(&vm_conf_list, true) < 0)
 		return 1;
 
-	if ((gl_conf->kq = kqueue()) < 0) {
+	if ((eventq = kqueue()) < 0) {
 		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
@@ -1413,7 +1419,7 @@ main(int argc, char *argv[])
 
 	stop_virtual_machines();
 	free_vm_list();
-	close(gl_conf->kq);
+	close(eventq);
 	free_events();
 	remove_plugins();
 	free_id_list();
@@ -1423,4 +1429,108 @@ main(int argc, char *argv[])
 	INFO("%s\n", "quit daemon");
 	LOG_CLOSE();
 	return 0;
+}
+
+int
+direct_run(const char *name, bool install, bool single)
+{
+	int i, status;
+	struct vm_conf *conf;
+	struct vm_conf_entry *conf_ent;
+	struct vm_entry *vm_ent;
+	struct kevent ev, ev2[3];
+
+	LOG_OPEN_PERROR();
+
+	if ((eventq = kqueue()) < 0) {
+		ERR("%s\n", "can not open kqueue");
+		return 1;
+	}
+
+	conf_ent = lookup_vm_conf(name);
+	if (conf_ent == NULL) {
+		ERR("no such VM %s\n", name);
+		return 1;
+	}
+
+	conf = &conf_ent->conf;
+	free(conf->comport);
+	conf->comport = strdup("stdio");
+	conf->install = install;
+	set_single_user(conf, single);
+
+	vm_ent = create_vm_entry(conf_ent);
+	if (vm_ent == NULL) {
+		free_vm_conf_entry(conf_ent);
+		return 1;
+	}
+
+	if (assign_comport(vm_ent) < 0) {
+		ERR("failed to assign comport for vm %s\n", name);
+		goto err;
+	}
+
+	if (VM_START(vm_ent) < 0)
+		goto err;
+	i = 0;
+	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	       0, vm_ent);
+	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0)
+		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
+		       NOTE_SECONDS, VM_CONF(vm_ent)->loader_timeout, vm_ent);
+	if (VM_INFD(vm_ent) != -1)
+		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
+	if (kevent_set(ev2, i) < 0) {
+		ERR("failed to wait process (%s)\n", strerror(errno));
+		VM_POWEROFF(vm_ent);
+		goto err;
+	}
+	call_plugins(vm_ent);
+
+wait:
+	if (kevent_get(&ev, 1, NULL) < 0) {
+		ERR("kevent failure (%s)\n", strerror(errno));
+		VM_POWEROFF(vm_ent);
+		goto err;
+	}
+
+	switch (ev.filter) {
+	case EVFILT_READ:
+		read_stdin(VM_PTR(vm_ent));
+		goto wait;
+	case EVFILT_PROC:
+		if (waitpid(ev.ident, &status, 0) < 0)
+			goto err;
+		if (ev.ident != VM_PID(vm_ent))
+			goto wait;
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+			break;
+		goto err;
+	case EVFILT_TIMER:
+	default:
+		VM_POWEROFF(vm_ent);
+		goto err;
+	}
+
+	if (VM_STATE(vm_ent) == LOAD) {
+		if (VM_START(vm_ent) < 0)
+			goto err;
+		call_plugins(vm_ent);
+		if (waitpid(VM_PID(vm_ent), &status, 0) < 0)
+			goto err;
+	}
+
+	VM_CLEANUP(vm_ent);
+	call_plugins(vm_ent);
+	free_vm_entry(vm_ent);
+	remove_plugins();
+	free_id_list();
+	return 0;
+err:
+	VM_CLEANUP(vm_ent);
+	call_plugins(vm_ent);
+	free_vm_entry(vm_ent);
+	remove_plugins();
+	free_id_list();
+	return 1;
 }

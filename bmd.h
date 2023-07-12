@@ -145,4 +145,6 @@ struct vm_entry *lookup_vm_by_name(const char *name);
 int set_timer(struct vm_entry *vm_ent, int second);
 int start_virtual_machine(struct vm_entry *vm_ent);
 
+int direct_run(const char *name, bool install, bool single);
+
 #endif
