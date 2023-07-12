@@ -20,8 +20,6 @@
 #include "bmd.h"
 #include "inspect.h"
 
-extern struct global_conf *gl_conf;
-
 int attach_console(const char *vmname, const char *comport);
 
 int
