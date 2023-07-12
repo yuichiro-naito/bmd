@@ -13,11 +13,6 @@
 #define COMMAND_TIMEOUT_SEC 30
 
 /*
- * Nmdm number offset for auto assignment.
- */
-#define NMDM_OFFSET 200
-
-/*
   Entry of plugins.
   The individual entries refer to the installed plugin.
  */
@@ -125,8 +120,9 @@ struct sock_buf {
 LIST_HEAD(vm_conf_head, vm_conf_entry);
 
 int init_gl_conf();
-int merge_gl_conf(struct global_conf *gc);
-void free_gl_conf(struct global_conf *gl);
+void free_gl_conf();
+int merge_global_conf(struct global_conf *gc);
+void free_global_conf(struct global_conf *gc);
 
 int remove_plugins();
 void call_plugins(struct vm_entry *vm_ent);
@@ -147,4 +143,5 @@ int start_virtual_machine(struct vm_entry *vm_ent);
 
 int direct_run(const char *name, bool install, bool single);
 
+extern struct global_conf *gl_conf;
 #endif

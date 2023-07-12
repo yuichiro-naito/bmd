@@ -228,7 +228,7 @@ end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
 	free_global_vars();
-	free_gl_conf(gl_conf);
+	free_gl_conf();
 	return ret;
 }
 
@@ -274,7 +274,7 @@ end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
 	free_global_vars();
-	free_gl_conf(gl_conf);
+	free_gl_conf();
 	return ret;
 }
 
@@ -305,7 +305,7 @@ do_showconfig(const char *name)
 	remove_plugins();
 	free_id_list();
 	free_global_vars();
-	free_gl_conf(gl_conf);
+	free_gl_conf();
 
 	return 0;
 }

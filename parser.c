@@ -737,7 +737,7 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 	if (nmdm_offset_s) {
 		gc->nmdm_offset = strtol(nmdm_offset_s, &p, 0);
 		if (*p != '\0')
-			gc->nmdm_offset = NMDM_OFFSET;
+			gc->nmdm_offset = DEFAULT_NMDM_OFFSET;
 		free(nmdm_offset_s);
 	}
 
@@ -1101,9 +1101,9 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 
 	set_global_vars(gv);
 	if (update_gl_conf)
-		merge_gl_conf(global_conf);
+		merge_global_conf(global_conf);
 	else
-		free_gl_conf(global_conf);
+		free_global_conf(global_conf);
 
 	goto cleanup;
 

@@ -12,6 +12,12 @@
 #define LOCALBASE "/usr/local"
 #endif
 
+/*
+ * Nmdm number offset for auto assignment.
+ */
+#define DEFAULT_NMDM_OFFSET 200
+
+
 int plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data);
 
 struct global_conf {
