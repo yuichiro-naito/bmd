@@ -32,26 +32,20 @@ avahi_finalize(struct global_conf *conf)
 {
 }
 
-static int
-on_process_exit(int id, void *data)
-{
-	return waitpid(id, NULL, WNOHANG);
-}
+static int on_process_exit(int id, void *data);
 
 static int
-exec_avahi_publish(struct vm *vm)
+exec_avahi_publish(nvlist_t *config)
 {
 	pid_t pid;
-	char buf[12];
-	char *args[6];
+	char  *args[6];
 	sigset_t mask;
 
 	args[0] = AVAHI_PUBLISH;
 	args[1] = "-s";
-	args[2] = vm->conf->name;
+	args[2] = (char *)nvlist_get_string(config, "name");
 	args[3] = "_rfb._tcp";
-	snprintf(buf, sizeof(buf), "%d", vm->conf->fbuf->port);
-	args[4] = buf;
+	args[4] = (char *)nvlist_get_string(config, "port");
 	args[5] = NULL;
 
 	sigemptyset(&mask);
@@ -64,8 +58,54 @@ exec_avahi_publish(struct vm *vm)
 		exit(1);
 	}
 
+	if (pid > 0)
+		plugin_wait_for_process(pid, on_process_exit, config);
 	return pid;
 }
+
+static int
+on_timer(int id, void *data)
+{
+	nvlist_t *config = data;
+	pid_t pid = exec_avahi_publish(config);
+	if (pid > 0) {
+		if (nvlist_exists_number(config, "pid"))
+			nvlist_free_number(config, "pid");
+		nvlist_add_number(config, "pid", pid);
+	}
+	return 0;
+}
+
+
+static int
+on_process_exit(int id, void *data)
+{
+	int status;
+	if (waitpid(id, &status, WNOHANG) < 0)
+		return -1;
+
+	/* If avahi-publish exit on error, retry */
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 1)
+		plugin_set_timer(5, on_timer, data);
+
+	return 0;
+}
+
+void
+set_params(nvlist_t *config, struct vm *vm)
+{
+	char num[16];
+
+	if (nvlist_exists_string(config, "name"))
+		nvlist_free_string(config, "name");
+	if (nvlist_exists_string(config, "port"))
+		nvlist_free_string(config, "port");
+
+	nvlist_add_string(config, "name", vm->conf->name);
+	snprintf(num, sizeof(num), "%d", vm->conf->fbuf->port);
+	nvlist_add_string(config, "port", num);
+}
+
 
 static void
 avahi_status_change(struct vm *vm, nvlist_t *config)
@@ -81,8 +121,10 @@ avahi_status_change(struct vm *vm, nvlist_t *config)
 	switch (vm->state) {
 	case LOAD:
 	case RUN:
-		if (pid == 0 && (pid = exec_avahi_publish(vm)) > 0)
-			plugin_wait_for_process(pid, on_process_exit, NULL);
+		if (pid == 0) {
+			set_params(config, vm);
+			pid = exec_avahi_publish(config);
+		}
 		/* FALLTHROUGH */
 	default:
 		if (pid > 0)

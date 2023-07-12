@@ -46,6 +46,11 @@ struct events events = LIST_HEAD_INITIALIZER(events);
  */
 static int eventq;
 
+/*
+  Last Timer Event ID
+ */
+static int timer_id = 0;
+
 extern struct vm_methods method_list[];
 
 static int
@@ -82,6 +87,29 @@ plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data)
 
 	EV_SET(&ev->kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
 	       NOTE_EXIT, 0, ev);
+	if (kevent_set(&ev->kev, 1) < 0) {
+		ERR("failed to wait plugin process (%s)\n", strerror(errno));
+		free(ev);
+		return -1;
+	}
+	LIST_INSERT_HEAD(&events, ev, next);
+	return 0;
+}
+
+int
+plugin_set_timer(int second, int (*cb)(int ident, void *data), void *data)
+{
+	struct event *ev;
+
+	if ((ev = malloc(sizeof(*ev))) == NULL)
+		return -1;
+
+	ev->type = PLUGIN;
+	ev->cb = cb;
+	ev->data = data;
+
+	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
+	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
 	if (kevent_set(&ev->kev, 1) < 0) {
 		ERR("failed to wait plugin process (%s)\n", strerror(errno));
 		free(ev);
@@ -232,7 +260,6 @@ on_timer(int ident, void *data)
 int
 set_timer(struct vm_entry *vm_ent, int second)
 {
-	static int id = 0;
 	struct event *ev;
 
 	if ((ev = malloc(sizeof(*ev))) == NULL)
@@ -242,7 +269,7 @@ set_timer(struct vm_entry *vm_ent, int second)
 	ev->cb = on_timer;
 	ev->data = vm_ent;
 
-	EV_SET(&ev->kev, ++id, EVFILT_TIMER,
+	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
 	if (kevent_set(&ev->kev, 1) < 0)
 		goto err;
