@@ -37,6 +37,11 @@ SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
 SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
 /*
+  All Events
+*/
+struct events events = LIST_HEAD_INITIALIZER(events);
+
+/*
   Global configuration.
  */
 struct global_conf gl_conf0 = { LOCALBASE "/etc/bmd.conf",
@@ -120,50 +125,179 @@ merge_gl_conf(struct global_conf *gc)
 	return 0;
 }
 
-int
-wait_for_reading(struct vm_entry *vm_ent)
+static int
+kevent_set(struct kevent *kev, int n)
 {
-	int i = 0;
-	struct kevent ev[2];
-
-	if (VM_OUTFD(vm_ent) != -1)
-		EV_SET(&ev[i++], VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
-		    vm_ent);
-	if (VM_ERRFD(vm_ent) != -1)
-		EV_SET(&ev[i++], VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
-		    vm_ent);
-	while (kevent(gl_conf->kq, ev, i, NULL, 0, NULL) < 0)
-		if (errno != EINTR) {
-			ERR("failed to wait reading fd (%s)\n",
-			    strerror(errno));
+	int rc;
+	while ((rc = kevent(gl_conf->kq, kev, n, NULL, 0, NULL)) < 0)
+		if (errno != EINTR)
 			return -1;
-		}
+	return rc;
+}
 
+static int
+kevent_get(struct kevent *kev, int n, struct timespec *timeout)
+{
+	int rc;
+	while ((rc = kevent(gl_conf->kq, NULL, 0 , kev, n, timeout)) < 0)
+		if (errno != EINTR)
+			return -1;
+	return rc;
+}
+
+int
+plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data)
+{
+	struct event *ev;
+
+	if ((ev = malloc(sizeof(*ev))) == NULL)
+		return -1;
+
+	ev->type = PLUGIN;
+	ev->cb = cb;
+	ev->data = data;
+
+	EV_SET(&ev->kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
+	       NOTE_EXIT, 0, ev);
+	if (kevent_set(&ev->kev, 1) < 0) {
+		ERR("failed to wait plugin process (%s)\n", strerror(errno));
+		free(ev);
+		return -1;
+	}
+	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 }
 
 int
-stop_waiting_fd(struct vm_entry *vm_ent)
+on_read_vm_output(int fd, void *data)
 {
-	int i = 0;
-	struct kevent ev[2];
+	struct vm_entry *vm_ent = data;
+	struct event *ev, *evn;
+	struct kevent *kev;
 
-	if (VM_OUTFD(vm_ent) != -1)
-		EV_SET(&ev[i++], VM_OUTFD(vm_ent), EVFILT_READ, EV_DELETE, 0, 0,
-		    vm_ent);
-	if (VM_ERRFD(vm_ent) != -1)
-		EV_SET(&ev[i++], VM_ERRFD(vm_ent), EVFILT_READ, EV_DELETE, 0, 0,
-		    vm_ent);
-	while (kevent(gl_conf->kq, ev, i, NULL, 0, NULL) < 0)
-		if (errno != EINTR) {
-			ERR("failed to delete waiting fd (%s)\n",
-			    strerror(errno));
-			return -1;
+	if (write_err_log(fd, VM_PTR(vm_ent)) == 0) {
+		LIST_FOREACH_SAFE (ev, &events, next, evn) {
+			kev = &ev->kev;
+			if (ev->data != vm_ent || kev->ident != fd ||
+			    kev->filter != EVFILT_READ)
+				continue;
+			/*
+			 * No need to remove fd from kqueue.
+			 * It's already closed.
+			 */
+			LIST_REMOVE(ev, next);
+			free(ev);
 		}
+	}
+	return 0;
+}
 
-	VM_CLOSE(vm_ent, OUTFD);
-	VM_CLOSE(vm_ent, ERRFD);
+int
+wait_for_vm_output(struct vm_entry *vm_ent)
+{
+	int i = 0, j;
+	struct event *ev[2] = {NULL, NULL};
+	struct kevent kev[2];
 
+	if (VM_OUTFD(vm_ent) != -1) {
+		if ((ev[i] = malloc(sizeof(struct event))) == NULL)
+			goto err;
+		ev[i]->type = EVENT;
+		ev[i]->cb = on_read_vm_output;
+		ev[i]->data = vm_ent;
+
+		EV_SET(&ev[i]->kev, VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
+		       ev[i]);
+		memcpy(&kev[i], &ev[i]->kev, sizeof(struct kevent));
+		i++;
+	}
+	if (VM_ERRFD(vm_ent) != -1) {
+		if ((ev[i] = malloc(sizeof(struct event))) == NULL)
+			goto err;
+		ev[i]->type = EVENT;
+		ev[i]->cb = on_read_vm_output;
+		ev[i]->data = vm_ent;
+
+		EV_SET(&ev[i]->kev, VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
+		       ev[i]);
+		memcpy(&kev[i], &ev[i]->kev, sizeof(struct kevent));
+		i++;
+	}
+
+	if (kevent_set(kev, i) < 0) {
+		ERR("failed to wait vm fds (%s)\n", strerror(errno));
+		goto err;
+	}
+
+	for (j = 0; j < i; j++)
+		LIST_INSERT_HEAD(&events, ev[j], next);
+
+	return 0;
+err:
+	for (j = 0; j < i; j++)
+		free(ev[j]);
+
+	return -1;
+}
+
+int
+stop_waiting_vm_output(struct vm_entry *vm_ent)
+{
+	struct event *ev, *evn;
+	struct kevent *kev;
+
+	LIST_FOREACH_SAFE (ev, &events, next, evn) {
+		kev = &ev->kev;
+		if (ev->data != vm_ent ||
+		    (kev->ident != VM_OUTFD(vm_ent) &&
+		     kev->ident != VM_ERRFD(vm_ent)) ||
+		    kev->filter != EVFILT_READ)
+			continue;
+		kev->flags = EV_DELETE;
+		if (kevent_set(kev, 1) < 0) {
+			ERR("failed to remove vm output event (%s)\n",
+			    strerror(errno));
+		}
+		LIST_REMOVE(ev, next);
+		free(ev);
+	}
+
+	return 0;
+}
+
+void
+free_events()
+{
+	struct event *ev, *evn;
+
+	LIST_FOREACH_SAFE (ev, &events, next, evn)
+		free(ev);
+	LIST_INIT(&events);
+}
+
+int
+on_timer(int ident, void *data)
+{
+	struct vm_entry *vm_ent = data;
+
+	switch (VM_STATE(vm_ent)) {
+	case TERMINATE:
+		/* delayed boot */
+		start_virtual_machine(vm_ent);
+		break;
+	case LOAD:
+	case STOP:
+	case REMOVE:
+	case RESTART:
+		/* loader timout or stop timeout */
+		/* force to poweroff */
+		ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
+		VM_POWEROFF(vm_ent);
+		break;
+	case RUN:
+		/* ignore timer */
+		break;
+	}
 	return 0;
 }
 
@@ -173,23 +307,26 @@ stop_waiting_fd(struct vm_entry *vm_ent)
  * If an event is for delay boot, set flag = 1.
  */
 int
-set_timer(struct vm_entry *vm_ent, int second, int flag)
+set_timer(struct vm_entry *vm_ent, int second)
 {
 	static int id = 0;
-	struct event_list *el;
+	struct event *ev;
 
-	if ((el = malloc(sizeof(*el))) == NULL)
+	if ((ev = malloc(sizeof(*ev))) == NULL)
 		goto err;
 
-	EV_SET(&el->ev, ((id += 2) | (flag & 1)), EVFILT_TIMER,
-	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, vm_ent);
-	while (kevent(gl_conf->kq, &el->ev, 1, NULL, 0, NULL) < 0)
-		if (errno != EINTR)
-			goto err;
-	SLIST_INSERT_HEAD(VM_EVLIST(vm_ent), el, next);
+	ev->type = EVENT;
+	ev->cb = on_timer;
+	ev->data = vm_ent;
+
+	EV_SET(&ev->kev, ++id, EVFILT_TIMER,
+	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
+	if (kevent_set(&ev->kev, 1) < 0)
+		goto err;
+	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 err:
-	free(el);
+	free(ev);
 	ERR("failed to set timer (%s)\n", strerror(errno));
 	return -1;
 }
@@ -200,31 +337,316 @@ err:
 int
 clear_all_timers(struct vm_entry *vm_ent)
 {
-	struct event_list *el, *eln;
+	struct event *ev, *evn;
 
-	SLIST_FOREACH_SAFE (el, VM_EVLIST(vm_ent), next, eln) {
-		el->ev.flags = EV_DELETE;
-		while (kevent(gl_conf->kq, &el->ev, 1, NULL, 0, NULL) < 0)
-			if (errno != EINTR)
-				break;
-		free(el);
+	LIST_FOREACH_SAFE (ev, &events, next, evn) {
+		if (ev->kev.filter != EVFILT_TIMER || ev->data != vm_ent)
+			continue;
+		ev->kev.flags = EV_DELETE;
+		if (kevent_set(&ev->kev, 1) < 0)
+			ERR("failed to remove timer event (%s)\n",
+			    strerror(errno));
+		LIST_REMOVE(ev, next);
+		free(ev);
 	}
-	SLIST_INIT(VM_EVLIST(vm_ent));
+	return 0;
+}
+
+void stop_virtual_machine(struct vm_entry *vm_ent);
+
+static char *
+reason_string(int status)
+{
+	int sz;
+	char *mes;
+
+	if (WIFSIGNALED(status))
+		sz = asprintf(&mes, " by signal %d%s", WTERMSIG(status),
+			      (WCOREDUMP(status) ? " coredump" : ""));
+	else if (WIFSTOPPED(status))
+		sz = asprintf(&mes, " by signal %d", WSTOPSIG(status));
+	else
+		sz = ((mes = strdup("")) == NULL ? -1 : 0);
+
+	return (sz < 0) ? NULL : mes;
+}
+
+int
+on_vm_exit(int ident, void *data)
+{
+	int status;
+	struct vm_entry *vm_ent = data;
+	char *rs;
+
+	if (waitpid(VM_PID(vm_ent), &status, 0) < 0)
+		ERR("wait error (%s)\n", strerror(errno));
+	switch (VM_STATE(vm_ent)) {
+	case LOAD:
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+			VM_CLOSE(vm_ent, INFD);
+			stop_waiting_vm_output(vm_ent);
+			start_virtual_machine(vm_ent);
+		} else {
+			ERR("failed loading vm %s (status:%d)\n",
+			    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
+			stop_virtual_machine(vm_ent);
+		}
+		break;
+	case RESTART:
+		stop_virtual_machine(vm_ent);
+		VM_STATE(vm_ent) = TERMINATE;
+		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
+		break;
+	case RUN:
+		if (VM_CONF(vm_ent)->install == false &&
+		    WIFEXITED(status) &&
+		    (VM_CONF(vm_ent)->boot == ALWAYS ||
+		     (VM_CONF(vm_ent)->backend == BHYVE &&
+		      WEXITSTATUS(status) == 0))) {
+			start_virtual_machine(vm_ent);
+			break;
+		}
+		/* FALLTHROUGH */
+	case STOP:
+		rs = reason_string(status);
+		INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
+		     (rs == NULL ? "" : rs));
+		free(rs);
+		stop_virtual_machine(vm_ent);
+		VM_CONF(vm_ent)->install = false;
+		break;
+	case REMOVE:
+		INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
+		stop_virtual_machine(vm_ent);
+		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+		free_vm_entry(vm_ent);
+		break;
+	case TERMINATE:
+		break;
+	}
+
 	return 0;
 }
 
 int
-wait_for_process(struct vm_entry *vm_ent)
+wait_for_vm(struct vm_entry *vm_ent)
 {
-	struct kevent ev;
+	struct event *ev;
+	if ((ev = malloc(sizeof(*ev))) == NULL)
+		return -1;
 
-	EV_SET(&ev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
-	    0, vm_ent);
-	while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
-		if (errno != EINTR) {
-			ERR("failed to wait process (%s)\n", strerror(errno));
-			return -1;
+	ev->type = EVENT;
+	ev->cb = on_vm_exit;
+	ev->data = vm_ent;
+
+	EV_SET(&ev->kev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
+	       NOTE_EXIT, 0, ev);
+
+	if (kevent_set(&ev->kev, 1) < 0) {
+		ERR("failed to wait process (%s)\n", strerror(errno));
+		free(ev);
+		return -1;
+	}
+
+	LIST_INSERT_HEAD(&events, ev, next);
+	return 0;
+}
+
+int
+set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
+{
+	int i = 0;
+	struct event *e, *ev[2] = {NULL, NULL};
+	struct kevent kev[2];
+
+	LIST_FOREACH (e, &events, next) {
+		if (e->data == sb) {
+			switch (e->kev.filter) {
+			case EVFILT_READ:
+				ev[0] = e;
+				memcpy(&kev[i], &e->kev, sizeof(struct kevent));
+				kev[i].flags = recv_f;
+				break;
+				i++;
+			case EVFILT_WRITE:
+				ev[1] = e;
+				memcpy(&kev[i], &e->kev, sizeof(struct kevent));
+				kev[i].flags = send_f;
+				i++;
+				break;
+			default:
+				break;
+			}
+			if (i >= 2)
+				break;
 		}
+	}
+
+	if (i == 0)
+		return 0;
+
+	if (kevent_set(kev, i) < 0) {
+		ERR("failed to change cmd socket event (%s)\n",
+		    strerror(errno));
+		return -1;
+	}
+
+	if (ev[0])
+		ev[0]->kev.flags =  recv_f;
+
+	if (ev[1])
+		ev[1]->kev.flags =  send_f;
+
+	return 0;
+}
+
+int
+stop_waiting_sock_buf(struct sock_buf *sb)
+{
+	struct event *ev, *evn;
+
+	LIST_FOREACH_SAFE (ev, &events, next, evn)
+		if (ev->data == sb) {
+			ev->kev.flags = EV_DELETE;
+			if (kevent_set(&ev->kev, 1) < 0) {
+				ERR("failed to remove socket events(%s)\n",
+				    strerror(errno));
+				return -1;
+			}
+			LIST_REMOVE(ev, next);
+			free(ev);
+		}
+
+	return 0;
+}
+
+int
+on_recv_sock_buf(int ident, void *data)
+{
+	struct sock_buf *sb = data;
+
+	switch (recv_sock_buf(sb)) {
+	case 2:
+		if (recv_command(sb) == 0) {
+			clear_sock_buf(sb);
+			set_sock_buf_wait_flags(sb, EV_DISABLE, EV_ENABLE);
+			break;
+		}
+		/* FALLTHROUGH */
+	case 1:
+		break;
+	default:
+		stop_waiting_sock_buf(sb);
+		destroy_sock_buf(sb);
+	}
+	return 0;
+}
+
+int
+on_send_sock_buf(int ident, void *data)
+{
+	struct sock_buf *sb = data;
+
+	switch (send_sock_buf(sb)) {
+	case 2:
+		clear_send_sock_buf(sb);
+		set_sock_buf_wait_flags(sb,  EV_ENABLE, EV_DISABLE);
+		/* FALLTHROUGH */
+	case 1:
+		break;
+	default:
+		stop_waiting_sock_buf(sb);
+		destroy_sock_buf(sb);
+		break;
+	}
+	return 0;
+}
+
+static int
+wait_for_sock_buf(struct sock_buf *sb)
+{
+	struct event *ev[2];
+	struct kevent kev[2];
+
+	ev[0] = malloc(sizeof(struct event));
+	ev[1] = malloc(sizeof(struct event));
+
+	if (ev[0] == NULL || ev[1] == NULL) {
+		free(ev[0]);
+		free(ev[1]);
+		return -1;
+	}
+
+	ev[0]->type = EVENT;
+	ev[0]->cb = on_recv_sock_buf;
+	ev[0]->data = sb;
+
+	EV_SET(&ev[0]->kev, sb->fd, EVFILT_READ, EV_ADD, 0, 0, ev[0]);
+	kev[0] = ev[0]->kev;
+
+	ev[1]->type = EVENT;
+	ev[1]->cb = on_send_sock_buf;
+	ev[1]->data = sb;
+
+	EV_SET(&ev[1]->kev, sb->fd, EVFILT_WRITE, EV_ADD, EV_DISABLE, 0, ev[1]);
+	kev[1] = ev[1]->kev;
+
+	if (kevent_set(kev, 2) < 0) {
+		ERR("failed to wait socket buffer (%s)\n", strerror(errno));
+		free(ev[0]);
+		free(ev[1]);
+		return -1;
+	}
+
+	LIST_INSERT_HEAD(&events, ev[1], next);
+	LIST_INSERT_HEAD(&events, ev[0], next);
+	return 0;
+}
+
+int
+on_accept_cmd_sock(int ident, void *data)
+{
+	struct sock_buf *sb;
+	int n, sock = gl_conf->cmd_sock;
+
+	if ((n = accept_command_socket(sock)) < 0)
+		return -1;
+
+	if ((sb = create_sock_buf(n)) == NULL) {
+		ERR("%s\n","failed to allocate socket buffer");
+		close(n);
+		return -1;
+	}
+
+	if (wait_for_sock_buf(sb) < 0) {
+		close(n);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
+wait_for_cmd_sock(int sock)
+{
+	struct event *ev;
+
+	if ((ev = malloc(sizeof(*ev))) == NULL)
+		return -1;
+
+	ev->type = EVENT;
+	ev->cb = on_accept_cmd_sock;
+	ev->data = NULL;
+
+	EV_SET(&ev->kev, sock, EVFILT_READ, EV_ADD, 0, 0, ev);
+
+	if (kevent_set(&ev->kev, 1) < 0) {
+		ERR("failed to wait socket recv (%s)\n", strerror(errno));
+		free(ev);
+		return -1;
+	}
+
+	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 }
 
@@ -257,8 +679,10 @@ load_plugins(const char *plugin_dir)
 		if (fd < 0)
 			continue;
 
-		if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL)
+		if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL) {
+			ERR("failed to open plugin %s\n", ent->d_name);
 			goto next;
+		}
 
 		if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
 		    desc->version != PLUGIN_VERSION ||
@@ -275,6 +699,7 @@ load_plugins(const char *plugin_dir)
 		pl_ent->desc = *desc;
 		pl_ent->handle = hdl;
 		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+		INFO("load plugin %s\n", ent->d_name);
 		loaded++;
 	next:
 		close(fd);
@@ -330,12 +755,24 @@ void
 free_vm_entry(struct vm_entry *vm_ent)
 {
 	struct net_conf *nc, *nnc;
-	struct event_list *el, *eln;
+	struct event *ev, *evn;
 
 	STAILQ_FOREACH_SAFE (nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
-	SLIST_FOREACH_SAFE (el, VM_EVLIST(vm_ent), next, eln)
-		free(el);
+	LIST_FOREACH_SAFE (ev, &events, next, evn) {
+		if (ev->data != vm_ent)
+			continue;
+		/*
+		  Basically no events are left on this timing.
+		  Delete & free them for safty.
+		*/
+		ev->kev.flags = EV_DELETE;
+		if (kevent_set(&ev->kev, 1) < 0)
+			ERR("failed to remove vm event (%s)\n",
+			    strerror(errno));
+		LIST_REMOVE(ev, next);
+		free(ev);
+	}
 	free(VM_MAPFILE(vm_ent));
 	free(VM_VARSFILE(vm_ent));
 	free(VM_ASCOMPORT(vm_ent));
@@ -414,7 +851,6 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
 	STAILQ_INIT(VM_TAPS(vm_ent));
-	SLIST_INIT(VM_EVLIST(vm_ent));
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 
 	return vm_ent;
@@ -531,7 +967,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	if (wait_for_process(vm_ent) < 0 || wait_for_reading(vm_ent) < 0) {
+	if (wait_for_vm(vm_ent) < 0 || wait_for_vm_output(vm_ent) < 0) {
 		ERR("failed to set kevent for vm %s\n", name);
 		/*
 		 * Force to kill bhyve.
@@ -548,7 +984,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 
 	call_plugins(vm_ent);
 	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0 &&
-	    shutdown_timer(vm_ent, conf->loader_timeout) < 0) {
+	    set_timer(vm_ent, conf->loader_timeout) < 0) {
 		ERR("failed to set timer for vm %s\n", name);
 		return -1;
 	}
@@ -575,9 +1011,8 @@ start_virtual_machines()
 	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 
-	while (kevent(gl_conf->kq, sigev, 3, NULL, 0, NULL) < 0)
-		if (errno != EINTR)
-			return -1;
+	if (kevent_set(sigev, 3) < 0)
+		return -1;
 
 	LIST_FOREACH (conf_ent, &vm_conf_list, next) {
 		vm_ent = create_vm_entry(conf_ent);
@@ -587,7 +1022,7 @@ start_virtual_machines()
 		if (conf->boot == NO)
 			continue;
 		if (conf->boot_delay > 0) {
-			if (boot_timer(vm_ent, conf->boot_delay) < 0)
+			if (set_timer(vm_ent, conf->boot_delay) < 0)
 				ERR("failed to set boot delay timer for vm %s\n",
 				    conf->name);
 			continue;
@@ -601,7 +1036,7 @@ start_virtual_machines()
 void
 stop_virtual_machine(struct vm_entry *vm_ent)
 {
-	stop_waiting_fd(vm_ent);
+	stop_waiting_vm_output(vm_ent);
 	clear_all_timers(vm_ent);
 	VM_CLEANUP(vm_ent);
 	call_plugins(vm_ent);
@@ -644,7 +1079,7 @@ reload_virtual_machines()
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
-				if (boot_timer(vm_ent, conf->boot_delay) < 0)
+				if (set_timer(vm_ent, conf->boot_delay) < 0)
 					ERR("failed to set timer for %s\n",
 					    conf->name);
 				continue;
@@ -667,13 +1102,13 @@ reload_virtual_machines()
 		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
 			switch (VM_STATE(vm_ent)) {
 			case TERMINATE:
-				boot_timer(vm_ent, MAX(conf->boot_delay, 1));
+				set_timer(vm_ent, MAX(conf->boot_delay, 1));
 				break;
 			case LOAD:
 			case RUN:
 				INFO("reboot vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
-				shutdown_timer(vm_ent, conf->stop_timeout);
+				set_timer(vm_ent, conf->stop_timeout);
 				VM_STATE(vm_ent) = RESTART;
 				break;
 			case STOP:
@@ -691,7 +1126,7 @@ reload_virtual_machines()
 			    VM_STATE(vm_ent) == RUN) {
 				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
-				shutdown_timer(vm_ent, conf->stop_timeout);
+				set_timer(vm_ent, conf->stop_timeout);
 				VM_STATE(vm_ent) = STOP;
 			} else if (VM_STATE(vm_ent) == RESTART)
 				VM_STATE(vm_ent) = STOP;
@@ -718,7 +1153,7 @@ reload_virtual_machines()
 				conf = VM_CONF(vm_ent);
 				INFO("acpi power off vm %s\n", conf->name);
 				VM_ACPI_POWEROFF(vm_ent);
-				shutdown_timer(vm_ent, conf->stop_timeout);
+				set_timer(vm_ent, conf->stop_timeout);
 				/* FALLTHROUGH */
 			case STOP:
 			case REMOVE:
@@ -749,206 +1184,40 @@ reload_virtual_machines()
 	return 0;
 }
 
-static char *
-reason_string(int status)
-{
-	int sz;
-	char *mes;
-
-	if (WIFSIGNALED(status))
-		sz = asprintf(&mes, " by signal %d%s", WTERMSIG(status),
-			      (WCOREDUMP(status) ? " coredump" : ""));
-	else if (WIFSTOPPED(status))
-		sz = asprintf(&mes, " by signal %d", WSTOPSIG(status));
-	else
-		sz = ((mes = strdup("")) == NULL ? -1 : 0);
-
-	return (sz < 0) ? NULL : mes;
-}
-
 int
 event_loop()
 {
-	struct kevent ev, ev2[2];
-	struct vm_entry *vm_ent;
-	int n, status;
-	char *rs;
-	struct sock_buf *sb;
+	struct kevent ev;
+	struct event *event;
+	int n;
 	struct timespec *to, timeout;
 
-	EV_SET(&ev, gl_conf->cmd_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
-	while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
-		if (errno != EINTR)
-			return -1;
+	if (wait_for_cmd_sock(gl_conf->cmd_sock) < 0)
+		return -1;
 
 wait:
 	to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
-	while ((n = kevent(gl_conf->kq, NULL, 0, &ev, 1, to)) < 0)
-		if (errno != EINTR) {
-			ERR("kevent failure (%s)\n", strerror(errno));
-			return -1;
-		}
+	if ((n = kevent_get(&ev, 1, to)) < 0) {
+		ERR("kevent failure (%s)\n", strerror(errno));
+		return -1;
+	}
 	if (n == 0) {
 		close_timeout_sock_buf(COMMAND_TIMEOUT_SEC);
 		goto wait;
 	}
 
-	vm_ent = ev.udata;
-	switch (ev.filter) {
-	case EVFILT_WRITE:
-		if (vm_ent != NULL && VM_TYPE(vm_ent) == SOCKBUF) {
-			sb = (struct sock_buf *)vm_ent;
-			switch (send_sock_buf(sb)) {
-			case 2:
-				clear_send_sock_buf(sb);
-				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-				    EV_ENABLE, 0, 0, sb);
-				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-				    EV_DELETE, 0, 0, sb);
-				while (kevent(gl_conf->kq, ev2, 2, NULL, 0,
-					   NULL) < 0)
-					if (errno != EINTR)
-						break;
-			case 1:
-				break;
-			default:
-				destroy_sock_buf(sb);
-				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-				    EV_DELETE, 0, 0, NULL);
-				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-				    EV_DELETE, 0, 0, NULL);
-				while (kevent(gl_conf->kq, ev2, 2, NULL, 0,
-					   NULL) < 0)
-					if (errno != EINTR)
-						break;
-				break;
-			}
+	event = ev.udata;
+	if (event != NULL && event->type >= EVENT) {
+		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
+			ERR("%s\n", "callback failed");
+		if (event->kev.flags & EV_ONESHOT) {
+			LIST_REMOVE(event, next);
+			free(event);
 		}
-		break;
-	case EVFILT_READ:
-		if (ev.ident == gl_conf->cmd_sock) {
-			if ((n = accept_command_socket(ev.ident)) < 0)
-				break;
-			sb = create_sock_buf(n);
-			EV_SET(&ev, n, EVFILT_READ, EV_ADD, 0, 0, sb);
-			while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
-				if (errno != EINTR) {
-					destroy_sock_buf(sb);
-					break;
-				}
-			break;
-		}
-		if (vm_ent != NULL && VM_TYPE(vm_ent) == SOCKBUF) {
-			sb = (struct sock_buf *)vm_ent;
-			switch (recv_sock_buf(sb)) {
-			case 2:
-				if (recv_command(sb) == 0) {
-					clear_sock_buf(sb);
-					EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-					    EV_DISABLE, 0, 0, sb);
-					EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-					    EV_ADD, 0, 0, sb);
-					while (kevent(gl_conf->kq, ev2, 2, NULL,
-						   0, NULL) < 0)
-						if (errno != EINTR)
-							break;
-					break;
-				}
-				/* FALLTHROUGH */
-			case 1:
-				break;
-			default:
-				destroy_sock_buf(sb);
-				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
-				    0, NULL);
-				while (kevent(gl_conf->kq, &ev, 1, NULL, 0,
-					   NULL) < 0)
-					if (errno != EINTR)
-						break;
-			}
-			break;
-		}
-		if (write_err_log(ev.ident, VM_PTR(vm_ent)) == 0) {
-			EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0, 0,
-			    NULL);
-			while (kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
-				if (errno != EINTR)
-					break;
-		}
-		break;
-	case EVFILT_TIMER:
-		switch (VM_STATE(vm_ent)) {
-		case TERMINATE:
-			/* delayed boot */
-			if (is_event_boot(&ev))
-				start_virtual_machine(vm_ent);
-			break;
-		case LOAD:
-		case STOP:
-		case REMOVE:
-		case RESTART:
-			/* loader timout or stop timeout */
-			/* force to poweroff */
-			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
-			VM_POWEROFF(vm_ent);
-			break;
-		case RUN:
-			/* ignore timer */
-			break;
-		}
-		break;
-	case EVFILT_PROC:
-		if (waitpid(ev.ident, &status, 0) < 0)
-			ERR("wait error (%s)\n", strerror(errno));
-		if (vm_ent == NULL || VM_PID(vm_ent) != ev.ident)
-			// Maybe plugin set this event
-			break;
-		switch (VM_STATE(vm_ent)) {
-		case LOAD:
-			if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-				VM_CLOSE(vm_ent, INFD);
-				stop_waiting_fd(vm_ent);
-				start_virtual_machine(vm_ent);
-			} else {
-				ERR("failed loading vm %s (status:%d)\n",
-				    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
-				stop_virtual_machine(vm_ent);
-			}
-			break;
-		case RESTART:
-			stop_virtual_machine(vm_ent);
-			VM_STATE(vm_ent) = TERMINATE;
-			boot_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
-			break;
-		case RUN:
-			if (VM_CONF(vm_ent)->install == false &&
-			    WIFEXITED(status) &&
-			    (VM_CONF(vm_ent)->boot == ALWAYS ||
-				(VM_CONF(vm_ent)->backend == BHYVE &&
-				    WEXITSTATUS(status) == 0))) {
-				start_virtual_machine(vm_ent);
-				break;
-			}
-			/* FALLTHROUGH */
-		case STOP:
-			rs = reason_string(status);
-			INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
-			     (rs == NULL ? "" : rs));
-			free(rs);
-			stop_virtual_machine(vm_ent);
-			VM_CONF(vm_ent)->install = false;
-			break;
-		case REMOVE:
-			INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
-			stop_virtual_machine(vm_ent);
-			SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
-			free_vm_entry(vm_ent);
-			break;
-		case TERMINATE:
-			break;
-		}
-		break;
-	case EVFILT_SIGNAL:
+		goto wait;
+	}
+
+	if (ev.filter == EVFILT_SIGNAL) {
 		switch (ev.ident) {
 		case SIGTERM:
 		case SIGINT:
@@ -959,9 +1228,8 @@ wait:
 			reload_virtual_machines();
 			goto wait;
 		}
-		break;
-	default:
-		ERR("recieved unknown event! (%d)", ev.filter);
+	} else {
+		ERR("recieved unexpcted event! (%d)", ev.filter);
 		return -1;
 	}
 
@@ -973,69 +1241,34 @@ end:
 int
 stop_virtual_machines()
 {
-	struct kevent ev, ev2[2];
+	struct kevent ev;
+	struct event *event;
 	struct vm_entry *vm_ent;
-	int status, count = 0;
+	int count = 0;
 
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
 		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 			count++;
 			VM_ACPI_POWEROFF(vm_ent);
-			shutdown_timer(vm_ent, VM_CONF(vm_ent)->stop_timeout);
+			set_timer(vm_ent, VM_CONF(vm_ent)->stop_timeout);
 		}
 	}
 
 	while (count > 0) {
-		if (kevent(gl_conf->kq, NULL, 0, &ev, 1, NULL) < 0) {
-			if (errno == EINTR)
-				continue;
+		if (kevent_get(&ev, 1, NULL) < 0)
 			return -1;
-		}
-		vm_ent = ev.udata;
-		if (ev.filter == EVFILT_PROC) {
-			if (waitpid(ev.ident, &status, 0) < 0)
-				ERR("wait error (%s)\n", strerror(errno));
-			if (vm_ent == NULL || VM_PID(vm_ent) != ev.ident)
-				// maybe plugin's child process
-				continue;
-			INFO("stop vm %s\n", VM_CONF(vm_ent)->name);
-			stop_virtual_machine(vm_ent);
-			count--;
-		} else if (ev.filter == EVFILT_TIMER) {
-			/* force to poweroff VM */
-			ERR("timeout kill vm %s\n", VM_CONF(vm_ent)->name);
-			VM_POWEROFF(vm_ent);
-		} else if (ev.filter == EVFILT_WRITE) {
-			if (VM_TYPE(vm_ent) == SOCKBUF) {
-				destroy_sock_buf((struct sock_buf *)vm_ent);
-				EV_SET(&ev2[0], ev.ident, EVFILT_READ,
-				    EV_DELETE, 0, 0, NULL);
-				EV_SET(&ev2[1], ev.ident, EVFILT_WRITE,
-				    EV_DELETE, 0, 0, NULL);
-				while (kevent(gl_conf->kq, ev2, 2, NULL, 0,
-					   NULL) < 0)
-					if (errno != EINTR)
-						break;
+		event = ev.udata;
+		if (event != NULL && event->type >= EVENT) {
+			if (event->type == EVENT &&
+			    event->kev.filter == EVFILT_PROC)
+				count--;
+			if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
+				ERR("%s\n", "callback failed");
+			if (event->kev.flags & EV_ONESHOT) {
+				LIST_REMOVE(event, next);
+				free(event);
 			}
-		} else if (ev.filter == EVFILT_READ) {
-			if (VM_TYPE(vm_ent) == SOCKBUF) {
-				destroy_sock_buf((struct sock_buf *)vm_ent);
-				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
-				    0, NULL);
-				while (kevent(gl_conf->kq, &ev, 1, NULL, 0,
-					   NULL) < 0)
-					if (errno != EINTR)
-						break;
-				continue;
-			}
-			if (write_err_log(ev.ident, VM_PTR(vm_ent)) == 0) {
-				EV_SET(&ev, ev.ident, EVFILT_READ, EV_DELETE, 0,
-				    0, NULL);
-				while (kevent(gl_conf->kq, &ev, 1, NULL, 0,
-					   NULL) < 0)
-					if (errno != EINTR)
-						break;
-			}
+			continue;
 		}
 	}
 #if __FreeBSD_version < 1400059
@@ -1181,6 +1414,7 @@ main(int argc, char *argv[])
 	stop_virtual_machines();
 	free_vm_list();
 	close(gl_conf->kq);
+	free_events();
 	remove_plugins();
 	free_id_list();
 	free_global_vars();

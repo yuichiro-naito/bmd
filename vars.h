@@ -12,6 +12,8 @@
 #define LOCALBASE "/usr/local"
 #endif
 
+int plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data);
+
 struct global_conf {
 	char *config_file;
 	char *plugin_dir;

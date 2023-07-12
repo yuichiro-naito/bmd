@@ -44,15 +44,19 @@
 static int
 redirect_to_com(struct vm *vm)
 {
-	int fd;
+	int i, fd;
 	char *com;
 
 	if ((com = vm->assigned_comport) == NULL)
 		com = "/dev/null";
 
-	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
-		if (errno != EINTR)
+	for (i = 0; i < 6; i++) {
+		while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
+			if (errno != EINTR)
+				break;
+		if (fd >=0)
 			break;
+	}
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
 		return -1;

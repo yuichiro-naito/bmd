@@ -11,6 +11,7 @@ LINKS=  ${BINDIR}/bmd ${BINDIR}/bmdctl
 SRCS=	bmd.c conf.c tap.c parser.c vm.c server.c control.c inspect.c \
 	console.c inspect_grub.c confparse.h confparse.y conflex.l y.tab.h
 CFLAGS+=-Wall -DLOCALBASE=\"$(LOCALBASE)\"
+LDFLAGS+=-rdynamic
 LDADD=	-lnv
 
 CLEANFILES= y.output

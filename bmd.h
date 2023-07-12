@@ -47,14 +47,13 @@ struct vm_conf_entry {
 	LIST_ENTRY(vm_conf_entry) next;
 };
 
-enum STRUCT_TYPE { VMENTRY, SOCKBUF };
+enum STRUCT_TYPE { VMENTRY, SOCKBUF, EVENT, PLUGIN };
 
 #define VM_START(v)         (v)->method->vm_start(&(v)->vm)
 #define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm)
 #define VM_POWEROFF(v)      (v)->method->vm_poweroff(&(v)->vm)
 #define VM_ACPI_POWEROFF(v) (v)->method->vm_acpi_poweroff(&(v)->vm)
 #define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm)
-#define VM_EVLIST(v)        (&(v)->event_list)
 #define VM_PTR(v)           (&(v)->vm)
 #define VM_CONF(v)          ((v)->vm.conf)
 #define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
@@ -80,9 +79,14 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF };
 		}                          \
 	} while (0)
 
-struct event_list {
-	struct kevent ev;
-	SLIST_ENTRY(event_list) next;
+LIST_HEAD(events, event);
+
+struct event {
+	enum STRUCT_TYPE type;
+	struct kevent kev;
+	void *data;
+	int (*cb)(int ident, void *data);
+	LIST_ENTRY(event) next;
 };
 
 /*
@@ -96,7 +100,6 @@ struct vm_entry {
 	struct vm_conf *new_conf;
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_methods *method;
-	SLIST_HEAD(, event_list) event_list;
 };
 
 /*
@@ -139,11 +142,7 @@ struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
 void free_vm_conf_entry(struct vm_conf_entry *conf_ent);
 void free_config_files();
 struct vm_entry *lookup_vm_by_name(const char *name);
-int set_timer(struct vm_entry *vm_ent, int second, int flag);
+int set_timer(struct vm_entry *vm_ent, int second);
 int start_virtual_machine(struct vm_entry *vm_ent);
-
-#define is_event_boot(e) ((e)->filter == EVFILT_TIMER && (e)->ident & 1)
-#define boot_timer(v, s) set_timer((v), (s), 1)
-#define shutdown_timer(v, s) set_timer((v), (s), 0)
 
 #endif

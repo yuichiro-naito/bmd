@@ -590,7 +590,7 @@ vm_down_command(int s, const nvlist_t *nv, int how, uid_t user)
 	case 0:
 		INFO("stop vm %s\n", conf->name);
 		VM_ACPI_POWEROFF(vm_ent);
-		shutdown_timer(vm_ent, conf->stop_timeout);
+		set_timer(vm_ent, conf->stop_timeout);
 		vm_ent->vm.state = STOP;
 		break;
 	case 1:

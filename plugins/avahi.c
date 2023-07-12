@@ -1,4 +1,4 @@
-#include <sys/event.h>
+#include <sys/wait.h>
 #include <sys/signal.h>
 #include <sys/unistd.h>
 
@@ -33,6 +33,12 @@ avahi_finalize(struct global_conf *conf)
 }
 
 static int
+on_process_exit(int id, void *data)
+{
+	return waitpid(id, NULL, WNOHANG);
+}
+
+static int
 exec_avahi_publish(struct vm *vm)
 {
 	pid_t pid;
@@ -64,7 +70,6 @@ exec_avahi_publish(struct vm *vm)
 static void
 avahi_status_change(struct vm *vm, nvlist_t *config)
 {
-	struct kevent ev;
 	pid_t pid;
 
 	if (avahi_enable == 0 || vm->conf->fbuf->enable == false)
@@ -76,13 +81,8 @@ avahi_status_change(struct vm *vm, nvlist_t *config)
 	switch (vm->state) {
 	case LOAD:
 	case RUN:
-		if (pid == 0 && (pid = exec_avahi_publish(vm)) > 0) {
-			EV_SET(&ev, pid, EVFILT_PROC,
-			       EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
-			while(kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL) < 0)
-				if (errno != EINTR)
-					break;
-		}
+		if (pid == 0 && (pid = exec_avahi_publish(vm)) > 0)
+			plugin_wait_for_process(pid, on_process_exit, NULL);
 		/* FALLTHROUGH */
 	default:
 		if (pid > 0)

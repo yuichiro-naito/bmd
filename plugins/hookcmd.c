@@ -1,4 +1,4 @@
-#include <sys/event.h>
+#include <sys/wait.h>
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -36,11 +36,16 @@ hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 	return -1;
 }
 
+static int
+on_process_exit(int id, void *data)
+{
+	return waitpid(id, NULL, WNOHANG);
+}
+
 static void
 hookcmd_status_change(struct vm *vm, nvlist_t *config)
 {
 	pid_t pid;
-	struct kevent ev;
 	const char *cmd0;
 	char *cmd1, *cmd2, *args[4];
 	static char *state_name[] = { "TERMINATE", "LOAD", "RUN",
@@ -69,8 +74,7 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	}
 	free(cmd1);
 
-	EV_SET(&ev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
-	kevent(gl_conf->kq, &ev, 1, NULL, 0, NULL);
+	plugin_wait_for_process(pid, on_process_exit, NULL);
 }
 
 PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "hookcmd", hookcmd_initialize,
