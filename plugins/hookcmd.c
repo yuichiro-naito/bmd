@@ -8,12 +8,9 @@
 
 #include "../vars.h"
 
-static struct global_conf *gl_conf;
-
 static int
 hookcmd_initialize(struct global_conf *conf)
 {
-	gl_conf = conf;
 	return 0;
 }
 

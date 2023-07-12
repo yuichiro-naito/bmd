@@ -13,14 +13,11 @@
 
 #define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"
 
-static struct global_conf *gl_conf;
 static int avahi_enable = 0;
 
 static int
 avahi_initialize(struct global_conf *conf)
 {
-	gl_conf = conf;
-
 	if (access(AVAHI_PUBLISH, R_OK | X_OK) == 0)
 		avahi_enable = 1;
 
