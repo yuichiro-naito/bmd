@@ -649,7 +649,7 @@ load_plugins(const char *plugin_dir)
 		pl_ent->desc = *desc;
 		pl_ent->handle = hdl;
 		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
-		INFO("load plugin %s\n", ent->d_name);
+		INFO("load plugin %s %s\n", desc->name, ent->d_name);
 		loaded++;
 	next:
 		close(fd);
