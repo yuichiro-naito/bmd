@@ -65,7 +65,7 @@ extern int lineno;
 }
 
 %token      GLOBAL VM TEMPLATE PLEQ BEGIN_AR END_AR INCLUDE
-%token <cs> STR STR1 VAR VAR1 NUMBER APPLY
+%token <cs> STR VAR NUMBER APPLY
 
 %type <sc> tmpl global vm
 %type <pp> param_l
@@ -275,15 +275,6 @@ expr	: NUMBER
 		$$->val = $1;
 	}
 	| VAR
-	{
-		$$ = emalloc(sizeof(struct cfexpr));
-		$$->type = CF_VAR;
-		$$->op = '\0';
-		$$->left = NULL;
-		$$->right = NULL;
-		$$->val = $1;
-	}
-	| VAR1
 	{
 		$$ = emalloc(sizeof(struct cfexpr));
 		$$->type = CF_VAR;
