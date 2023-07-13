@@ -129,14 +129,10 @@ void call_plugins(struct vm_entry *vm_ent);
 int call_plugin_parser(struct plugin_data_head *head,
 		       const char *key, const char *val);
 int load_plugins(const char *plugin_dir);
-void free_vm_entry(struct vm_entry *vm_ent);
 
-int assign_comport(struct vm_entry *vm_ent);
 int create_plugin_data(struct plugin_data_head *head);
 void free_plugin_data(struct plugin_data_head *head);
-struct vm_entry *create_vm_entry(struct vm_conf_entry *conf_ent);
 void free_vm_conf_entry(struct vm_conf_entry *conf_ent);
-void free_config_files();
 struct vm_entry *lookup_vm_by_name(const char *name);
 int set_timer(struct vm_entry *vm_ent, int second);
 int start_virtual_machine(struct vm_entry *vm_ent);

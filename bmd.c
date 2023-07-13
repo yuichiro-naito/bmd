@@ -58,6 +58,13 @@ static int timer_id = 0;
 
 extern struct vm_methods method_list[];
 
+static void stop_virtual_machine(struct vm_entry *vm_ent);
+static void free_vm_entry(struct vm_entry *vm_ent);
+
+// implemented in control.c
+int control(int argc, char *argv[]);
+struct vm_conf_entry *lookup_vm_conf(const char *name);
+
 static int
 kevent_set(struct kevent *kev, int n)
 {
@@ -124,7 +131,7 @@ plugin_set_timer(int second, int (*cb)(int ident, void *data), void *data)
 	return 0;
 }
 
-int
+static int
 on_read_vm_output(int fd, void *data)
 {
 	struct vm_entry *vm_ent = data;
@@ -148,7 +155,7 @@ on_read_vm_output(int fd, void *data)
 	return 0;
 }
 
-int
+static int
 wait_for_vm_output(struct vm_entry *vm_ent)
 {
 	int i = 0, j;
@@ -196,7 +203,7 @@ err:
 	return -1;
 }
 
-int
+static int
 stop_waiting_vm_output(struct vm_entry *vm_ent)
 {
 	struct event *ev, *evn;
@@ -221,7 +228,7 @@ stop_waiting_vm_output(struct vm_entry *vm_ent)
 	return 0;
 }
 
-void
+static void
 free_events()
 {
 	struct event *ev, *evn;
@@ -231,7 +238,7 @@ free_events()
 	LIST_INIT(&events);
 }
 
-int
+static int
 on_timer(int ident, void *data)
 {
 	struct vm_entry *vm_ent = data;
@@ -289,7 +296,7 @@ err:
 /**
  * Clear all timers for VM.
  */
-int
+static int
 clear_all_timers(struct vm_entry *vm_ent)
 {
 	struct event *ev, *evn;
@@ -306,8 +313,6 @@ clear_all_timers(struct vm_entry *vm_ent)
 	}
 	return 0;
 }
-
-void stop_virtual_machine(struct vm_entry *vm_ent);
 
 static char *
 reason_string(int status)
@@ -326,7 +331,7 @@ reason_string(int status)
 	return (sz < 0) ? NULL : mes;
 }
 
-int
+static int
 on_vm_exit(int ident, void *data)
 {
 	int status;
@@ -407,7 +412,7 @@ wait_for_vm(struct vm_entry *vm_ent)
 	return 0;
 }
 
-int
+static int
 set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 {
 	int i = 0;
@@ -455,7 +460,7 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 	return 0;
 }
 
-int
+static int
 stop_waiting_sock_buf(struct sock_buf *sb)
 {
 	struct event *ev, *evn;
@@ -475,7 +480,7 @@ stop_waiting_sock_buf(struct sock_buf *sb)
 	return 0;
 }
 
-int
+static int
 on_recv_sock_buf(int ident, void *data)
 {
 	struct sock_buf *sb = data;
@@ -497,7 +502,7 @@ on_recv_sock_buf(int ident, void *data)
 	return 0;
 }
 
-int
+static int
 on_send_sock_buf(int ident, void *data)
 {
 	struct sock_buf *sb = data;
@@ -558,7 +563,7 @@ wait_for_sock_buf(struct sock_buf *sb)
 	return 0;
 }
 
-int
+static int
 on_accept_cmd_sock(int ident, void *data)
 {
 	struct sock_buf *sb;
@@ -706,7 +711,7 @@ call_plugin_parser(struct plugin_data_head *head,
 	return 1;
 }
 
-void
+static void
 free_vm_entry(struct vm_entry *vm_ent)
 {
 	struct net_conf *nc, *nnc;
@@ -735,7 +740,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	free(vm_ent);
 }
 
-void
+static void
 free_vm_list()
 {
 	struct vm_entry *vm_ent, *vmn;
@@ -789,7 +794,7 @@ err:
 	return -1;
 }
 
-struct vm_entry *
+static struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
 	struct vm_entry *vm_ent;
@@ -836,7 +841,7 @@ get_nmdm_number(const char *p)
  * Assign new 'nmdm' which has a bigger number in all VM configurations and
  * "/dev/" directory.
  */
-int
+static int
 assign_comport(struct vm_entry *vm_ent)
 {
 	int fd, i, n, v, max = -1;
@@ -954,7 +959,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	return 0;
 }
 
-int
+static int
 start_virtual_machines()
 {
 	struct vm_conf *conf;
@@ -988,7 +993,7 @@ start_virtual_machines()
 	return 0;
 }
 
-void
+static void
 stop_virtual_machine(struct vm_entry *vm_ent)
 {
 	stop_waiting_vm_output(vm_ent);
@@ -1008,7 +1013,7 @@ lookup_vm_by_name(const char *name)
 	return NULL;
 }
 
-int
+static int
 reload_virtual_machines()
 {
 	struct vm_conf *conf;
@@ -1139,7 +1144,7 @@ reload_virtual_machines()
 	return 0;
 }
 
-int
+static int
 event_loop()
 {
 	struct kevent ev;
@@ -1193,7 +1198,7 @@ end:
 	return 0;
 }
 
-int
+static int
 stop_virtual_machines()
 {
 	struct kevent ev;
@@ -1234,7 +1239,7 @@ stop_virtual_machines()
 	return 0;
 }
 
-int
+static int
 parse_opt(int argc, char *argv[])
 {
 	int ch;
@@ -1277,7 +1282,7 @@ parse_opt(int argc, char *argv[])
 	return 0;
 }
 
-int
+static int
 strendswith(const char *t, const char *s)
 {
 	const char *p = &t[strlen(t)];
@@ -1289,10 +1294,6 @@ strendswith(const char *t, const char *s)
 
 	return (*p) - (*q);
 }
-
-int control(int argc, char *argv[]);
-struct vm_conf_entry *lookup_vm_conf(const char *name);
-int read_stdin(struct vm *vm);
 
 int
 main(int argc, char *argv[])
@@ -1379,6 +1380,32 @@ main(int argc, char *argv[])
 	INFO("%s\n", "quit daemon");
 	LOG_CLOSE();
 	return 0;
+}
+
+static int
+read_stdin(struct vm *vm)
+{
+	int n, rc;
+	ssize_t size;
+	char buf[4 * 1024];
+
+	while ((size = read(0, buf, sizeof(buf))) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+	if (size == 0)
+		return 0;
+	if (size > 0 && vm->infd != -1) {
+		n = 0;
+		while (n < size) {
+			if ((rc = write(vm->infd, buf + n, size - n)) < 0)
+				if (errno != EINTR && errno != EAGAIN)
+					break;
+			if (rc > 0)
+				n += rc;
+		}
+	}
+
+	return size;
 }
 
 int

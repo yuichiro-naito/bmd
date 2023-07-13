@@ -64,32 +64,6 @@ lookup_vm_conf(const char *name)
 }
 
 int
-read_stdin(struct vm *vm)
-{
-	int n, rc;
-	ssize_t size;
-	char buf[4 * 1024];
-
-	while ((size = read(0, buf, sizeof(buf))) < 0)
-		if (errno != EINTR && errno != EAGAIN)
-			break;
-	if (size == 0)
-		return 0;
-	if (size > 0 && vm->infd != -1) {
-		n = 0;
-		while (n < size) {
-			if ((rc = write(vm->infd, buf + n, size - n)) < 0)
-				if (errno != EINTR && errno != EAGAIN)
-					break;
-			if (rc > 0)
-				n += rc;
-		}
-	}
-
-	return size;
-}
-
-int
 do_inspect(char *name)
 {
 	int i;
