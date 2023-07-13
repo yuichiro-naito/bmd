@@ -316,7 +316,7 @@ accept_command_socket(int s0)
 	return s;
 }
 
-static struct vm_conf_entry *
+static int
 search_and_replace_vm_conf(struct vm_entry *vm_ent)
 {
 	char *name = VM_CONF(vm_ent)->name;
@@ -324,8 +324,8 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_file(&list, false) < 0) {
-		printf("failed to load VM config files\n");
-		return NULL;
+		ERR("%s\n", "failed to load VM config files");
+		return -1;
 	}
 
 	LIST_FOREACH_SAFE (conf_ent, &list, next, cen)
@@ -334,14 +334,24 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		else
 			free_vm_conf_entry(conf_ent);
 
-	if (ret) {
+	if (ret == NULL) {
+		INFO("%s\n", "discard all VM configurations\n");
+		return -1;
+	}
+
+	if (compare_vm_conf(&ret->conf, VM_CONF(vm_ent)) != 0) {
 		LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 		VM_CONF(vm_ent) = &ret->conf;
-
+		INFO("replace %s configuration\n", name);
+	} else {
+		free_vm_conf_entry(ret);
+		INFO("no changes for vm %s configuration. discard the last loaded ones.\n", name);
 	}
-	return ret;
+
+
+	return 0;
 }
 
 char *
@@ -424,7 +434,7 @@ boot0_command(int s, const nvlist_t *nv, int style, uid_t user)
 		goto ret;
 	}
 
-	if (search_and_replace_vm_conf(vm_ent) == NULL) {
+	if (search_and_replace_vm_conf(vm_ent) < 0) {
 		error = true;
 		reason = "failed to load config file";
 		goto ret;
