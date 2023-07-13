@@ -17,10 +17,6 @@
  */
 #define DEFAULT_NMDM_OFFSET 200
 
-
-int plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data);
-int plugin_set_timer(int second, int (*cb)(int ident, void *data), void *data);
-
 struct global_conf {
 	char *config_file;
 	char *plugin_dir;
