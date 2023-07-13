@@ -651,7 +651,10 @@ load_plugins(const char *plugin_dir)
 			goto next;
 		}
 
-		if (desc->initialize && (*(desc->initialize))(gl_conf) < 0) {
+		pl_ent->env.set_timer = plugin_set_timer;
+		pl_ent->env.wait_for_process = plugin_wait_for_process;
+
+		if (desc->initialize && (*(desc->initialize))(&pl_ent->env) < 0) {
 			free(pl_ent);
 			dlclose(hdl);
 			goto next;
@@ -677,7 +680,7 @@ remove_plugins()
 
 	SLIST_FOREACH_SAFE (pl_ent, &plugin_list, next, pln) {
 		if (pl_ent->desc.finalize)
-			(*pl_ent->desc.finalize)(gl_conf);
+			(*pl_ent->desc.finalize)();
 		dlclose(pl_ent->handle);
 		free(pl_ent);
 	}

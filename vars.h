@@ -156,13 +156,51 @@ struct vm_methods {
 	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 7
+#define PLUGIN_VERSION 8
 
+/*
+  Plugin call back function
+ */
+typedef int (*plugin_call_back)(int ident, void *data);
+
+/*
+  Plugin Environment
+
+  Utility functions for plugins.
+
+         set_timer: wait in 'sec' seconds and call back 'cb' function.
+  wait_for_process: wait for process 'pid' exits and call back 'cb' function.
+
+  'data' pointer is passed to 'data' argument in the call back function.
+  'ident' argument is the same value of 'pid' in 'wait_for_process' function.
+  For 'set_timer' function, 'ident' is an unique number to the timers.
+ */
+typedef struct plugin_env {
+	int (*set_timer)(int sec, plugin_call_back cb, void *data);
+	int (*wait_for_process)(pid_t pid, plugin_call_back cb, void *data);
+} PLUGIN_ENV;
+
+/*
+  Plugin Description
+
+           version: must be set PLUGIN_VERSION
+              name: plugin name
+        initialize: a function called after plugin is loaded. (*1)
+          finalize: a function called before plugin is removed.
+  on_status_change: a function called when VM state changed. (*2)
+      parse_config: a function called while parsing VM configuratin (*2)
+
+  *1: PLUGIN_ENV pointer is available while plugin is loaded.
+  *2: nvlist_t pointer is available while VM is existing, unless removed from
+      config file and reloaded.
+
+  All other pointers in arguments are local scope to the function.
+ */
 typedef struct plugin_desc {
 	int version;
 	char *name;
-	int (*initialize)(struct global_conf *);
-	void (*finalize)(struct global_conf *);
+	int (*initialize)(PLUGIN_ENV *);
+	void (*finalize)();
 	void (*on_status_change)(struct vm *, nvlist_t *);
 	int (*parse_config)(nvlist_t *, const char *, const char *);
 } PLUGIN_DESC;

@@ -8,14 +8,17 @@
 
 #include "../vars.h"
 
+static PLUGIN_ENV *plugin_env;
+
 static int
-hookcmd_initialize(struct global_conf *conf)
+hookcmd_initialize(PLUGIN_ENV *env)
 {
+	plugin_env = env;
 	return 0;
 }
 
 static void
-hookcmd_finalize(struct global_conf *conf)
+hookcmd_finalize()
 {
 }
 
@@ -71,7 +74,7 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	}
 	free(cmd1);
 
-	plugin_wait_for_process(pid, on_process_exit, NULL);
+	plugin_env->wait_for_process(pid, on_process_exit, NULL);
 }
 
 PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "hookcmd", hookcmd_initialize,

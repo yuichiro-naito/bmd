@@ -19,6 +19,7 @@
 struct plugin_entry {
 	struct plugin_desc desc;
 	void *handle;
+	PLUGIN_ENV env;
 	SLIST_ENTRY(plugin_entry) next;
 };
 
