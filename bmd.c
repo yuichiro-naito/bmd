@@ -42,9 +42,14 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 struct events events = LIST_HEAD_INITIALIZER(events);
 
 /*
-  Global event queue;
+  Global event queue
  */
 static int eventq;
+
+/*
+  Global command socket
+ */
+static int cmd_sock;
 
 /*
   Last Timer Event ID
@@ -557,7 +562,7 @@ int
 on_accept_cmd_sock(int ident, void *data)
 {
 	struct sock_buf *sb;
-	int n, sock = gl_conf->cmd_sock;
+	int n, sock = cmd_sock;
 
 	if ((n = accept_command_socket(sock)) < 0)
 		return -1;
@@ -1142,7 +1147,7 @@ event_loop()
 	int n;
 	struct timespec *to, timeout;
 
-	if (wait_for_cmd_sock(gl_conf->cmd_sock) < 0)
+	if (wait_for_cmd_sock(cmd_sock) < 0)
 		return -1;
 
 wait:
@@ -1340,7 +1345,7 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	if ((gl_conf->cmd_sock = create_command_server(gl_conf)) < 0) {
+	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
 		ERR("can not bind %s\n", gl_conf->cmd_sock_path);
 		return 1;
 	}
@@ -1361,7 +1366,7 @@ main(int argc, char *argv[])
 	event_loop();
 
 	unlink(gl_conf->cmd_sock_path);
-	close(gl_conf->cmd_sock);
+	close(cmd_sock);
 
 	stop_virtual_machines();
 	free_vm_list();

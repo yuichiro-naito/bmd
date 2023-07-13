@@ -7,7 +7,7 @@
  */
 struct global_conf gl_conf0 = { LOCALBASE "/etc/bmd.conf",
 	LOCALBASE "/libexec/bmd", LOCALBASE "/var/cache/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, DEFAULT_NMDM_OFFSET, -1, 0};
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, DEFAULT_NMDM_OFFSET, -1};
 
 struct global_conf *gl_conf = &gl_conf0;
 
@@ -49,7 +49,6 @@ init_gl_conf()
 	COPY_ATTR_STRING(cmd_sock_path);
 	COPY_ATTR_STRING(unix_domain_socket_mode);
 	COPY_ATTR_INT(nmdm_offset);
-	COPY_ATTR_INT(cmd_sock);
 	COPY_ATTR_INT(foreground);
 #undef COPY_ATTR_STRING
 #undef COPY_ATTR_INT

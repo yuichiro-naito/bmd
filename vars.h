@@ -29,7 +29,6 @@ struct global_conf {
 	char *cmd_sock_path;
 	char *unix_domain_socket_mode;
 	int nmdm_offset;
-	int cmd_sock;
 	int foreground;
 };
 
@@ -157,7 +156,7 @@ struct vm_methods {
 	void (*vm_cleanup)(struct vm *);
 };
 
-#define PLUGIN_VERSION 6
+#define PLUGIN_VERSION 7
 
 typedef struct plugin_desc {
 	int version;
