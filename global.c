@@ -7,7 +7,7 @@
  */
 struct global_conf gl_conf0 = { LOCALBASE "/etc/bmd.conf",
 	LOCALBASE "/libexec/bmd", LOCALBASE "/var/cache/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, DEFAULT_NMDM_OFFSET, -1};
+	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, DEFAULT_NMDM_OFFSET, 0};
 
 struct global_conf *gl_conf = &gl_conf0;
 
