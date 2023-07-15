@@ -20,7 +20,6 @@
 #include "bmd.h"
 #include "conf.h"
 #include "log.h"
-#include "parser.h"
 #include "server.h"
 #include "vars.h"
 #include "vm.h"

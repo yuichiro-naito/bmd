@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "server.h"
 
@@ -162,7 +163,8 @@ attach_console(const char *vmname, const char *comport)
 	}
 
 	if ((fd = open(port, O_RDWR)) < 0) {
-		fprintf(stderr, "failed to open %s\n", port);
+		fprintf(stderr, "failed to open %s (%s)\n", port,
+			strerror(errno));
 		free(port);
 		return 1;
 	}

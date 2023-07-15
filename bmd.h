@@ -7,6 +7,8 @@
 
 #include "vars.h"
 
+#define UID_NOBODY   65534
+
 /*
   Command timeout in second.
  */
@@ -76,16 +78,6 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF, EVENT, PLUGIN };
 		}                          \
 	} while (0)
 
-LIST_HEAD(events, event);
-
-struct event {
-	enum STRUCT_TYPE type;
-	struct kevent kev;
-	void *data;
-	int (*cb)(int ident, void *data);
-	LIST_ENTRY(event) next;
-};
-
 /*
   Entry of vm list.
   The individual entries indicate the virtual machine process.
@@ -98,6 +90,18 @@ struct vm_entry {
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_method *method;
 	nvlist_t *pl_conf;
+};
+
+/*
+   Event Structure.
+ */
+LIST_HEAD(events, event);
+struct event {
+	enum STRUCT_TYPE type;
+	struct kevent kev;
+	void *data;
+	int (*cb)(int ident, void *data);
+	LIST_ENTRY(event) next;
 };
 
 /*
@@ -142,6 +146,8 @@ int set_timer(struct vm_entry *vm_ent, int second);
 int start_virtual_machine(struct vm_entry *vm_ent);
 
 int direct_run(const char *name, bool install, bool single);
+
+int load_config_file(struct vm_conf_head *list, bool update_gl_conf);
 
 extern struct global_conf *gl_conf;
 #endif

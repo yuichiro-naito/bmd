@@ -14,13 +14,10 @@
 #include "vars.h"
 #include "log.h"
 #include "conf.h"
-#include "parser.h"
 #include "vm.h"
 #include "server.h"
 #include "bmd.h"
 #include "inspect.h"
-
-int attach_console(const char *vmname, const char *comport);
 
 int
 usage(int argc, char *argv[])

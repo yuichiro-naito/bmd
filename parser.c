@@ -8,7 +8,6 @@
 
 #include "conf.h"
 #include "log.h"
-#include "parser.h"
 #include "confparse.h"
 #include "bmd.h"
 
