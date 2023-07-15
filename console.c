@@ -24,7 +24,7 @@ sighandler_exit(int sig)
 	exit(0);
 }
 
-int
+static int
 console_in(int fd)
 {
 	int c;
@@ -57,7 +57,7 @@ console_in(int fd)
 	return 0;
 }
 
-int
+static int
 console_out(int fd)
 {
 	ssize_t sz, n, written;
@@ -92,7 +92,7 @@ console_out(int fd)
 /*
  * Set up the "remote" tty's state
  */
-int
+static int
 ttysetup(int fd, int speed)
 {
 	struct termios cntrl;
