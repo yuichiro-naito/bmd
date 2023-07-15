@@ -3,11 +3,18 @@
 #include "vars.h"
 
 /*
-  Global configuration.
+  Default global configuration.
  */
-struct global_conf gl_conf0 = { LOCALBASE "/etc/bmd.conf",
-	LOCALBASE "/libexec/bmd", LOCALBASE "/var/cache/bmd",
-	"/var/run/bmd.pid", "/var/run/bmd.sock", NULL, DEFAULT_NMDM_OFFSET, 0};
+struct global_conf gl_conf0 = {
+	.config_file = LOCALBASE "/etc/bmd.conf",
+	.plugin_dir = LOCALBASE "/libexec/bmd",
+	.vars_dir = LOCALBASE "/var/cache/bmd",
+	.pid_path = "/var/run/bmd.pid",
+	.cmd_sock_path = "/var/run/bmd.sock",
+	.unix_domain_socket_mode = NULL,
+	.nmdm_offset = DEFAULT_NMDM_OFFSET,
+	.foreground = 0
+};
 
 struct global_conf *gl_conf = &gl_conf0;
 
