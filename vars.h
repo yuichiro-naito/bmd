@@ -163,6 +163,9 @@ typedef int (*plugin_call_back)(int ident, void *data);
 
          set_timer: wait in 'sec' seconds and call back 'cb' function.
   wait_for_process: wait for process 'pid' exits and call back 'cb' function.
+       assign_taps: assigns tap interfaces for all networks.
+     activate_taps: bring up all tap interfaces and set description.
+       remove_taps: destroy all tap interfaces.
 
   'data' pointer is passed to 'data' argument in the call back function.
   'ident' argument is the same value of 'pid' in 'wait_for_process' function.
