@@ -550,14 +550,14 @@ list_command(int s, const nvlist_t *nv, uid_t user)
 		if (user > 0 && VM_CONF(vm_ent)->owner != user)
 			continue;
 		p = nvlist_create(0);
-		nvlist_add_string(p, "name", vm_ent->vm.conf->name);
-		nvlist_add_string(p, "ncpu", vm_ent->vm.conf->ncpu);
-		nvlist_add_string(p, "memory", vm_ent->vm.conf->memory);
+		nvlist_add_string(p, "name", VM_CONF(vm_ent)->name);
+		nvlist_add_string(p, "ncpu", VM_CONF(vm_ent)->ncpu);
+		nvlist_add_string(p, "memory", VM_CONF(vm_ent)->memory);
 		nvlist_add_string(p, "loader",
-		    vm_ent->vm.conf->loader ?
-			vm_ent->vm.conf->loader :
-			      vm_ent->vm.conf->backend);
-		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
+				  VM_CONF(vm_ent)->loader ?
+				  VM_CONF(vm_ent)->loader :
+				  VM_CONF(vm_ent)->backend);
+		nvlist_add_string(p, "state", state_string[VM_STATE(vm_ent)]);
 		if ((pwd = getpwuid(VM_CONF(vm_ent)->owner)) == NULL)
 			nvlist_add_string(p, "owner", "nobody");
 		else
@@ -599,7 +599,7 @@ vm_down_command(int s, const nvlist_t *nv, int how, uid_t user)
 		INFO("stop vm %s\n", conf->name);
 		VM_ACPI_POWEROFF(vm_ent);
 		set_timer(vm_ent, conf->stop_timeout);
-		vm_ent->vm.state = STOP;
+		VM_STATE(vm_ent) = STOP;
 		break;
 	case 1:
 		INFO("reset vm %s\n", conf->name);
@@ -608,7 +608,7 @@ vm_down_command(int s, const nvlist_t *nv, int how, uid_t user)
 	case 2:
 		INFO("poweroff vm %s\n", conf->name);
 		VM_POWEROFF(vm_ent);
-		vm_ent->vm.state = STOP;
+		VM_STATE(vm_ent) = STOP;
 		break;
 	default:
 		error = true;
