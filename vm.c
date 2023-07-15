@@ -424,6 +424,9 @@ assign_taps(struct vm *vm)
 	char *desc;
 	struct vm_conf *conf = vm->conf;
 
+	if (STAILQ_FIRST(&vm->taps) == NULL)
+		return 0;
+
 	STAILQ_FOREACH (nc, &conf->nets, next) {
 		nnc = copy_net_conf(nc);
 		if (nnc == NULL)
@@ -675,7 +678,7 @@ start_bhyve(struct vm *vm, nvlist_t *pl_conf)
 	if (vm->state == LOAD)
 		return exec_bhyve(vm);
 
-	if (STAILQ_FIRST(&vm->taps) == NULL && assign_taps(vm) < 0)
+	if (assign_taps(vm) < 0)
 		return -1;
 
 	if (activate_taps(vm) < 0)

@@ -204,7 +204,7 @@ start_qemu(struct vm *vm, nvlist_t *pl_conf)
 	if (! nvlist_exists_string(pl_conf, "qemu_arch"))
 		nvlist_add_string(pl_conf, "qemu_arch", "x86_64");
 
-	if (STAILQ_FIRST(&vm->taps) == NULL && plugin_env->assign_taps(vm) < 0)
+	if (plugin_env->assign_taps(vm) < 0)
 		return -1;
 
 	if (plugin_env->activate_taps(vm) < 0)
