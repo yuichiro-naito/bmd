@@ -56,7 +56,7 @@ static int cmd_sock;
  */
 static int timer_id = 0;
 
-extern struct vm_methods method_list[];
+extern struct vm_method bhyve_method;
 
 static void stop_virtual_machine(struct vm_entry *vm_ent);
 static void free_vm_entry(struct vm_entry *vm_ent);
@@ -361,7 +361,7 @@ on_vm_exit(int ident, void *data)
 		if (VM_CONF(vm_ent)->install == false &&
 		    WIFEXITED(status) &&
 		    (VM_CONF(vm_ent)->boot == ALWAYS ||
-		     (VM_CONF(vm_ent)->backend == BHYVE &&
+		     (strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 		      WEXITSTATUS(status) == 0))) {
 			start_virtual_machine(vm_ent);
 			break;
@@ -624,6 +624,13 @@ load_plugins(const char *plugin_dir)
 	if (loaded != 0)
 		return 0;
 
+	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+		return -1;
+
+	pl_ent->desc.name = "bhyve";
+	pl_ent->desc.method = &bhyve_method;
+	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+
 	if ((d = opendir(plugin_dir)) == NULL) {
 		ERR("can not open %s\n", gl_conf->plugin_dir);
 		return -1;
@@ -653,6 +660,9 @@ load_plugins(const char *plugin_dir)
 
 		pl_ent->env.set_timer = plugin_set_timer;
 		pl_ent->env.wait_for_process = plugin_wait_for_process;
+		pl_ent->env.assign_taps = assign_taps;
+		pl_ent->env.activate_taps = activate_taps;
+		pl_ent->env.remove_taps = remove_taps;
 
 		if (desc->initialize && (*(desc->initialize))(&pl_ent->env) < 0) {
 			free(pl_ent);
@@ -797,6 +807,40 @@ err:
 	return -1;
 }
 
+static int
+set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
+{
+	struct plugin_data *pd;
+	struct vm_method *m;
+	char *backend = conf_ent->conf.backend;
+
+	SLIST_FOREACH (pd, &conf_ent->pl_data, next) {
+		m = pd->ent->desc.method;
+		if (m && strcmp(m->name, backend) == 0) {
+			VM_METHOD(vm_ent) = m;
+			VM_PLCONF(vm_ent) = pd->pl_conf;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
+int
+vm_method_exists(char *name)
+{
+	struct plugin_entry *pl_ent;
+	struct vm_method *m;
+
+	SLIST_FOREACH (pl_ent, &plugin_list, next) {
+		m = pl_ent->desc.method;
+		if (m && strcmp(m->name, name) == 0)
+			return 0;
+	}
+
+	return -1;
+}
+
 static struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
@@ -805,7 +849,10 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	if ((vm_ent = calloc(1, sizeof(struct vm_entry))) == NULL)
 		return NULL;
 	VM_TYPE(vm_ent) = VMENTRY;
-	VM_METHOD(vm_ent) = &method_list[conf_ent->conf.backend];
+	if (set_vm_method(vm_ent, conf_ent) < 0) {
+		free(vm_ent);
+		return NULL;
+	}
 	VM_CONF(vm_ent) = &conf_ent->conf;
 	VM_STATE(vm_ent) = TERMINATE;
 	VM_PID(vm_ent) = -1;
@@ -917,7 +964,10 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
 
-	VM_METHOD(vm_ent) = &method_list[conf->backend];
+	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
+		ERR("failed to set vm method for vm %s\n", name);
+		return -1;
+	}
 
 	if (assign_comport(vm_ent) < 0) {
 		ERR("failed to assign comport for vm %s\n", name);
@@ -1362,12 +1412,10 @@ main(int argc, char *argv[])
 
 	INFO("%s\n", "start daemon");
 
-	if (start_virtual_machines() < 0) {
+	if (start_virtual_machines() < 0)
 		ERR("%s\n", "failed to start virtual machines");
-		return 1;
-	}
-
-	event_loop();
+	else
+		event_loop();
 
 	unlink(gl_conf->cmd_sock_path);
 	close(cmd_sock);

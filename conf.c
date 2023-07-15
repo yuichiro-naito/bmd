@@ -174,6 +174,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->loader);
 	free(vc->loadcmd);
 	free(vc->installcmd);
+	free(vc->backend);
 	free(vc->debug_port);
 	free(vc->err_logfile);
 	free_fbuf(vc->fbuf);
@@ -181,8 +182,6 @@ free_vm_conf(struct vm_conf *vc)
 	clear_disk_conf(vc);
 	clear_iso_conf(vc);
 	clear_net_conf(vc);
-	free(vc->qemu_arch);
-	free(vc->qemu_machine);
 	free(vc->keymap);
 	free(vc);
 }
@@ -473,29 +472,12 @@ set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type)
 }
 
 int
-set_backend(struct vm_conf *conf, enum VM_BACKENDS backend)
+set_backend(struct vm_conf *conf, char *backend)
 {
 	if (conf == NULL)
 		return 0;
 
-	conf->backend = backend;
-	return 0;
-}
-
-int
-set_qemu_arch(struct vm_conf *conf, const char *arch)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->qemu_arch, arch);
-}
-
-int
-set_qemu_machine(struct vm_conf *conf, const char *machine)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->qemu_machine, machine);
+	return set_string(&conf->backend, backend);
 }
 
 int
@@ -678,7 +660,7 @@ err:
 struct vm_conf *
 create_vm_conf(const char *vm_name)
 {
-	char *name, *arch, idnum[12];
+	char *name, *backend, idnum[12];
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
 	unsigned int id;
@@ -687,9 +669,9 @@ create_vm_conf(const char *vm_name)
 	ret = calloc(1, sizeof(typeof(*ret)));
 	fbuf = create_fbuf();
 	name = strdup(vm_name);
-	arch = strdup("x86_64");
+	backend = strdup("bhyve");
 	local = malloc(sizeof(*local));
-	if (ret == NULL || fbuf == NULL || name == NULL || arch == NULL ||
+	if (ret == NULL || fbuf == NULL || name == NULL || backend == NULL ||
 	    local == NULL)
 		goto err;
 
@@ -712,7 +694,7 @@ create_vm_conf(const char *vm_name)
 	ret->loader_timeout = 3;
 	ret->stop_timeout = 300;
 	ret->utctime = true;
-	ret->qemu_arch = arch;
+	ret->backend = backend;
 
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
@@ -722,9 +704,9 @@ create_vm_conf(const char *vm_name)
 err:
 	ERR("failed to create VM config! (%s)\n", strerror(errno));
 	free(ret);
+	free(backend);
 	free(fbuf);
 	free(name);
-	free(arch);
 	return NULL;
 }
 
@@ -924,8 +906,6 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_STR(err_logfile);
 	CMP_STR(grub_run_partition);
 
-	CMP_STR(qemu_arch);
-	CMP_STR(qemu_machine);
 	CMP_STR(keymap);
 
 	if ((rc = compare_fbuf(a->fbuf, b->fbuf)) != 0)

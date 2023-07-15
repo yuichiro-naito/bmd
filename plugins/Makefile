@@ -1,6 +1,6 @@
 LOCALBASE?= /usr/local
 PLUGINDIR=$(LOCALBASE)/libexec/bmd
-TARGET= libavahiplugin.so libhookcmdplugin.so
+TARGET= libavahiplugin.so libhookcmdplugin.so libqemuplugin.so
 CFLAGS+=-Wall -fPIC -DLOCALBASE=\"$(LOCALBASE)\"
 
 .PHONY: clean install installconfig installdirs
@@ -12,6 +12,9 @@ libavahiplugin.so: avahi.o
 
 libhookcmdplugin.so: hookcmd.o
 	$(LD) -shared -o $@ hookcmd.o
+
+libqemuplugin.so: qemu.o
+	$(LD) -shared -o $@ qemu.o
 
 clean:
 	rm -f *.o *.so
@@ -25,3 +28,4 @@ installdirs:
 
 avahi.o: avahi.c ../vars.h
 hookcmd.o: hookcmd.c ../vars.h
+qemu.o: qemu.c ../vars.h

@@ -45,16 +45,17 @@ struct vm_conf_entry {
 
 enum STRUCT_TYPE { VMENTRY, SOCKBUF, EVENT, PLUGIN };
 
-#define VM_START(v)         (v)->method->vm_start(&(v)->vm)
-#define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm)
-#define VM_POWEROFF(v)      (v)->method->vm_poweroff(&(v)->vm)
-#define VM_ACPI_POWEROFF(v) (v)->method->vm_acpi_poweroff(&(v)->vm)
-#define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm)
+#define VM_START(v)         (v)->method->vm_start(&(v)->vm, (v)->pl_conf)
+#define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm, (v)->pl_conf)
+#define VM_POWEROFF(v)      (v)->method->vm_poweroff(&(v)->vm, (v)->pl_conf)
+#define VM_ACPI_POWEROFF(v) (v)->method->vm_acpi_poweroff(&(v)->vm, (v)->pl_conf)
+#define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm, (v)->pl_conf)
 #define VM_PTR(v)           (&(v)->vm)
 #define VM_CONF(v)          ((v)->vm.conf)
 #define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
 #define VM_NEWCONF(v)       ((v)->new_conf)
 #define VM_METHOD(v)        ((v)->method)
+#define VM_PLCONF(v)        ((v)->pl_conf)
 #define VM_TYPE(v)          ((v)->type)
 #define VM_PLUGIN_DATA(v)   (VM_CONF_ENT(v)->pl_data)
 #define VM_PID(v)           ((v)->vm.pid)
@@ -95,7 +96,8 @@ struct vm_entry {
 	struct vm vm;
 	struct vm_conf *new_conf;
 	SLIST_ENTRY(vm_entry) next;
-	struct vm_methods *method;
+	struct vm_method *method;
+	nvlist_t *pl_conf;
 };
 
 /*
@@ -130,6 +132,7 @@ void call_plugins(struct vm_entry *vm_ent);
 int call_plugin_parser(struct plugin_data_head *head,
 		       const char *key, const char *val);
 int load_plugins(const char *plugin_dir);
+int vm_method_exists(char *name);
 
 int create_plugin_data(struct plugin_data_head *head);
 void free_plugin_data(struct plugin_data_head *head);

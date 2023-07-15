@@ -284,46 +284,10 @@ parse_hostbridge(struct vm_conf *conf, char *val)
 static int
 parse_backend(struct vm_conf *conf, char *val)
 {
-	enum VM_BACKENDS b;
-
-	if (strcasecmp(val, "bhyve") == 0)
-		b = BHYVE;
-	else if (strcasecmp(val, "qemu") == 0)
-		b = QEMU;
-	else
+	if (vm_method_exists(val) < 0)
 		return -1;
 
-	return set_backend(conf, b);
-}
-
-static int
-compare_archs(const void *a, const void *b)
-{
-	return strcasecmp((const char *)a, *(const char **)b);
-}
-
-static int
-parse_qemu_arch(struct vm_conf *conf, char *val)
-{
-	const char **p,
-	    *archs[] = { "aarch64", "alpha", "arm", "cris", "hppa", "i386",
-		    "lm32", "m68k", "microblaze", "microblazeel", "mips",
-		    "mips64", "mips64el", "mipsel", "moxie", "nios2", "or1k",
-		    "ppc", "ppc64", "riscv32", "riscv64", "rx", "s390x", "sh4",
-		    "sh4eb", "sparc", "sparc64", "tricore", "unicore32",
-		    "x86_64", "xtensa", "xtensaeb" };
-
-	if ((p = bsearch(val, archs, sizeof(archs) / sizeof(archs[0]),
-		 sizeof(archs[0]), compare_archs)) == NULL)
-		return -1;
-
-	return set_qemu_arch(conf, *p);
-}
-
-static int
-parse_qemu_machine(struct vm_conf *conf, char *val)
-{
-	return set_qemu_machine(conf, val);
+	return set_backend(conf,val);
 }
 
 static int
@@ -485,8 +449,6 @@ struct parser_entry parser_list[] = {
 	{ "network", &parse_net, &clear_net_conf },
 	{ "owner", &parse_owner, NULL },
 	{ "passthru", &parse_passthru, &clear_passthru_conf },
-	{ "qemu_arch", &parse_qemu_arch, NULL },
-	{ "qemu_machine", &parse_qemu_machine, NULL },
 	{ "reboot_on_change", &parse_reboot_on_change, NULL },
 	{ "stop_timeout", &parse_stop_timeout, NULL },
 	{ "utctime", &parse_utctime, NULL },
@@ -522,7 +484,7 @@ check_conf(struct vm_conf *conf)
 		return -1;
 	}
 
-	if (conf->backend == BHYVE && conf->loader == NULL) {
+	if (strcmp(conf->backend, "bhyve") == 0 && conf->loader == NULL) {
 		ERR("loader is required for vm %s\n", name);
 		return -1;
 	}
@@ -1070,22 +1032,18 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		     global_conf->plugin_dir : gl_conf->plugin_dir);
 
 	TAILQ_FOREACH(sc, &cfvms, next) {
-		if (create_plugin_data(&head) < 0) {
-			rc = -1;
-			goto cleanup2;
-		}
+		if (create_plugin_data(&head) < 0)
+			continue;
 		if ((conf = create_vm_conf(sc->name)) == NULL) {
 			free_plugin_data(&head);
-			rc = -1;
-			goto cleanup2;
+			continue;
 		}
 		conf->vars.global = gv;
 		conf->owner = sc->owner;
 		if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL) {
 			free_plugin_data(&head);
 			free_vm_conf(conf);
-			rc = -1;
-			goto cleanup2;
+			continue;
 		}
 		conf_ent->pl_data = head;
 		conf = &conf_ent->conf;
@@ -1094,8 +1052,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		    finalize_vm_conf(conf) < 0 || check_conf(conf) < 0) {
 			free_plugin_data(&head);
 			free_vm_conf(conf);
-			rc = -1;
-			goto cleanup2;
+			continue;
 		}
 		LIST_INSERT_HEAD(list, conf_ent, next);
 	}
@@ -1109,7 +1066,6 @@ set_global:
 
 	goto cleanup;
 
-cleanup2:
 	LIST_FOREACH_SAFE (conf_ent, list, next, cen) {
 		free_vm_conf(&conf_ent->conf);
 		free_plugin_data(&conf_ent->pl_data);

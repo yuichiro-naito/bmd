@@ -526,7 +526,6 @@ list_command(int s, const nvlist_t *nv, uid_t user)
 	struct passwd *pwd;
 	const static char *state_string[] = { "STOP", "LOAD", "RUN",
 		"TERMINATING", "TERMINATING", "REBOOTING" };
-	const static char *backend_string[] = { "bhyve", "qemu" };
 
 	res = nvlist_create(0);
 
@@ -557,7 +556,7 @@ list_command(int s, const nvlist_t *nv, uid_t user)
 		nvlist_add_string(p, "loader",
 		    vm_ent->vm.conf->loader ?
 			vm_ent->vm.conf->loader :
-			      backend_string[vm_ent->vm.conf->backend]);
+			      vm_ent->vm.conf->backend);
 		nvlist_add_string(p, "state", state_string[vm_ent->vm.state]);
 		if ((pwd = getpwuid(VM_CONF(vm_ent)->owner)) == NULL)
 			nvlist_add_string(p, "owner", "nobody");

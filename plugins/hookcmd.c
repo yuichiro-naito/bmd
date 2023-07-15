@@ -78,4 +78,4 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 }
 
 PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "hookcmd", hookcmd_initialize,
-	hookcmd_finalize, hookcmd_status_change, hookcmd_parse_config };
+			    hookcmd_finalize, hookcmd_status_change, hookcmd_parse_config, NULL};

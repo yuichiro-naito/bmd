@@ -65,8 +65,6 @@ struct fbuf {
 	char *password;
 };
 
-enum VM_BACKENDS { BHYVE, QEMU };
-
 enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
 
 struct conf_var {
@@ -88,7 +86,7 @@ struct vm_conf {
 	int loader_timeout;
 	int stop_timeout;
 	enum HOSTBRIDGE_TYPE hostbridge;
-	enum VM_BACKENDS backend;
+	char *backend;
 	char *debug_port;
 	char *ncpu;
 	char *memory;
@@ -115,8 +113,6 @@ struct vm_conf {
 	STAILQ_HEAD(, iso_conf) isoes;
 	STAILQ_HEAD(, net_conf) nets;
 	STAILQ_HEAD(, passthru_conf) passthrues;
-	char *qemu_arch;
-	char *qemu_machine;
 	char *keymap;
 };
 
@@ -144,15 +140,16 @@ struct vm {
 	char *assigned_comport;
 };
 
-struct vm_methods {
-	int (*vm_start)(struct vm *);
-	int (*vm_reset)(struct vm *);
-	int (*vm_poweroff)(struct vm *);
-	int (*vm_acpi_poweroff)(struct vm *);
-	void (*vm_cleanup)(struct vm *);
+struct vm_method {
+	char *name;
+	int (*vm_start)(struct vm *, nvlist_t *);
+	int (*vm_reset)(struct vm *, nvlist_t *);
+	int (*vm_poweroff)(struct vm *, nvlist_t *);
+	int (*vm_acpi_poweroff)(struct vm *, nvlist_t *);
+	void (*vm_cleanup)(struct vm *, nvlist_t *);
 };
 
-#define PLUGIN_VERSION 8
+#define PLUGIN_VERSION 9
 
 /*
   Plugin call back function
@@ -174,6 +171,9 @@ typedef int (*plugin_call_back)(int ident, void *data);
 typedef struct plugin_env {
 	int (*set_timer)(int sec, plugin_call_back cb, void *data);
 	int (*wait_for_process)(pid_t pid, plugin_call_back cb, void *data);
+	int (*assign_taps)(struct vm *vm);
+	int (*activate_taps)(struct vm *vm);
+	int (*remove_taps)(struct vm *vm);
 } PLUGIN_ENV;
 
 /*
@@ -199,6 +199,7 @@ typedef struct plugin_desc {
 	void (*finalize)();
 	void (*on_status_change)(struct vm *, nvlist_t *);
 	int (*parse_config)(nvlist_t *, const char *, const char *);
+	struct vm_method *method;
 } PLUGIN_DESC;
 
 #endif
