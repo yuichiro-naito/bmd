@@ -162,7 +162,7 @@ typedef struct plugin_env {
 /*
   Plugin Description
 
-           version: must be set PLUGIN_VERSION
+           version: must set PLUGIN_VERSION
               name: plugin name
         initialize: a function called after plugin is loaded. (*1)
           finalize: a function called before plugin is removed.
