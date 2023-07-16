@@ -22,7 +22,6 @@
 
 #include "conf.h"
 #include "log.h"
-#include "vars.h"
 #include "vm.h"
 #include "inspect.h"
 

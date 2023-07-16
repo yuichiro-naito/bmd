@@ -6,7 +6,7 @@
 #include <string.h>
 #include <libgen.h>
 
-#include "../vars.h"
+#include "../bmd_plugin.h"
 
 static PLUGIN_ENV *plugin_env;
 

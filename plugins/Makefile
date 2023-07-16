@@ -26,6 +26,6 @@ install:
 installconfig:
 installdirs:
 
-avahi.o: avahi.c ../vars.h
-hookcmd.o: hookcmd.c ../vars.h
-qemu.o: qemu.c ../vars.h
+avahi.o: avahi.c ../bmd_plugin.h
+hookcmd.o: hookcmd.c ../bmd_plugin.h
+qemu.o: qemu.c ../bmd_plugin.h

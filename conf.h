@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "vars.h"
+#include "bmd_plugin.h"
 
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)

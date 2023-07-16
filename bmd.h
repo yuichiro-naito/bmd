@@ -5,7 +5,7 @@
 #include <sys/nv.h>
 #include <sys/event.h>
 
-#include "vars.h"
+#include "bmd_plugin.h"
 
 #define UID_NOBODY   65534
 

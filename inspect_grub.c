@@ -13,7 +13,6 @@
 
 #include "conf.h"
 #include "inspect.h"
-#include "vars.h"
 #include "vm.h"
 
 struct proc_pipe {

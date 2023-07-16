@@ -20,7 +20,6 @@
 #include "bmd.h"
 #include "conf.h"
 #include "log.h"
-#include "vars.h"
 #include "vm.h"
 
 extern struct vm_conf_head vm_conf_list;

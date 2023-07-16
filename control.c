@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <signal.h>
 
-#include "vars.h"
 #include "log.h"
 #include "conf.h"
 #include "vm.h"

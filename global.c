@@ -1,6 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
-#include "vars.h"
+#include "bmd_plugin.h"
 
 /*
   Default global configuration.

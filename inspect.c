@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "vars.h"
+#include "bmd_plugin.h"
 #include "vm.h"
 #include "inspect.h"
 

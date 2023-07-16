@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../vars.h"
+#include "../bmd_plugin.h"
 
 #define WRITE_STR(fp, str) \
 	fwrite_unlocked(&(const char *[]) { (str) }[0], sizeof(char *), 1, (fp))

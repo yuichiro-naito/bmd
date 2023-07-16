@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "../vars.h"
+#include "../bmd_plugin.h"
 
 #define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"
 

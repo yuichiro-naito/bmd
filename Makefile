@@ -12,6 +12,8 @@ SRCS=	bmd.c conf.c tap.c parser.c vm.c server.c control.c inspect.c global.c \
 	console.c inspect_grub.c confparse.h confparse.y conflex.l y.tab.h
 CFLAGS+=-Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LDADD=	-lnv
+INCS=bmd_plugin.h
+INCSDIR=$(LOCALBASE)/include
 
 CLEANFILES= y.output
 

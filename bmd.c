@@ -21,7 +21,6 @@
 #include "conf.h"
 #include "log.h"
 #include "server.h"
-#include "vars.h"
 #include "vm.h"
 
 /*

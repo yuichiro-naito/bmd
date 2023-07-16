@@ -1,5 +1,5 @@
-#ifndef _VARS_H_
-#define _VARS_H_
+#ifndef _BMD_PLUGIN_H_
+#define _BMD_PLUGIN_H_
 
 #include <sys/types.h>
 #include <sys/queue.h>
