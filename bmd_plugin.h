@@ -8,10 +8,6 @@
 
 #include <stdbool.h>
 
-#ifndef LOCALBASE
-#define LOCALBASE "/usr/local"
-#endif
-
 struct global_conf {
 	char *config_file;
 	char *plugin_dir;
