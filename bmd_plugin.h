@@ -36,13 +36,13 @@ enum BOOT { NO, YES, ONESHOT, ALWAYS };
 
 struct fbuf {
 	int enable;
-	char *ipaddr;
 	int port;
+	char *ipaddr;
+	char *vgaconf;
+	char *password;
 	int width;
 	int height;
-	char *vgaconf;
 	int wait;
-	char *password;
 };
 
 enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
@@ -61,39 +61,39 @@ struct variables {
 
 struct vm_conf {
 	struct variables vars;
-	uid_t owner;
-	int boot_delay;
-	int loader_timeout;
-	int stop_timeout;
-	enum HOSTBRIDGE_TYPE hostbridge;
+	struct fbuf *fbuf;
+	STAILQ_HEAD(, disk_conf) disks;
+	STAILQ_HEAD(, iso_conf) isoes;
+	STAILQ_HEAD(, net_conf) nets;
+	STAILQ_HEAD(, passthru_conf) passthrues;
+	char *keymap;
 	char *backend;
 	char *debug_port;
 	char *ncpu;
 	char *memory;
 	char *name;
 	char *comport;
-	enum BOOT boot;
 	char *loader;
 	char *loadcmd;
 	char *installcmd;
 	char *err_logfile;
 	char *grub_run_partition;
-	struct fbuf *fbuf;
+	uid_t owner;
+	enum BOOT boot;
+	enum HOSTBRIDGE_TYPE hostbridge;
+	int ndisks;
+	int nisoes;
+	int nnets;
+	int npassthrues;
+	int boot_delay;
+	int loader_timeout;
+	int stop_timeout;
 	bool mouse;
 	bool wired_memory;
 	bool utctime;
 	bool reboot_on_change;
 	bool single_user;
 	bool install;
-	int ndisks;
-	int nisoes;
-	int nnets;
-	int npassthrues;
-	STAILQ_HEAD(, disk_conf) disks;
-	STAILQ_HEAD(, iso_conf) isoes;
-	STAILQ_HEAD(, net_conf) nets;
-	STAILQ_HEAD(, passthru_conf) passthrues;
-	char *keymap;
 };
 
 enum STATE {
@@ -107,17 +107,17 @@ enum STATE {
 
 struct vm {
 	struct vm_conf *conf;
-	pid_t pid;
 	enum STATE state;
+	pid_t pid;
+	STAILQ_HEAD(, net_conf) taps;
+	char *mapfile;
+	char *varsfile;
+	char *assigned_comport;
 	int infd;
 	int outfd;
 	int errfd;
 	int logfd;
 	int ntaps;
-	STAILQ_HEAD(, net_conf) taps;
-	char *mapfile;
-	char *varsfile;
-	char *assigned_comport;
 };
 
 struct vm_method {
@@ -129,7 +129,7 @@ struct vm_method {
 	void (*vm_cleanup)(struct vm *, nvlist_t *);
 };
 
-#define PLUGIN_VERSION 9
+#define PLUGIN_VERSION 10
 
 /*
   Plugin call back function
