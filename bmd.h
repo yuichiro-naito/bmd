@@ -14,6 +14,8 @@
  */
 #define COMMAND_TIMEOUT_SEC 30
 
+struct global_conf;
+
 /*
   Entry of plugins.
   The individual entries refer to the installed plugin.

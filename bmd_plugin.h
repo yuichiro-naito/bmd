@@ -8,17 +8,6 @@
 
 #include <stdbool.h>
 
-struct global_conf {
-	char *config_file;
-	char *plugin_dir;
-	char *vars_dir;
-	char *pid_path;
-	char *cmd_sock_path;
-	char *unix_domain_socket_mode;
-	int nmdm_offset;
-	int foreground;
-};
-
 struct passthru_conf {
 	STAILQ_ENTRY(passthru_conf) next;
 	char *devid;

@@ -6,6 +6,17 @@
 
 #include "bmd_plugin.h"
 
+struct global_conf {
+	char *config_file;
+	char *plugin_dir;
+	char *vars_dir;
+	char *pid_path;
+	char *cmd_sock_path;
+	char *unix_domain_socket_mode;
+	int nmdm_offset;
+	int foreground;
+};
+
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)
 
