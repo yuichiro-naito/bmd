@@ -847,7 +847,6 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 
 	if ((vm_ent = calloc(1, sizeof(struct vm_entry))) == NULL)
 		return NULL;
-	VM_TYPE(vm_ent) = VMENTRY;
 	if (set_vm_method(vm_ent, conf_ent) < 0) {
 		free(vm_ent);
 		return NULL;
@@ -1218,8 +1217,8 @@ wait:
 		goto wait;
 	}
 
-	event = ev.udata;
-	if (event != NULL && event->type >= EVENT) {
+	if (ev.udata != NULL) {
+		event = ev.udata;
 		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
 			ERR("%s\n", "callback failed");
 		if (event->kev.flags & EV_ONESHOT) {
@@ -1269,8 +1268,8 @@ stop_virtual_machines()
 	while (count > 0) {
 		if (kevent_get(&ev, 1, NULL) < 0)
 			return -1;
-		event = ev.udata;
-		if (event != NULL && event->type >= EVENT) {
+		if (ev.udata != NULL) {
+			event = ev.udata;
 			if (event->type == EVENT &&
 			    event->kev.filter == EVFILT_PROC)
 				count--;

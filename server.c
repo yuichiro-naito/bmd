@@ -35,7 +35,6 @@ create_sock_buf(int fd)
 
 	if ((r = calloc(1, sizeof(*r))) == NULL)
 		return NULL;
-	r->type = SOCKBUF;
 	r->fd = fd;
 	time(&r->event_time);
 	LIST_INSERT_HEAD(&sock_list, r, next);

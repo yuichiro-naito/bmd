@@ -45,7 +45,7 @@ struct vm_conf_entry {
 	LIST_ENTRY(vm_conf_entry) next;
 };
 
-enum STRUCT_TYPE { VMENTRY, SOCKBUF, EVENT, PLUGIN };
+enum STRUCT_TYPE { EVENT, PLUGIN };
 
 #define VM_START(v)         (v)->method->vm_start(&(v)->vm, (v)->pl_conf)
 #define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm, (v)->pl_conf)
@@ -84,7 +84,6 @@ enum STRUCT_TYPE { VMENTRY, SOCKBUF, EVENT, PLUGIN };
   Make sure that 'type' is the first member of this structure.
  */
 struct vm_entry {
-	enum STRUCT_TYPE type;
 	struct vm vm;
 	struct vm_conf *new_conf;
 	SLIST_ENTRY(vm_entry) next;
@@ -109,7 +108,6 @@ struct event {
   Make sure that 'type' is the first member of this structure.
  */
 struct sock_buf {
-	enum STRUCT_TYPE type;
 	LIST_ENTRY(sock_buf) next;
 	int fd;
 	int state;
