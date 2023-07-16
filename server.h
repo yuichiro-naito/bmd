@@ -1,5 +1,5 @@
-#ifndef _COMMAND_H
-#define _COMMAND_H
+#ifndef _SERVER_H
+#define _SERVER_H
 
 
 /*
