@@ -12,11 +12,6 @@
 #define LOCALBASE "/usr/local"
 #endif
 
-/*
- * Nmdm number offset for auto assignment.
- */
-#define DEFAULT_NMDM_OFFSET 200
-
 struct global_conf {
 	char *config_file;
 	char *plugin_dir;

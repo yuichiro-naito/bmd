@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include "server.h"
 #include "bmd_plugin.h"
 
 /*

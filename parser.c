@@ -10,6 +10,7 @@
 #include "log.h"
 #include "confparse.h"
 #include "bmd.h"
+#include "server.h"
 
 extern FILE *yyin;
 extern int yynerrs;

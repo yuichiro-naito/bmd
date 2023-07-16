@@ -2,6 +2,11 @@
 #define _COMMAND_H
 
 
+/*
+ * Nmdm number offset for auto assignment.
+ */
+#define DEFAULT_NMDM_OFFSET 200
+
 struct sock_buf;
 struct global_conf;
 
