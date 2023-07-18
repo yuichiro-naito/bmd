@@ -77,5 +77,12 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 	plugin_env->wait_for_process(pid, on_process_exit, NULL);
 }
 
-PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "hookcmd", hookcmd_initialize,
-			    hookcmd_finalize, hookcmd_status_change, hookcmd_parse_config, NULL};
+PLUGIN_DESC plugin_desc = {
+	.version = PLUGIN_VERSION,
+	.name = "hookcmd",
+	.initialize = hookcmd_initialize,
+	.finalize = hookcmd_finalize,
+	.on_status_change = hookcmd_status_change,
+	.parse_config = hookcmd_parse_config,
+	.method = NULL
+};

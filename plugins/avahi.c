@@ -137,5 +137,12 @@ avahi_status_change(struct vm *vm, nvlist_t *config)
 	}
 }
 
-PLUGIN_DESC plugin_desc = { PLUGIN_VERSION, "avahi", avahi_initialize,
-			    avahi_finalize, avahi_status_change, NULL, NULL};
+PLUGIN_DESC plugin_desc = {
+	.version = PLUGIN_VERSION,
+	.name = "avahi",
+	.initialize = avahi_initialize,
+	.finalize =  avahi_finalize,
+	.on_status_change = avahi_status_change,
+	.parse_config = NULL,
+	.method = NULL
+};

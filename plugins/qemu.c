@@ -347,11 +347,20 @@ qemu_parse_config(nvlist_t *config, const char *key, const char *val)
 }
 
 struct vm_method qemu_method = {
-	"qemu",  start_qemu, reset_qemu, poweroff_qemu, acpi_poweroff_qemu,
-	 cleanup_qemu
+	.name = "qemu",
+	.vm_start = start_qemu,
+	.vm_reset = reset_qemu,
+	.vm_poweroff = poweroff_qemu,
+	.vm_acpi_poweroff = acpi_poweroff_qemu,
+	.vm_cleanup =  cleanup_qemu
 };
 
 PLUGIN_DESC plugin_desc = {
-	PLUGIN_VERSION, "qemu", qemu_initialize,
-	qemu_finalize, NULL, qemu_parse_config, &qemu_method
+	.version = PLUGIN_VERSION,
+	.name = "qemu",
+	.initialize = qemu_initialize,
+	.finalize = qemu_finalize,
+	.on_status_change = NULL,
+	.parse_config = qemu_parse_config,
+	.method = &qemu_method
 };
