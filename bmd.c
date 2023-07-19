@@ -83,17 +83,31 @@ kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 	return rc;
 }
 
+static struct event *
+create_event0(enum STRUCT_TYPE type, int (*cb)(int ident, void *data), void *data)
+{
+	struct event *ev;
+
+	if ((ev = malloc(sizeof(*ev))) == NULL)
+		return NULL;
+
+	ev->type = type;
+	ev->cb = cb;
+	ev->data = data;
+
+	return ev;
+}
+
+#define create_event(c, d) create_event0(EVENT, (c), (d))
+#define create_plugin_event(c, d) create_event0(PLUGIN, (c), (d))
+
 int
 plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data)
 {
 	struct event *ev;
 
-	if ((ev = malloc(sizeof(*ev))) == NULL)
+	if ((ev = create_plugin_event(cb, data)) == NULL)
 		return -1;
-
-	ev->type = PLUGIN;
-	ev->cb = cb;
-	ev->data = data;
 
 	EV_SET(&ev->kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
 	       NOTE_EXIT, 0, ev);
@@ -111,12 +125,8 @@ plugin_set_timer(int second, int (*cb)(int ident, void *data), void *data)
 {
 	struct event *ev;
 
-	if ((ev = malloc(sizeof(*ev))) == NULL)
+	if ((ev = create_plugin_event(cb, data)) == NULL)
 		return -1;
-
-	ev->type = PLUGIN;
-	ev->cb = cb;
-	ev->data = data;
 
 	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
@@ -161,27 +171,21 @@ wait_for_vm_output(struct vm_entry *vm_ent)
 	struct kevent kev[2];
 
 	if (VM_OUTFD(vm_ent) != -1) {
-		if ((ev[i] = malloc(sizeof(struct event))) == NULL)
+		if ((ev[i] = create_event(on_read_vm_output, vm_ent)) == NULL)
 			goto err;
-		ev[i]->type = EVENT;
-		ev[i]->cb = on_read_vm_output;
-		ev[i]->data = vm_ent;
 
 		EV_SET(&ev[i]->kev, VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
 		       ev[i]);
-		memcpy(&kev[i], &ev[i]->kev, sizeof(struct kevent));
+		kev[i] = ev[i]->kev;
 		i++;
 	}
 	if (VM_ERRFD(vm_ent) != -1) {
-		if ((ev[i] = malloc(sizeof(struct event))) == NULL)
+		if ((ev[i] = create_event(on_read_vm_output, vm_ent)) == NULL)
 			goto err;
-		ev[i]->type = EVENT;
-		ev[i]->cb = on_read_vm_output;
-		ev[i]->data = vm_ent;
 
 		EV_SET(&ev[i]->kev, VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
 		       ev[i]);
-		memcpy(&kev[i], &ev[i]->kev, sizeof(struct kevent));
+		kev[i] = ev[i]->kev;
 		i++;
 	}
 
@@ -272,12 +276,8 @@ set_timer(struct vm_entry *vm_ent, int second)
 {
 	struct event *ev;
 
-	if ((ev = malloc(sizeof(*ev))) == NULL)
+	if ((ev = create_event(on_timer, vm_ent)) == NULL)
 		goto err;
-
-	ev->type = EVENT;
-	ev->cb = on_timer;
-	ev->data = vm_ent;
 
 	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
@@ -390,12 +390,9 @@ int
 wait_for_vm(struct vm_entry *vm_ent)
 {
 	struct event *ev;
-	if ((ev = malloc(sizeof(*ev))) == NULL)
-		return -1;
 
-	ev->type = EVENT;
-	ev->cb = on_vm_exit;
-	ev->data = vm_ent;
+	if ((ev = create_event(on_vm_exit, vm_ent)) == NULL)
+		return -1;
 
 	EV_SET(&ev->kev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
 	       NOTE_EXIT, 0, ev);
@@ -526,8 +523,8 @@ wait_for_sock_buf(struct sock_buf *sb)
 	struct event *ev[2];
 	struct kevent kev[2];
 
-	ev[0] = malloc(sizeof(struct event));
-	ev[1] = malloc(sizeof(struct event));
+	ev[0] = create_event(on_recv_sock_buf, sb);
+	ev[1] = create_event(on_send_sock_buf, sb);
 
 	if (ev[0] == NULL || ev[1] == NULL) {
 		free(ev[0]);
@@ -535,16 +532,8 @@ wait_for_sock_buf(struct sock_buf *sb)
 		return -1;
 	}
 
-	ev[0]->type = EVENT;
-	ev[0]->cb = on_recv_sock_buf;
-	ev[0]->data = sb;
-
 	EV_SET(&ev[0]->kev, sb->fd, EVFILT_READ, EV_ADD, 0, 0, ev[0]);
 	kev[0] = ev[0]->kev;
-
-	ev[1]->type = EVENT;
-	ev[1]->cb = on_send_sock_buf;
-	ev[1]->data = sb;
 
 	EV_SET(&ev[1]->kev, sb->fd, EVFILT_WRITE, EV_ADD, EV_DISABLE, 0, ev[1]);
 	kev[1] = ev[1]->kev;
@@ -589,12 +578,8 @@ wait_for_cmd_sock(int sock)
 {
 	struct event *ev;
 
-	if ((ev = malloc(sizeof(*ev))) == NULL)
+	if ((ev = create_event(on_accept_cmd_sock, NULL)) == NULL)
 		return -1;
-
-	ev->type = EVENT;
-	ev->cb = on_accept_cmd_sock;
-	ev->data = NULL;
 
 	EV_SET(&ev->kev, sock, EVFILT_READ, EV_ADD, 0, 0, ev);
 
