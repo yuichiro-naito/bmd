@@ -332,7 +332,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 			free_vm_conf_entry(conf_ent);
 
 	if (ret == NULL) {
-		INFO("%s\n", "discard all VM configurations\n");
+		INFO("%s\n", "discard the last loaded configurations\n");
 		return -1;
 	}
 
@@ -341,10 +341,10 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 		VM_CONF(vm_ent) = &ret->conf;
-		INFO("replace %s configuration\n", name);
+		INFO("changes are found. update %s configuration\n", name);
 	} else {
 		free_vm_conf_entry(ret);
-		INFO("no changes for vm %s configuration. discard the last loaded ones.\n", name);
+		INFO("no changes are found for %s. keep existing configurations.\n", name);
 	}
 
 
