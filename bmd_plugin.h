@@ -8,92 +8,24 @@
 
 #include <stdbool.h>
 
-struct passthru_conf {
-	STAILQ_ENTRY(passthru_conf) next;
-	char *devid;
+struct passthru_conf;
+struct disk_conf;
+struct iso_conf;
+struct net_conf;
+struct vm_conf;
+struct vm;
+
+enum BOOT {
+	NO,       // Do not boot VM
+	YES,      // Boot when daemon starts
+	ONESHOT,  // Boot when daemon starts, do not reboot on VM exit
+	ALWAYS    // Keep on running VM although VM terminates
 };
 
-struct disk_conf {
-	STAILQ_ENTRY(disk_conf) next;
-	char *type;
-	char *path;
-};
-
-struct iso_conf {
-	STAILQ_ENTRY(iso_conf) next;
-	char *type;
-	char *path;
-};
-
-struct net_conf {
-	STAILQ_ENTRY(net_conf) next;
-	char *type;
-	char *bridge;
-	char *tap;
-};
-
-enum BOOT { NO, YES, ONESHOT, ALWAYS };
-
-struct fbuf {
-	int enable;
-	int port;
-	char *ipaddr;
-	char *vgaconf;
-	char *password;
-	int width;
-	int height;
-	int wait;
-};
-
-enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
-
-struct conf_var {
-	RB_ENTRY(conf_var) entry;
-	char *key, *val;
-};
-
-RB_HEAD(vartree, conf_var);
-
-struct variables {
-	struct vartree *global;
-	struct vartree *local;
-};
-
-struct vm_conf {
-	struct variables vars;
-	struct fbuf *fbuf;
-	STAILQ_HEAD(, disk_conf) disks;
-	STAILQ_HEAD(, iso_conf) isoes;
-	STAILQ_HEAD(, net_conf) nets;
-	STAILQ_HEAD(, passthru_conf) passthrues;
-	char *keymap;
-	char *backend;
-	char *debug_port;
-	char *ncpu;
-	char *memory;
-	char *name;
-	char *comport;
-	char *loader;
-	char *loadcmd;
-	char *installcmd;
-	char *err_logfile;
-	char *grub_run_partition;
-	uid_t owner;
-	enum BOOT boot;
-	enum HOSTBRIDGE_TYPE hostbridge;
-	int ndisks;
-	int nisoes;
-	int nnets;
-	int npassthrues;
-	int boot_delay;
-	int loader_timeout;
-	int stop_timeout;
-	bool mouse;
-	bool wired_memory;
-	bool utctime;
-	bool reboot_on_change;
-	bool single_user;
-	bool install;
+enum HOSTBRIDGE_TYPE {
+	NONE,
+	INTEL,
+	AMD
 };
 
 enum STATE {
@@ -105,20 +37,98 @@ enum STATE {
 	RESTART	   // send SIGTERM and need rebooting
 };
 
-struct vm {
-	struct vm_conf *conf;
-	enum STATE state;
-	pid_t pid;
-	STAILQ_HEAD(, net_conf) taps;
-	char *mapfile;
-	char *varsfile;
-	char *assigned_comport;
-	int infd;
-	int outfd;
-	int errfd;
-	int logfd;
-	int ntaps;
-};
+#define DISK_CONF_FOREACH(dc, conf)	   \
+	for ((dc) = get_disk_conf((conf)); \
+	     (dc) != NULL;		   \
+	     (dc) = next_disk_conf((dc)))
+
+#define ISO_CONF_FOREACH(ic, conf)	  \
+	for ((ic) = get_iso_conf((conf)); \
+	     (ic) != NULL;		  \
+	     (ic) = next_net_conf((ic)))
+
+#define NET_CONF_FOREACH(nc, conf)	  \
+	for ((nc) = get_net_conf((conf)); \
+	     (nc) != NULL;		  \
+	     (nc) = next_net_conf((nc)))
+
+#define TAPS_FOREACH(nc, vm)		  \
+	for ((nc) = get_taps((vm));	  \
+	     (nc) != NULL;		  \
+	     (nc) = next_net_conf((nc)))
+
+int get_infd(struct vm *vm);
+int get_outfd(struct vm *vm);
+int get_errfd(struct vm *vm);
+int get_logfd(struct vm *vm);
+void set_infd(struct vm *vm, int fd);
+void set_outfd(struct vm *vm, int fd);
+void set_errfd(struct vm *vm, int fd);
+void set_logfd(struct vm *vm, int fd);
+char *get_assigned_comport(struct vm *vm);
+enum STATE get_state(struct vm *vm);
+void set_state(struct vm *vm, enum STATE st);
+void set_pid(struct vm *vm, pid_t pid);
+struct vm_conf *vm_get_conf(struct vm *vm);
+struct passthru_conf *get_passthru_conf(struct vm_conf *conf);
+struct passthru_conf *next_passthru_conf(struct passthru_conf *p_conf);
+char *get_passthru_conf_devid(struct passthru_conf *p_conf);
+struct disk_conf *get_disk_conf(struct vm_conf *conf);
+struct disk_conf *next_disk_conf(struct disk_conf *d_conf);
+char *get_disk_conf_type(struct disk_conf *d_conf);
+char *get_disk_conf_path(struct disk_conf *d_conf);
+struct iso_conf *get_iso_conf(struct vm_conf *conf);
+struct iso_conf *next_iso_conf(struct iso_conf *i_conf);
+char *get_iso_conf_type(struct iso_conf *i_conf);
+char *get_iso_conf_path(struct iso_conf *i_conf);
+struct net_conf *get_taps(struct vm *vm);
+struct net_conf *get_net_conf(struct vm_conf *conf);
+struct net_conf *next_net_conf(struct net_conf *n_conf);
+char *get_net_conf_type(struct net_conf *n_conf);
+char *get_net_conf_bridge(struct net_conf *n_conf);
+char *get_net_conf_tap(struct net_conf *n_conf);
+char *get_name(struct vm_conf *c);
+char *get_memory(struct vm_conf *conf);
+char *get_ncpu(struct vm_conf *conf);
+char *get_loadcmd(struct vm_conf *conf);
+char *get_installcmd(struct vm_conf *conf);
+char *get_err_logfile(struct vm_conf *conf);
+char *get_loader(struct vm_conf *conf);
+int get_loader_timeout(struct vm_conf *conf);
+int get_stop_timeout(struct vm_conf *conf);
+char *get_grub_run_partition(struct vm_conf *conf);
+char *get_debug_port(struct vm_conf *conf);
+uid_t get_owner(struct vm_conf *conf);
+enum BOOT get_boot(struct vm_conf *conf);
+enum HOSTBRIDGE_TYPE get_hostbridge(struct vm_conf *conf);
+char *get_backend(struct vm_conf *conf);
+int get_boot_delay(struct vm_conf *conf);
+char *get_comport(struct vm_conf *conf);
+bool is_reboot_on_change(struct vm_conf *conf);
+bool is_single_user(struct vm_conf *conf);
+bool is_install(struct vm_conf *conf);
+bool is_fbuf_enable(struct vm_conf *conf);
+char *get_fbuf_ipaddr(struct vm_conf *conf);
+int get_fbuf_port(struct vm_conf *conf);
+void get_fbuf_res(struct vm_conf *conf, int *width, int *height);
+char *get_fbuf_vgaconf(struct vm_conf *conf);
+int get_fbuf_wait(struct vm_conf *conf);
+char *get_fbuf_password(struct vm_conf *conf);
+bool is_mouse(struct vm_conf *conf);
+bool is_wired_memory(struct vm_conf *conf);
+bool is_utctime(struct vm_conf *conf);
+char *get_keymap(struct vm_conf *conf);
+
+/*
+  Plugin call back function
+ */
+typedef int (*plugin_call_back)(int ident, void *data);
+
+int plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data);
+int plugin_set_timer(int second, plugin_call_back cb, void *data);
+int assign_taps(struct vm *vm);
+int activate_taps(struct vm *vm);
+int remove_taps(struct vm *vm);
 
 struct vm_method {
 	char *name;
@@ -129,35 +139,7 @@ struct vm_method {
 	void (*vm_cleanup)(struct vm *, nvlist_t *);
 };
 
-#define PLUGIN_VERSION 10
-
-/*
-  Plugin call back function
- */
-typedef int (*plugin_call_back)(int ident, void *data);
-
-/*
-  Plugin Environment
-
-  Utility functions for plugins.
-
-         set_timer: wait in 'sec' seconds and call back 'cb' function.
-  wait_for_process: wait for process 'pid' exits and call back 'cb' function.
-       assign_taps: assigns tap interfaces for all networks.
-     activate_taps: bring up all tap interfaces and set description.
-       remove_taps: destroy all tap interfaces.
-
-  'data' pointer is passed to 'data' argument in the call back function.
-  'ident' argument is the same value of 'pid' in 'wait_for_process' function.
-  For 'set_timer' function, 'ident' is an unique number to the timers.
- */
-typedef struct plugin_env {
-	int (*set_timer)(int sec, plugin_call_back cb, void *data);
-	int (*wait_for_process)(pid_t pid, plugin_call_back cb, void *data);
-	int (*assign_taps)(struct vm *vm);
-	int (*activate_taps)(struct vm *vm);
-	int (*remove_taps)(struct vm *vm);
-} PLUGIN_ENV;
+#define PLUGIN_VERSION 11
 
 /*
   Plugin Description
@@ -178,7 +160,7 @@ typedef struct plugin_env {
 typedef struct plugin_desc {
 	int version;
 	char *name;
-	int (*initialize)(PLUGIN_ENV *);
+	int (*initialize)();
 	void (*finalize)();
 	void (*on_status_change)(struct vm *, nvlist_t *);
 	int (*parse_config)(nvlist_t *, const char *, const char *);

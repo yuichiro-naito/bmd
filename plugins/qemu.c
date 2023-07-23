@@ -8,6 +8,10 @@
 
 #include "../bmd_plugin.h"
 
+#ifndef LOCALBASE
+#define LOCALBASE "/usr/local"
+#endif
+
 #define WRITE_STR(fp, str) \
 	fwrite_unlocked(&(const char *[]) { (str) }[0], sizeof(char *), 1, (fp))
 
@@ -18,12 +22,10 @@
 		fwrite_unlocked(&p, sizeof(char *), 1, (fp)); \
 	} while (0)
 
-static PLUGIN_ENV *plugin_env;
-
 static int
 exec_qemu(struct vm *vm, nvlist_t *pl_conf)
 {
-	struct vm_conf *conf = vm->conf;
+	struct vm_conf *conf = vm_get_conf(vm);
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
@@ -34,8 +36,8 @@ exec_qemu(struct vm *vm, nvlist_t *pl_conf)
 	size_t n, buf_size;
 	ssize_t rc;
 	FILE *fp;
-	bool dopipe = ((vm->assigned_comport == NULL) ||
-	    (strcasecmp(vm->assigned_comport, "stdio") != 0));
+	bool dopipe = ((get_assigned_comport(vm) == NULL) ||
+		       (strcasecmp(get_assigned_comport(vm), "stdio") != 0));
 
 	if (dopipe) {
 		if (pipe(infd) < 0) {
@@ -63,16 +65,16 @@ exec_qemu(struct vm *vm, nvlist_t *pl_conf)
 			close(infd[1]);
 			close(outfd[1]);
 			close(errfd[1]);
-			vm->infd = infd[0];
-			vm->outfd = outfd[0];
-			vm->errfd = errfd[0];
-			if (conf->fbuf->enable) {
+			set_infd(vm, infd[0]);
+			set_outfd(vm, outfd[0]);
+			set_errfd(vm, errfd[0]);
+			if (is_fbuf_enable(conf)) {
 				buf_size = asprintf(&buf,
 				    "set_password vnc %s\n",
-				    conf->fbuf->password);
+				    get_fbuf_password(conf));
 				n = 0;
 				while (n < buf_size) {
-					if ((rc = write(vm->infd, buf + n,
+					if ((rc = write(get_infd(vm), buf + n,
 						 buf_size - n)) < 0)
 						if (errno != EINTR &&
 						    errno != EAGAIN)
@@ -83,8 +85,8 @@ exec_qemu(struct vm *vm, nvlist_t *pl_conf)
 				free(buf);
 			}
 		}
-		vm->pid = pid;
-		vm->state = RUN;
+		set_pid(vm, pid);
+		set_state(vm, RUN);
 	} else if (pid == 0) {
 		/* child process */
 		if (dopipe) {
@@ -112,22 +114,22 @@ exec_qemu(struct vm *vm, nvlist_t *pl_conf)
 			WRITE_STR(fp, mac);
 		}
 		WRITE_STR(fp, "-rtc");
-		if (conf->utctime == true)
+		if (is_utctime(conf) == true)
 			WRITE_STR(fp, "base=utc");
 		else
 			WRITE_STR(fp, "base=localtime");
-		if (conf->debug_port != NULL) {
+		if (get_debug_port(conf) != NULL) {
 			WRITE_STR(fp, "-gdb");
-			WRITE_FMT(fp, "tcp::%s", conf->debug_port);
+			WRITE_FMT(fp, "tcp::%s", get_debug_port(conf));
 		}
 		WRITE_STR(fp, "-smp");
-		WRITE_STR(fp, conf->ncpu);
+		WRITE_STR(fp, get_ncpu(conf));
 		WRITE_STR(fp, "-m");
-		WRITE_STR(fp, conf->memory);
-		if (vm->assigned_comport == NULL) {
+		WRITE_STR(fp, get_memory(conf));
+		if (get_assigned_comport(vm) == NULL) {
 			WRITE_STR(fp, "-monitor");
 			WRITE_STR(fp, "-stdio");
-		} else if (strcasecmp(vm->assigned_comport, "stdio") == 0) {
+		} else if (strcasecmp(get_assigned_comport(vm), "stdio") == 0) {
 			WRITE_STR(fp, "-chardev");
 			WRITE_STR(fp, "stdio,mux=on,id=char0,signal=off");
 			WRITE_STR(fp, "-mon");
@@ -139,51 +141,52 @@ exec_qemu(struct vm *vm, nvlist_t *pl_conf)
 			WRITE_STR(fp, "stdio");
 			WRITE_STR(fp, "-chardev");
 			WRITE_FMT(fp, "serial,path=%s,id=char0,signal=off",
-			    vm->assigned_comport);
+				  get_assigned_comport(vm));
 			WRITE_STR(fp, "-serial");
 			WRITE_STR(fp, "chardev:char0");
 		}
 
 		WRITE_STR(fp, "-boot");
-		WRITE_STR(fp, conf->install ? "d" : "c");
+		WRITE_STR(fp, is_install(conf) ? "d" : "c");
 
 		int i = 0;
-		STAILQ_FOREACH (dc, &conf->disks, next) {
+		DISK_CONF_FOREACH (dc, conf) {
+			char *path = get_disk_conf_path(dc);
+			char *type = get_disk_conf_type(dc);
 			WRITE_STR(fp, "-blockdev");
-			if (strncmp(dc->path, "/dev/", 4) == 0) {
+			if (strncmp(path, "/dev/", 4) == 0) {
 				WRITE_FMT(fp,
 				    "node-name=blk%d,driver=raw,file.driver=host_device,file.filename=%s",
-				    i, dc->path);
+				    i, path);
 			} else {
 				WRITE_FMT(fp,
 				    "node-name=blk%d,driver=file,filename=%s",
-				    i++, dc->path);
+				    i++, path);
 			}
 			WRITE_STR(fp, "-device");
-			WRITE_FMT(fp, "%s,drive=blk%d", dc->type, i);
+			WRITE_FMT(fp, "%s,drive=blk%d", type, i);
 			i++;
 		}
-		ic = STAILQ_FIRST(&conf->isoes);
+		ic = get_iso_conf(conf);
 		if (ic != NULL) {
 			WRITE_STR(fp, "-cdrom");
-			WRITE_STR(fp, ic->path);
+			WRITE_STR(fp, get_iso_conf_path(ic));
 		}
-		STAILQ_FOREACH (nc, &vm->taps, next) {
+		TAPS_FOREACH (nc, vm) {
 			WRITE_STR(fp, "-nic");
-			WRITE_FMT(fp, "tap,ifname=%s", nc->tap);
+			WRITE_FMT(fp, "tap,ifname=%s", get_net_conf_tap(nc));
 		}
-		if (conf->fbuf->enable) {
-			struct fbuf *fb = conf->fbuf;
+		if (is_fbuf_enable(conf)) {
 			WRITE_STR(fp, "-vga");
 			WRITE_STR(fp, "std");
 			WRITE_STR(fp, "-vnc");
-			WRITE_FMT(fp, ":%d", fb->port - 5900);
+			WRITE_FMT(fp, ":%d", get_fbuf_port(conf) - 5900);
 		}
-		if (conf->mouse) {
+		if (is_mouse(conf)) {
 			WRITE_STR(fp, "-usb");
 		}
 		WRITE_STR(fp, "-name");
-		WRITE_STR(fp, conf->name);
+		WRITE_STR(fp, get_name(conf));
 		WRITE_STR(fp, NULL);
 
 		funlockfile(fp);
@@ -204,10 +207,10 @@ start_qemu(struct vm *vm, nvlist_t *pl_conf)
 	if (! nvlist_exists_string(pl_conf, "qemu_arch"))
 		nvlist_add_string(pl_conf, "qemu_arch", "x86_64");
 
-	if (plugin_env->assign_taps(vm) < 0)
+	if (assign_taps(vm) < 0)
 		return -1;
 
-	if (plugin_env->activate_taps(vm) < 0)
+	if (activate_taps(vm) < 0)
 		goto err;
 
 	if (exec_qemu(vm, pl_conf) < 0)
@@ -215,7 +218,7 @@ start_qemu(struct vm *vm, nvlist_t *pl_conf)
 
 	return 0;
 err:
-	plugin_env->remove_taps(vm);
+	remove_taps(vm);
 	return -1;
 }
 
@@ -224,9 +227,9 @@ cleanup_qemu(struct vm *vm, nvlist_t *pl_conf)
 {
 #define VM_CLOSE_FD(fd)                \
 	do {                           \
-		if (vm->fd != -1) {    \
-			close(vm->fd); \
-			vm->fd = -1;   \
+		if (get_##fd(vm) != -1) {	\
+			close(get_##fd(vm));	\
+			set_##fd(vm, -1);	\
 		}                      \
 	} while (0)
 
@@ -235,8 +238,8 @@ cleanup_qemu(struct vm *vm, nvlist_t *pl_conf)
 	VM_CLOSE_FD(errfd);
 	VM_CLOSE_FD(logfd);
 #undef VM_CLOSE_FD
-	plugin_env->remove_taps(vm);
-	vm->state = TERMINATE;
+	remove_taps(vm);
+	set_state(vm, TERMINATE);
 }
 
 static int
@@ -245,20 +248,20 @@ put_command(struct vm *vm, char *cmd)
 	ssize_t rc;
 	size_t len, n;
 
-	if (vm->infd == -1)
+	if (get_infd(vm) == -1)
 		return 0;
 
 	len = strlen(cmd);
 
 	for (n = 0; n < len;) {
-		if ((rc = write(vm->infd, cmd + n, len - n)) < 0)
+		if ((rc = write(get_infd(vm), cmd + n, len - n)) < 0)
 			switch (errno) {
 			case EINTR:
 			case EAGAIN:
 				continue;
 			case EPIPE:
-				close(vm->infd);
-				vm->infd = -1;
+				close(get_infd(vm));
+				set_infd(vm, -1);
 				/* FALLTHROUGH */
 			default:
 				return -1;
@@ -285,18 +288,6 @@ static int
 acpi_poweroff_qemu(struct vm *vm, nvlist_t *pl_conf)
 {
 	return put_command(vm, "system_powerdown\n");
-}
-
-static int
-qemu_initialize(PLUGIN_ENV *env)
-{
-	plugin_env = env;
-	return 0;
-}
-
-static void
-qemu_finalize()
-{
 }
 
 static int
@@ -358,8 +349,8 @@ struct vm_method qemu_method = {
 PLUGIN_DESC plugin_desc = {
 	.version = PLUGIN_VERSION,
 	.name = "qemu",
-	.initialize = qemu_initialize,
-	.finalize = qemu_finalize,
+	.initialize = NULL,
+	.finalize = NULL,
 	.on_status_change = NULL,
 	.parse_config = qemu_parse_config,
 	.method = &qemu_method

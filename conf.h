@@ -21,6 +21,105 @@ struct global_conf {
 	int foreground;
 };
 
+struct passthru_conf {
+	STAILQ_ENTRY(passthru_conf) next;
+	char *devid;
+};
+
+struct disk_conf {
+	STAILQ_ENTRY(disk_conf) next;
+	char *type;
+	char *path;
+};
+
+struct iso_conf {
+	STAILQ_ENTRY(iso_conf) next;
+	char *type;
+	char *path;
+};
+
+struct net_conf {
+	STAILQ_ENTRY(net_conf) next;
+	char *type;
+	char *bridge;
+	char *tap;
+};
+
+struct fbuf {
+	int enable;
+	int port;
+	char *ipaddr;
+	char *vgaconf;
+	char *password;
+	int width;
+	int height;
+	int wait;
+};
+
+struct conf_var {
+	RB_ENTRY(conf_var) entry;
+	char *key, *val;
+};
+
+RB_HEAD(vartree, conf_var);
+
+struct variables {
+	struct vartree *global;
+	struct vartree *local;
+};
+
+struct vm_conf {
+	struct variables vars;
+	struct fbuf *fbuf;
+	STAILQ_HEAD(, disk_conf) disks;
+	STAILQ_HEAD(, iso_conf) isoes;
+	STAILQ_HEAD(, net_conf) nets;
+	STAILQ_HEAD(, passthru_conf) passthrues;
+	char *keymap;
+	char *backend;
+	char *debug_port;
+	char *ncpu;
+	char *memory;
+	char *name;
+	char *comport;
+	char *loader;
+	char *loadcmd;
+	char *installcmd;
+	char *err_logfile;
+	char *grub_run_partition;
+	uid_t owner;
+	enum BOOT boot;
+	enum HOSTBRIDGE_TYPE hostbridge;
+	int ndisks;
+	int nisoes;
+	int nnets;
+	int npassthrues;
+	int boot_delay;
+	int loader_timeout;
+	int stop_timeout;
+	bool mouse;
+	bool wired_memory;
+	bool utctime;
+	bool reboot_on_change;
+	bool single_user;
+	bool install;
+};
+
+struct vm {
+	struct vm_conf *conf;
+	enum STATE state;
+	pid_t pid;
+	STAILQ_HEAD(, net_conf) taps;
+	char *mapfile;
+	char *varsfile;
+	char *assigned_comport;
+	int infd;
+	int outfd;
+	int errfd;
+	int logfd;
+	int ntaps;
+};
+
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)
 

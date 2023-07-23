@@ -209,6 +209,24 @@ err:
 	return -1;
 }
 
+struct passthru_conf *
+get_passthru_conf(struct vm_conf *conf)
+{
+	return STAILQ_FIRST(&conf->passthrues);
+}
+
+struct passthru_conf *
+next_passthru_conf(struct passthru_conf *p_conf)
+{
+	return STAILQ_NEXT(p_conf, next);
+}
+
+char *
+get_passthru_conf_devid(struct passthru_conf *p_conf)
+{
+	return p_conf->devid;
+}
+
 int
 add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
 {
@@ -233,6 +251,30 @@ err:
 	free(y);
 	free(t);
 	return -1;
+}
+
+struct disk_conf *
+get_disk_conf(struct vm_conf *conf)
+{
+	return STAILQ_FIRST(&conf->disks);
+}
+
+struct disk_conf *
+next_disk_conf(struct disk_conf *d_conf)
+{
+	return STAILQ_NEXT(d_conf, next);
+}
+
+char *
+get_disk_conf_type(struct disk_conf *d_conf)
+{
+	return d_conf->type;
+}
+
+char *
+get_disk_conf_path(struct disk_conf *d_conf)
+{
+	return d_conf->path;
 }
 
 int
@@ -261,6 +303,30 @@ err:
 	return -1;
 }
 
+struct iso_conf *
+get_iso_conf(struct vm_conf *conf)
+{
+	return STAILQ_FIRST(&conf->isoes);
+}
+
+struct iso_conf *
+next_iso_conf(struct iso_conf *i_conf)
+{
+	return STAILQ_NEXT(i_conf, next);
+}
+
+char *
+get_iso_conf_type(struct iso_conf *i_conf)
+{
+	return i_conf->type;
+}
+
+char *
+get_iso_conf_path(struct iso_conf *i_conf)
+{
+	return i_conf->path;
+}
+
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
 {
@@ -286,6 +352,36 @@ err:
 	free(y);
 	free(t);
 	return -1;
+}
+
+struct net_conf *
+get_net_conf(struct vm_conf *conf)
+{
+	return STAILQ_FIRST(&conf->nets);
+}
+
+struct net_conf *
+next_net_conf(struct net_conf *n_conf)
+{
+	return STAILQ_NEXT(n_conf, next);
+}
+
+char *
+get_net_conf_type(struct net_conf *n_conf)
+{
+	return n_conf->type;
+}
+
+char *
+get_net_conf_bridge(struct net_conf *n_conf)
+{
+	return n_conf->bridge;
+}
+
+char *
+get_net_conf_tap(struct net_conf *n_conf)
+{
+	return n_conf->tap;
 }
 
 struct net_conf *
@@ -339,12 +435,24 @@ set_name(struct vm_conf *conf, const char *name)
 	return set_string(&conf->name, name);
 }
 
+char *
+get_name(struct vm_conf *c)
+{
+	return c->name;
+}
+
 int
 set_loadcmd(struct vm_conf *conf, const char *cmd)
 {
 	if (conf == NULL)
 		return 0;
 	return set_string(&conf->loadcmd, cmd);
+}
+
+char *
+get_loadcmd(struct vm_conf *conf)
+{
+	return conf->loadcmd;
 }
 
 int
@@ -355,6 +463,12 @@ set_installcmd(struct vm_conf *conf, const char *cmd)
 	return set_string(&conf->installcmd, cmd);
 }
 
+char *
+get_installcmd(struct vm_conf *conf)
+{
+	return conf->installcmd;
+}
+
 int
 set_err_logfile(struct vm_conf *conf, const char *name)
 {
@@ -363,12 +477,24 @@ set_err_logfile(struct vm_conf *conf, const char *name)
 	return set_string(&conf->err_logfile, name);
 }
 
+char *
+get_err_logfile(struct vm_conf *conf)
+{
+	return conf->err_logfile;
+}
+
 int
 set_loader(struct vm_conf *conf, const char *loader)
 {
 	if (conf == NULL)
 		return 0;
 	return set_string(&conf->loader, loader);
+}
+
+char *
+get_loader(struct vm_conf *conf)
+{
+	return conf->loader;
 }
 
 int
@@ -382,6 +508,12 @@ set_loader_timeout(struct vm_conf *conf, int timeout)
 }
 
 int
+get_loader_timeout(struct vm_conf *conf)
+{
+	return conf->loader_timeout;
+}
+
+int
 set_stop_timeout(struct vm_conf *conf, int timeout)
 {
 	if (conf == NULL)
@@ -389,6 +521,12 @@ set_stop_timeout(struct vm_conf *conf, int timeout)
 
 	conf->stop_timeout = timeout;
 	return 0;
+}
+
+int
+get_stop_timeout(struct vm_conf *conf)
+{
+	return conf->stop_timeout;
 }
 
 int
@@ -400,6 +538,12 @@ set_grub_run_partition(struct vm_conf *conf, const char *partition)
 	return set_string(&conf->grub_run_partition, partition);
 }
 
+char *
+get_grub_run_partition(struct vm_conf *conf)
+{
+	return conf->grub_run_partition;
+}
+
 int
 set_debug_port(struct vm_conf *conf, const char *port)
 {
@@ -407,6 +551,12 @@ set_debug_port(struct vm_conf *conf, const char *port)
 		return 0;
 
 	return set_string(&conf->debug_port, port);
+}
+
+char *
+get_debug_port(struct vm_conf *conf)
+{
+	return conf->debug_port;
 }
 
 int
@@ -417,12 +567,24 @@ set_memory_size(struct vm_conf *conf, const char *memory)
 	return set_string(&conf->memory, memory);
 }
 
+char *
+get_memory(struct vm_conf *conf)
+{
+	return conf->memory;
+}
+
 int
 set_comport(struct vm_conf *conf, const char *com)
 {
 	if (conf == NULL)
 		return 0;
 	return set_string(&conf->comport, com);
+}
+
+char *
+get_comport(struct vm_conf *conf)
+{
+	return conf->comport;
 }
 
 int
@@ -441,6 +603,12 @@ set_ncpu(struct vm_conf *conf, int ncpu)
 	return 0;
 }
 
+char *
+get_ncpu(struct vm_conf *conf)
+{
+	return conf->ncpu;
+}
+
 int
 set_owner(struct vm_conf *conf, uid_t owner)
 {
@@ -449,6 +617,12 @@ set_owner(struct vm_conf *conf, uid_t owner)
 
 	conf->owner = owner;
 	return 0;
+}
+
+uid_t
+get_owner(struct vm_conf *conf)
+{
+	return conf->owner;
 }
 
 int
@@ -461,6 +635,12 @@ set_boot(struct vm_conf *conf, enum BOOT boot)
 	return 0;
 }
 
+enum BOOT
+get_boot(struct vm_conf *conf)
+{
+	return conf->boot;
+}
+
 int
 set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type)
 {
@@ -469,6 +649,12 @@ set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type)
 
 	conf->hostbridge = type;
 	return 0;
+}
+
+enum HOSTBRIDGE_TYPE
+get_hostbridge(struct vm_conf *conf)
+{
+	return conf->hostbridge;
 }
 
 int
@@ -480,6 +666,12 @@ set_backend(struct vm_conf *conf, char *backend)
 	return set_string(&conf->backend, backend);
 }
 
+char *
+get_backend(struct vm_conf *conf)
+{
+	return conf->backend;
+}
+
 int
 set_keymap(struct vm_conf *conf, const char *keymap)
 {
@@ -487,6 +679,13 @@ set_keymap(struct vm_conf *conf, const char *keymap)
 		return 0;
 	return set_string(&conf->keymap, keymap);
 }
+
+char *
+get_keymap(struct vm_conf *conf)
+{
+	return conf->keymap;
+}
+
 int
 set_boot_delay(struct vm_conf *conf, int delay)
 {
@@ -498,12 +697,24 @@ set_boot_delay(struct vm_conf *conf, int delay)
 }
 
 int
+get_boot_delay(struct vm_conf *conf)
+{
+	return conf->boot_delay;
+}
+
+int
 set_reboot_on_change(struct vm_conf *conf, bool enable)
 {
 	if (conf == NULL)
 		return 0;
 	conf->reboot_on_change = enable;
 	return 0;
+}
+
+bool
+is_reboot_on_change(struct vm_conf *conf)
+{
+	return conf->reboot_on_change;
 }
 
 int
@@ -515,6 +726,12 @@ set_single_user(struct vm_conf *conf, bool single)
 	return 0;
 }
 
+bool
+is_single_user(struct vm_conf *conf)
+{
+	return conf->single_user;
+}
+
 int
 set_install(struct vm_conf *conf, bool install)
 {
@@ -524,6 +741,12 @@ set_install(struct vm_conf *conf, bool install)
 	return 0;
 }
 
+bool
+is_install(struct vm_conf *conf)
+{
+	return conf->install;
+}
+
 int
 set_fbuf_enable(struct fbuf *fb, bool enable)
 {
@@ -531,6 +754,12 @@ set_fbuf_enable(struct fbuf *fb, bool enable)
 		return 0;
 	fb->enable = enable;
 	return 0;
+}
+
+bool
+is_fbuf_enable(struct vm_conf *conf)
+{
+	return conf->fbuf->enable;
 }
 
 int
@@ -546,6 +775,12 @@ set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr)
 	return ret;
 }
 
+char
+*get_fbuf_ipaddr(struct vm_conf *conf)
+{
+	return conf->fbuf->ipaddr;
+}
+
 int
 set_fbuf_port(struct fbuf *fb, int port)
 {
@@ -556,6 +791,12 @@ set_fbuf_port(struct fbuf *fb, int port)
 	if (fb->enable < 0)
 		fb->enable = true;
 	return 0;
+}
+
+int
+get_fbuf_port(struct vm_conf *conf)
+{
+	return conf->fbuf->port;
 }
 
 int
@@ -571,6 +812,15 @@ set_fbuf_res(struct fbuf *fb, int width, int height)
 	return 0;
 }
 
+void
+get_fbuf_res(struct vm_conf *conf, int *width, int *height)
+{
+	if (width)
+		*width = conf->fbuf->width;
+	if (height)
+		*height = conf->fbuf->height;
+}
+
 int
 set_fbuf_vgaconf(struct fbuf *fb, const char *vga)
 {
@@ -584,11 +834,23 @@ set_fbuf_vgaconf(struct fbuf *fb, const char *vga)
 	return ret;
 }
 
+char *
+get_fbuf_vgaconf(struct vm_conf *conf)
+{
+	return conf->fbuf->vgaconf;
+}
+
 int
 set_fbuf_wait(struct fbuf *fb, int wait)
 {
 	fb->wait = wait;
 	return 0;
+}
+
+int
+get_fbuf_wait(struct vm_conf *conf)
+{
+	return conf->fbuf->wait;
 }
 
 int
@@ -604,11 +866,23 @@ set_fbuf_password(struct fbuf *fb, const char *pass)
 	return ret;
 }
 
+char *
+get_fbuf_password(struct vm_conf *conf)
+{
+	return conf->fbuf->password;
+}
+
 int
 set_mouse(struct vm_conf *conf, bool use)
 {
 	conf->mouse = use;
 	return 0;
+}
+
+bool
+is_mouse(struct vm_conf *conf)
+{
+	return conf->mouse;
 }
 
 int
@@ -620,6 +894,12 @@ set_wired_memory(struct vm_conf *conf, bool val)
 	return 0;
 }
 
+bool
+is_wired_memory(struct vm_conf *conf)
+{
+	return conf->wired_memory;
+}
+
 int
 set_utctime(struct vm_conf *conf, bool val)
 {
@@ -628,6 +908,96 @@ set_utctime(struct vm_conf *conf, bool val)
 	conf->utctime = val;
 	return 0;
 }
+
+bool
+is_utctime(struct vm_conf *conf)
+{
+	return conf->utctime;
+}
+
+int
+get_infd(struct vm *vm)
+{
+	return vm->infd;
+}
+
+int
+get_outfd(struct vm *vm)
+{
+	return vm->outfd;
+}
+
+int
+get_errfd(struct vm *vm)
+{
+	return vm->errfd;
+}
+
+int
+get_logfd(struct vm *vm)
+{
+	return vm->logfd;
+}
+
+void
+set_infd(struct vm *vm, int fd)
+{
+	vm->infd = fd;
+}
+
+void
+set_outfd(struct vm *vm, int fd)
+{
+	vm->outfd = fd;
+}
+void
+set_errfd(struct vm *vm, int fd)
+{
+	vm->errfd = fd;
+}
+
+void
+set_logfd(struct vm *vm, int fd)
+{
+	vm->logfd = fd;
+}
+
+char *
+get_assigned_comport(struct vm *vm)
+{
+	return vm->assigned_comport;
+}
+
+void
+set_pid(struct vm *vm, pid_t pid)
+{
+	vm->pid = pid;
+}
+
+void
+set_state(struct vm *vm, enum STATE st)
+{
+	vm->state = st;
+}
+
+enum STATE
+get_state(struct vm *vm)
+{
+	return vm->state;
+}
+
+struct vm_conf *
+vm_get_conf(struct vm *vm)
+{
+	return vm->conf;
+}
+
+struct net_conf *
+get_taps(struct vm *vm)
+{
+	return STAILQ_FIRST(&vm->taps);
+}
+
 
 struct fbuf *
 create_fbuf()

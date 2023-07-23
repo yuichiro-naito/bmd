@@ -18,7 +18,6 @@
 #include <pwd.h>
 
 #include "bmd.h"
-#include "conf.h"
 #include "log.h"
 #include "vm.h"
 

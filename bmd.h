@@ -5,6 +5,7 @@
 #include <sys/nv.h>
 #include <sys/event.h>
 
+#include "conf.h"
 #include "bmd_plugin.h"
 
 #define UID_NOBODY   65534
@@ -23,7 +24,6 @@ struct global_conf;
 struct plugin_entry {
 	struct plugin_desc desc;
 	void *handle;
-	PLUGIN_ENV env;
 	SLIST_ENTRY(plugin_entry) next;
 };
 

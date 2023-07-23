@@ -2,6 +2,7 @@
 #define _VM_H_
 
 struct vm;
+struct vm_conf;
 
 /* Implemented in vm.c */
 int remove_taps(struct vm *vm);

@@ -8,20 +8,6 @@
 
 #include "../bmd_plugin.h"
 
-static PLUGIN_ENV *plugin_env;
-
-static int
-hookcmd_initialize(PLUGIN_ENV *env)
-{
-	plugin_env = env;
-	return 0;
-}
-
-static void
-hookcmd_finalize()
-{
-}
-
 static int
 hookcmd_parse_config(nvlist_t *config, const char *key, const char *val)
 {
@@ -46,6 +32,7 @@ static void
 hookcmd_status_change(struct vm *vm, nvlist_t *config)
 {
 	pid_t pid;
+	struct vm_conf *conf = vm_get_conf(vm);
 	const char *cmd0;
 	char *cmd1, *cmd2, *args[4];
 	static char *state_name[] = { "TERMINATE", "LOAD", "RUN",
@@ -66,22 +53,22 @@ hookcmd_status_change(struct vm *vm, nvlist_t *config)
 
 	if (pid == 0) {
 		args[0] = cmd2;
-		args[1] = vm->conf->name;
-		args[2] = state_name[vm->state];
+		args[1] = get_name(conf);
+		args[2] = state_name[get_state(vm)];
 		args[3] = NULL;
 		execv(cmd0, args);
 		exit(1);
 	}
 	free(cmd1);
 
-	plugin_env->wait_for_process(pid, on_process_exit, NULL);
+	plugin_wait_for_process(pid, on_process_exit, NULL);
 }
 
 PLUGIN_DESC plugin_desc = {
 	.version = PLUGIN_VERSION,
 	.name = "hookcmd",
-	.initialize = hookcmd_initialize,
-	.finalize = hookcmd_finalize,
+	.initialize = NULL,
+	.finalize = NULL,
 	.on_status_change = hookcmd_status_change,
 	.parse_config = hookcmd_parse_config,
 	.method = NULL

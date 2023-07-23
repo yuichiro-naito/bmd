@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "bmd_plugin.h"
+#include "conf.h"
 #include "vm.h"
 #include "inspect.h"
 

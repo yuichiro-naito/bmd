@@ -18,7 +18,6 @@
 #include <ctype.h>
 
 #include "bmd.h"
-#include "conf.h"
 #include "log.h"
 #include "server.h"
 #include "vm.h"
@@ -593,14 +592,57 @@ wait_for_cmd_sock(int sock)
 	return 0;
 }
 
+static int
+add_plugin(int dirfd, const char *fname)
+{
+	int fd;
+	void *hdl;
+	struct plugin_desc *desc;
+	struct plugin_entry *pl_ent;
+
+	while ((fd = openat(dirfd, fname, O_RDONLY)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0)
+		return -1;
+
+	if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL) {
+		ERR("failed to open plugin %s\n", fname);
+		close(fd);
+		return -1;
+	}
+
+	if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
+	    desc->version != PLUGIN_VERSION ||
+	    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
+		ERR("invalid plugin %s\n", fname);
+		goto err;
+	}
+
+	if (desc->initialize && (*(desc->initialize))() < 0) {
+		ERR("failed to initialize plugin %s %s\n", desc->name, fname);
+		goto err2;
+	}
+	pl_ent->desc = *desc;
+	pl_ent->handle = hdl;
+	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+	INFO("load plugin %s %s\n", desc->name, fname);
+
+	close(fd);
+	return 0;
+err2:
+	free(pl_ent);
+err:
+	dlclose(hdl);
+	close(fd);
+	return -1;
+}
+
 int
 load_plugins(const char *plugin_dir)
 {
 	DIR *d;
-	void *hdl;
-	int fd;
 	struct dirent *ent;
-	struct plugin_desc *desc;
 	struct plugin_entry *pl_ent;
 	static int loaded = 0;
 
@@ -615,7 +657,7 @@ load_plugins(const char *plugin_dir)
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 
 	if ((d = opendir(plugin_dir)) == NULL) {
-		ERR("can not open %s\n", gl_conf->plugin_dir);
+		ERR("can not open %s\n", plugin_dir);
 		return -1;
 	}
 
@@ -623,42 +665,8 @@ load_plugins(const char *plugin_dir)
 		if (ent->d_namlen < 4 || ent->d_name[0] == '.' ||
 		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0)
 			continue;
-		while ((fd = openat(dirfd(d), ent->d_name, O_RDONLY)) < 0)
-			if (errno != EINTR)
-				break;
-		if (fd < 0)
-			continue;
-
-		if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL) {
-			ERR("failed to open plugin %s\n", ent->d_name);
-			goto next;
-		}
-
-		if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
-		    desc->version != PLUGIN_VERSION ||
-		    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
-			dlclose(hdl);
-			goto next;
-		}
-
-		pl_ent->env.set_timer = plugin_set_timer;
-		pl_ent->env.wait_for_process = plugin_wait_for_process;
-		pl_ent->env.assign_taps = assign_taps;
-		pl_ent->env.activate_taps = activate_taps;
-		pl_ent->env.remove_taps = remove_taps;
-
-		if (desc->initialize && (*(desc->initialize))(&pl_ent->env) < 0) {
-			free(pl_ent);
-			dlclose(hdl);
-			goto next;
-		}
-		pl_ent->desc = *desc;
-		pl_ent->handle = hdl;
-		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
-		INFO("load plugin %s %s\n", desc->name, ent->d_name);
-		loaded++;
-	next:
-		close(fd);
+		if (add_plugin(dirfd(d), ent->d_name) >= 0)
+			loaded++;
 	}
 
 	closedir(d);

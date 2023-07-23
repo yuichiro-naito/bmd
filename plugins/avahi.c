@@ -14,22 +14,14 @@
 #define AVAHI_PUBLISH "/usr/local/bin/avahi-publish"
 
 static int avahi_enable = 0;
-static PLUGIN_ENV *plugin_env;
 
 static int
-avahi_initialize(PLUGIN_ENV *env)
+avahi_initialize()
 {
-	plugin_env = env;
-
 	if (access(AVAHI_PUBLISH, R_OK | X_OK) == 0)
 		avahi_enable = 1;
 
 	return 0;
-}
-
-static void
-avahi_finalize()
-{
 }
 
 static int on_process_exit(int id, void *data);
@@ -59,7 +51,7 @@ exec_avahi_publish(nvlist_t *config)
 	}
 
 	if (pid > 0)
-		plugin_env->wait_for_process(pid, on_process_exit, config);
+		plugin_wait_for_process(pid, on_process_exit, config);
 	return pid;
 }
 
@@ -86,13 +78,13 @@ on_process_exit(int id, void *data)
 
 	/* If avahi-publish exit on error, retry */
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 1)
-		plugin_env->set_timer(5, on_timer, data);
+		plugin_set_timer(5, on_timer, data);
 
 	return 0;
 }
 
 void
-set_params(nvlist_t *config, struct vm *vm)
+set_params(nvlist_t *config, struct vm_conf *conf)
 {
 	char num[16];
 
@@ -101,8 +93,8 @@ set_params(nvlist_t *config, struct vm *vm)
 	if (nvlist_exists_string(config, "port"))
 		nvlist_free_string(config, "port");
 
-	nvlist_add_string(config, "name", vm->conf->name);
-	snprintf(num, sizeof(num), "%d", vm->conf->fbuf->port);
+	nvlist_add_string(config, "name", get_name(conf));
+	snprintf(num, sizeof(num), "%d", get_fbuf_port(conf));
 	nvlist_add_string(config, "port", num);
 }
 
@@ -111,18 +103,19 @@ static void
 avahi_status_change(struct vm *vm, nvlist_t *config)
 {
 	pid_t pid;
+	struct vm_conf *conf = vm_get_conf(vm);
 
-	if (avahi_enable == 0 || vm->conf->fbuf->enable == false)
+	if (avahi_enable == 0 || is_fbuf_enable(conf) == false)
 		return;
 
 	pid = nvlist_exists_number(config, "pid") ?
 		nvlist_take_number(config, "pid") : 0;
 
-	switch (vm->state) {
+	switch (get_state(vm)) {
 	case LOAD:
 	case RUN:
 		if (pid == 0) {
-			set_params(config, vm);
+			set_params(config, conf);
 			pid = exec_avahi_publish(config);
 		}
 		/* FALLTHROUGH */
@@ -141,7 +134,7 @@ PLUGIN_DESC plugin_desc = {
 	.version = PLUGIN_VERSION,
 	.name = "avahi",
 	.initialize = avahi_initialize,
-	.finalize =  avahi_finalize,
+	.finalize =  NULL,
 	.on_status_change = avahi_status_change,
 	.parse_config = NULL,
 	.method = NULL

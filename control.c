@@ -12,7 +12,6 @@
 #include <signal.h>
 
 #include "log.h"
-#include "conf.h"
 #include "vm.h"
 #include "server.h"
 #include "bmd.h"

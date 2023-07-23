@@ -423,7 +423,7 @@ assign_taps(struct vm *vm)
 	char *desc;
 	struct vm_conf *conf = vm->conf;
 
-	if (STAILQ_FIRST(&vm->taps) == NULL)
+	if (STAILQ_FIRST(&vm->taps) != NULL)
 		return 0;
 
 	STAILQ_FOREACH (nc, &conf->nets, next) {

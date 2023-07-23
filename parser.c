@@ -6,7 +6,6 @@
 #include <libgen.h>
 #include <pwd.h>
 
-#include "conf.h"
 #include "log.h"
 #include "confparse.h"
 #include "bmd.h"
