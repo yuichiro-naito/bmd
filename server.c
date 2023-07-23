@@ -381,18 +381,23 @@ get_peer_comport(const char *comport)
 static int
 chown_comport(const char *comport, uid_t user)
 {
-	int rc;
+	int i, rc;
 	struct stat st;
 	char *fn = get_peer_comport(comport);
 
 	if (fn == NULL)
 		return 0;
 
-	if (stat(fn, &st) < 0 ||
-	    chown(fn, user, st.st_gid) < 0) {
-		rc = -1;
-	} else
+	for (i = 0; i < 5; i++) {
+		if (stat(fn, &st) < 0 ||
+		    chown(fn, user, st.st_gid) < 0) {
+			rc = -1;
+			usleep(1000);
+			continue;
+		}
 		rc = 0;
+		break;
+	}
 
 	free(fn);
 	return rc;
@@ -460,7 +465,8 @@ ret:
 		nvlist_add_string(res, "reason", reason);
 	if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
 		       (comport = VM_CONF(vm_ent)->comport))) {
-		chown_comport(comport, user);
+		if (chown_comport(comport, user) < 0)
+			ERR("failed to change owner (%s)\n", comport);
 		nvlist_add_string(res, "comport", comport);
 	}
 	return res;
