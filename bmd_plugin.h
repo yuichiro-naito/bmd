@@ -126,9 +126,6 @@ typedef int (*plugin_call_back)(int ident, void *data);
 
 int plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data);
 int plugin_set_timer(int second, plugin_call_back cb, void *data);
-int assign_taps(struct vm *vm);
-int activate_taps(struct vm *vm);
-int remove_taps(struct vm *vm);
 
 struct vm_method {
 	char *name;
