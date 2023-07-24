@@ -677,12 +677,6 @@ start_bhyve(struct vm *vm, nvlist_t *pl_conf)
 	if (vm->state == LOAD)
 		return exec_bhyve(vm);
 
-	if (assign_taps(vm) < 0)
-		return -1;
-
-	if (activate_taps(vm) < 0)
-		goto err;
-
 	if (strcasecmp(conf->loader, "bhyveload") == 0) {
 		if (bhyve_load(vm) < 0)
 			goto err;
@@ -703,7 +697,6 @@ start_bhyve(struct vm *vm, nvlist_t *pl_conf)
 
 	return 0;
 err:
-	remove_taps(vm);
 	return -1;
 }
 
@@ -723,7 +716,6 @@ cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf)
 	VM_CLOSE_FD(errfd);
 	VM_CLOSE_FD(logfd);
 #undef VM_CLOSE_FD
-	remove_taps(vm);
 	destroy_bhyve(vm);
 	if (vm->mapfile) {
 		unlink(vm->mapfile);

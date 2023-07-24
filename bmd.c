@@ -948,6 +948,13 @@ assign_comport(struct vm_entry *vm_ent)
 	return 0;
 }
 
+void
+cleanup_virtual_machine(struct vm_entry *vm_ent)
+{
+	remove_taps(VM_PTR(vm_ent));
+	VM_CLEANUP(vm_ent);
+}
+
 int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
@@ -964,9 +971,18 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
+	if (VM_STATE(vm_ent) == TERMINATE) {
+		if (assign_taps(VM_PTR(vm_ent)) < 0)
+			return -1;
+		if (activate_taps(VM_PTR(vm_ent)) < 0) {
+			remove_taps(VM_PTR(vm_ent));
+			return -1;
+		}
+	}
+
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
-		VM_CLEANUP(vm_ent);
+		cleanup_virtual_machine(vm_ent);
 		return -1;
 	}
 
@@ -978,7 +994,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		 */
 		VM_POWEROFF(vm_ent);
 		waitpid(VM_PID(vm_ent), NULL, 0);
-		VM_CLEANUP(vm_ent);
+		cleanup_virtual_machine(vm_ent);
 		return -1;
 	}
 
@@ -1041,7 +1057,7 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 {
 	stop_waiting_vm_output(vm_ent);
 	clear_all_timers(vm_ent);
-	VM_CLEANUP(vm_ent);
+	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
 }
 
@@ -1538,14 +1554,14 @@ wait:
 			goto err;
 	}
 
-	VM_CLEANUP(vm_ent);
+	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	remove_plugins();
 	free_id_list();
 	return 0;
 err:
-	VM_CLEANUP(vm_ent);
+	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
 	free_vm_entry(vm_ent);
 	remove_plugins();

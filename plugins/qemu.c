@@ -207,19 +207,7 @@ start_qemu(struct vm *vm, nvlist_t *pl_conf)
 	if (! nvlist_exists_string(pl_conf, "qemu_arch"))
 		nvlist_add_string(pl_conf, "qemu_arch", "x86_64");
 
-	if (assign_taps(vm) < 0)
-		return -1;
-
-	if (activate_taps(vm) < 0)
-		goto err;
-
-	if (exec_qemu(vm, pl_conf) < 0)
-		goto err;
-
-	return 0;
-err:
-	remove_taps(vm);
-	return -1;
+	return exec_qemu(vm, pl_conf);
 }
 
 static void
@@ -238,7 +226,6 @@ cleanup_qemu(struct vm *vm, nvlist_t *pl_conf)
 	VM_CLOSE_FD(errfd);
 	VM_CLOSE_FD(logfd);
 #undef VM_CLOSE_FD
-	remove_taps(vm);
 	set_state(vm, TERMINATE);
 }
 
