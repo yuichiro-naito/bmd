@@ -608,15 +608,14 @@ add_plugin(int dirfd, const char *fname)
 
 	if ((hdl = fdlopen(fd, RTLD_NOW)) == NULL) {
 		ERR("failed to open plugin %s\n", fname);
-		close(fd);
-		return -1;
+		goto err0;
 	}
 
 	if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
 	    desc->version != PLUGIN_VERSION ||
 	    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
 		ERR("invalid plugin %s\n", fname);
-		goto err;
+		goto err1;
 	}
 
 	if (desc->initialize && (*(desc->initialize))() < 0) {
@@ -632,8 +631,9 @@ add_plugin(int dirfd, const char *fname)
 	return 0;
 err2:
 	free(pl_ent);
-err:
+err1:
 	dlclose(hdl);
+err0:
 	close(fd);
 	return -1;
 }
