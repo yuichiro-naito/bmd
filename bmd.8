@@ -15,12 +15,17 @@
 The
 .Nm
 utility spawns bhyve processes according to the configuration file,
-and waits for its termination. If bhyve terminates with exit code 0 (rebooted),
+and waits for them to terminate. If a bhyve proccess terminates with
+exit code 0 (rebooted),
 .Nm
-spawns bhyve process again.
+spawns the bhyve process again. The
 .Nm
-recieves control commands from bmdctl(1) to manage bhyve processes via unix
-domain socket. See bmdctl(1) for detail.
+recieves control commands from
+.Xr bmdctl 1
+to manage bhyve processes via unix
+domain socket. See
+.Xr bmdctl 1
+for detail.
 .Sh OPTIONS
 .Bl -tag -width ident
 .It Fl F
@@ -42,5 +47,48 @@ Specify the unix domain socket permission in octal number.
 The default is
 .Pa 0660 .
 Please note that the unix domain socket path can not be changed in command
-line options. See bmd.conf(5) to change the path.
+line options. See
+.Xr bmd.conf 5
+to change the path.
 .El
+.Pp
+The
+.Nm
+waits for control commands from
+.Xr bmdctl 1
+via unix domain socket. When
+.Nm
+receives a boot request from
+.Xr bmdctl 1 ,
+.Nm
+reloads the configuration file to check updates for boot target. If any
+updates are found, the
+.Nm
+adopts the updated configuration.
+.Sh SIGNAL HANDLING
+.Nm
+deals with the following signals:
+.Pp
+.Bl -tag -width SIGTERM -compact
+.It SIGTERM
+Send SIGTERM to all bhyve processes and wait for them to terminate,
+then quit the daemon.
+.It SIGHUP
+Reload the configuration file.
+.El
+.Sh FILES
+.Bl -tag -width /usr/local/var/cache/bmd -compact
+.It Pa /var/run/bmd.pid
+Pid file
+.It Pa /var/run/bmd.sock
+Unix domain socket
+.It Pa /usr/local/etc/bmd.conf
+Configuration file
+.It Pa /usr/local/libexec/bmd
+Plugin directory
+.It Pa /usr/local/var/cache/bmd
+Storage for UEFI variables
+.El
+.Sh SEE ALSO
+.Xr bmdctl 1,
+.Xr bmd.conf 5
