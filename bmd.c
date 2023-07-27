@@ -1243,7 +1243,7 @@ wait:
 			INFO("%s\n", "stopping daemon");
 			goto end;
 		case SIGHUP:
-			INFO("%s\n", "reload config files");
+			INFO("%s\n", "reload config file");
 			reload_virtual_machines();
 			goto wait;
 		}
