@@ -1,0 +1,130 @@
+.Dd Jul 27, 2023
+.Dt bmdctl 8
+.Os
+.
+.Sh NAME
+.Nm bmdctl
+.Nd control utility for bhyve management daemon (bmd)
+.Sh SYNOPSIS
+.Nm
+.Cm list
+.Nm
+.Cm boot
+.Op Fl c 
+name
+.Nm
+.Cm install
+.Op Fl c
+name
+.Nm
+.Cm shutdown
+name
+.Nm
+.Cm poweroff
+name
+.Nm
+.Cm reset
+name
+.Nm
+.Cm console
+name
+.Nm
+.Cm showcomport
+name
+.Nm
+.Cm showconfig
+.Op name
+.Nm
+.Cm inspect
+name
+.Nm
+.Cm run
+.Op Fl i
+.Op Fl s
+name
+.Sh DESCRIPTION
+The
+.Nm
+command is a control utility for virtual machines which are managed by
+.Xr bmd 8 .
+Root privileged user can control all virtual machines. Non-priviledged user
+can control its own virtual machines.
+
+.Bl -tag -width ".Cm showcomport Fl name"
+.It Cm list
+Show list of virtual machines.
+.It Xo
+.Cm boot
+.Op Fl c
+.Ar name
+.Xc
+Boot the virtual machine. If
+.Fl c
+is specified, connect to the console after booting.
+.It Xo
+.Cm start
+.Op Fl c
+.Ar name
+.Xc
+Alias for boot.
+.It Xo
+.Cm install
+.Op Fl c
+.Ar name
+.Xc
+Boot from ISO media to install it. If
+.Fl c
+is specified, connect to the console after booting.
+.It Cm shudown Ar name
+Send SIGTERM to the bhyve process to trigger ACPI shutdown.
+.It Cm stop Ar name
+Alias for shtudown.
+.It Cm poweroff Ar name
+Force to quit the bhyve process.
+.It Cm reset Ar name
+Force to reset the bhyve process.
+.It Cm console Ar name
+Connect to the console of the virtual machine. Type '~.' escape sequence to
+quit the console.
+.It Cm showcomport Ar name
+Print the console device file. (nmdm)
+.It Cm showconfig Op Ar name
+Parse the configuration file and show virtual machine configurations. This is
+for debugging the configuration parser.
+.It Cm inspect Ar name
+Inspect disks and iso images and show the results for
+.Ar loadcmd
+and
+.Ar installcmd .
+.It Xo
+.Cm run
+.Op Fl i
+.Op Fl s
+.Ar name
+.Xc
+Boot the virtual machine directly. The virtual machine runs out of control
+from
+.Xr bmd 8 .
+Root priviledge is required. If
+.Fl i
+is specified, boot from ISO image. If
+.Fl s
+is specified, boot single user mode.
+.El
+.Pp
+The
+.Nm
+command connects to the unix domain socket of
+.Xr bmd 8
+and sends a request of sub-command (excludes the
+.Cm run
+sub-command). The unix domain
+socket path is read from
+.Xr bmd.conf 5 .
+If
+.Xr bmd.conf 5
+is not readable, use the default path of
+.Pa /var/run/bmd.sock .
+.Sh SEE ALSO
+.Xr bmd 8 ,
+.Xr bmd.conf 5
