@@ -48,7 +48,8 @@ redirect_to_com(struct vm *vm)
 	if ((com = vm->assigned_comport) == NULL)
 		com = "/dev/null";
 
-	while ((fd = open(com, O_WRONLY)) < 0)
+	/* Do not wait for peer connects to this nmdm. */
+	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
 		if (errno != EINTR)
 			break;
 	if (fd < 0) {
