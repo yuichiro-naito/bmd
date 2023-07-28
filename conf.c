@@ -25,7 +25,7 @@ free_id_list()
 {
 	struct id_entry *e, *t;
 
-	SLIST_FOREACH_SAFE(e, &id_list, next, t)
+	SLIST_FOREACH_SAFE (e, &id_list, next, t)
 		free(e);
 	SLIST_INIT(&id_list);
 }
@@ -36,7 +36,7 @@ get_id(const char *name, unsigned int *id)
 	static unsigned int lastid = 0;
 	struct id_entry *e;
 
-	SLIST_FOREACH(e, &id_list, next)
+	SLIST_FOREACH (e, &id_list, next)
 		if (strcmp(e->name, name) == 0) {
 			*id = e->id;
 			return 0;
@@ -151,7 +151,7 @@ free_vartree(struct vartree *vt)
 {
 	struct conf_var *v, *vn;
 
-	RB_FOREACH_SAFE(v, vartree, vt, vn) {
+	RB_FOREACH_SAFE (v, vartree, vt, vn) {
 		RB_REMOVE(vartree, vt, v);
 		free_var(v);
 	}
@@ -1438,8 +1438,13 @@ get_var(struct variables *vars, char *k)
 {
 	char *ret;
 
-	if ((ret = get_var0(vars->global, k)) == NULL &&
-	    (ret = get_var0(vars->local, k)) == NULL)
+	/*
+	 * Lookup local variables first. This pretends for users
+	 * that global variables are re-writable in vm and
+	 * template section.
+	 */
+	if ((ret = get_var0(vars->local, k)) == NULL &&
+	    (ret = get_var0(vars->global, k)) == NULL)
 		return NULL;
 
 	return ret;
