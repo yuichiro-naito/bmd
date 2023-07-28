@@ -50,7 +50,7 @@ redirect_to_com(struct vm *vm)
 
 	/* Do not wait for peer connects to this nmdm. */
 	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
-		if (errno != EINTR)
+		if (errno != EINTR && errno != ENOENT)
 			break;
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
