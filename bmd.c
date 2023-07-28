@@ -420,8 +420,8 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 				ev[0] = e;
 				memcpy(&kev[i], &e->kev, sizeof(struct kevent));
 				kev[i].flags = recv_f;
-				break;
 				i++;
+				break;
 			case EVFILT_WRITE:
 				ev[1] = e;
 				memcpy(&kev[i], &e->kev, sizeof(struct kevent));
@@ -455,12 +455,12 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 }
 
 static int
-stop_waiting_sock_buf(struct sock_buf *sb)
+stop_waiting_sock_buf(struct sock_buf *sb, short filter)
 {
 	struct event *ev, *evn;
 
 	LIST_FOREACH_SAFE (ev, &events, next, evn)
-		if (ev->data == sb) {
+		if (ev->data == sb && ev->kev.filter == filter) {
 			ev->kev.flags = EV_DELETE;
 			if (kevent_set(&ev->kev, 1) < 0) {
 				ERR("failed to remove socket events(%s)\n",
@@ -490,7 +490,7 @@ on_recv_sock_buf(int ident, void *data)
 	case 1:
 		break;
 	default:
-		stop_waiting_sock_buf(sb);
+		stop_waiting_sock_buf(sb, EVFILT_READ);
 		destroy_sock_buf(sb);
 	}
 	return 0;
@@ -509,7 +509,7 @@ on_send_sock_buf(int ident, void *data)
 	case 1:
 		break;
 	default:
-		stop_waiting_sock_buf(sb);
+		stop_waiting_sock_buf(sb, EVFILT_WRITE);
 		destroy_sock_buf(sb);
 		break;
 	}
@@ -1008,7 +1008,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	if (VM_LOGFD(vm_ent) == -1)
+	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
 		while ((VM_LOGFD(vm_ent) = open(conf->err_logfile,
 						O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
 						0644)) < 0)
@@ -1208,7 +1208,7 @@ event_loop()
 {
 	struct kevent ev;
 	struct event *event;
-	int n;
+	int n, do_remove;
 	struct timespec *to, timeout;
 
 	if (wait_for_cmd_sock(cmd_sock) < 0)
@@ -1227,9 +1227,10 @@ wait:
 
 	if (ev.udata != NULL) {
 		event = ev.udata;
+		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
 		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
 			ERR("%s\n", "callback failed");
-		if (event->kev.flags & EV_ONESHOT) {
+		if (do_remove) {
 			LIST_REMOVE(event, next);
 			free(event);
 		}
@@ -1263,7 +1264,7 @@ stop_virtual_machines()
 	struct kevent ev;
 	struct event *event;
 	struct vm_entry *vm_ent;
-	int count = 0;
+	int do_remove, count = 0;
 
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
 		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
@@ -1281,9 +1282,10 @@ stop_virtual_machines()
 			if (event->type == EVENT &&
 			    event->kev.filter == EVFILT_PROC)
 				count--;
+			do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
 			if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
 				ERR("%s\n", "callback failed");
-			if (event->kev.flags & EV_ONESHOT) {
+			if (do_remove) {
 				LIST_REMOVE(event, next);
 				free(event);
 			}
