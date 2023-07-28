@@ -455,12 +455,12 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 }
 
 static int
-stop_waiting_sock_buf(struct sock_buf *sb, short filter)
+stop_waiting_sock_buf(struct sock_buf *sb)
 {
 	struct event *ev, *evn;
 
 	LIST_FOREACH_SAFE (ev, &events, next, evn)
-		if (ev->data == sb && ev->kev.filter == filter) {
+		if (ev->data == sb) {
 			ev->kev.flags = EV_DELETE;
 			if (kevent_set(&ev->kev, 1) < 0) {
 				ERR("failed to remove socket events(%s)\n",
@@ -490,7 +490,7 @@ on_recv_sock_buf(int ident, void *data)
 	case 1:
 		break;
 	default:
-		stop_waiting_sock_buf(sb, EVFILT_READ);
+		stop_waiting_sock_buf(sb);
 		destroy_sock_buf(sb);
 	}
 	return 0;
@@ -509,7 +509,7 @@ on_send_sock_buf(int ident, void *data)
 	case 1:
 		break;
 	default:
-		stop_waiting_sock_buf(sb, EVFILT_WRITE);
+		stop_waiting_sock_buf(sb);
 		destroy_sock_buf(sb);
 		break;
 	}
