@@ -4,6 +4,7 @@
 #include <sys/procctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <dirent.h>
@@ -884,11 +885,12 @@ get_nmdm_number(const char *p)
 static int
 assign_comport(struct vm_entry *vm_ent)
 {
-	int fd, i, n, v, max = -1;
+	int i, n, v, max = -1;
 	struct dirent **names;
 	char *new_com;
 	struct vm_entry *e;
 	struct vm_conf *conf = VM_CONF(vm_ent);
+	struct stat sb;
 
 	if (conf->comport == NULL)
 		return 0;
@@ -929,20 +931,15 @@ assign_comport(struct vm_entry *vm_ent)
 	if (max < gl_conf->nmdm_offset - 1)
 		max = gl_conf->nmdm_offset - 1;
 
-	for (i = 1; i < 6; i++) {
-		if (asprintf(&new_com, "/dev/nmdm%dB", max + i) < 0)
-			return -1;
-
-		while ((fd = open(new_com, O_RDWR|O_NONBLOCK)) < 0)
-			if (errno != EINTR)
-				break;
-		if (fd >= 0)
-			break;
-		free(new_com);
-	}
-	if (fd < 0)
+	if (asprintf(&new_com, "/dev/nmdm%dB", max + 1) < 0)
 		return -1;
-	close(fd);
+
+	/* Create nmdm device to reserve it. */
+	if (stat(new_com, &sb) < 0) {
+		ERR("failed to stat %s (%s)\n",  new_com, strerror(errno));
+		free(new_com);
+		return -1;
+	}
 	VM_ASCOMPORT(vm_ent) = new_com;
 
 	return 0;
@@ -1188,7 +1185,6 @@ reload_virtual_machines()
 				LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 				free_vm_entry(vm_ent);
 			}
-
 		} else {
 			VM_CONF(vm_ent) = VM_NEWCONF(vm_ent);
 			VM_NEWCONF(vm_ent) = NULL;
