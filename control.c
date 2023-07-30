@@ -21,7 +21,7 @@ int
 usage(int argc, char *argv[])
 {
 	printf(
-	    "usage: %s <subcommand>\n"
+	    "usage: %s [-f config_file] <subcommand>\n"
 	    "  boot [-c] <name>     : boot VM\n"
 	    "  install [-c] <name>  : install VM from ISO image\n"
 	    "  shutdown <name>      : ACPI shutdown VM\n"
@@ -286,10 +286,16 @@ control(int argc, char *argv[])
 	if (argc < 2)
 		return usage(argc, argv);
 
-	if (load_config_file(NULL, 1) < 0) {
-		printf("failed to load VM config files\n");
-		return 1;
+	if (argc > 2 && strcmp(argv[1], "-f") == 0) {
+		free(gl_conf->config_file);
+		gl_conf->config_file = strdup(argv[2]);
+		argv += 2;
+		argc += 2;
 	}
+
+	if (load_config_file(NULL, 1) < 0)
+		fprintf(stderr, "failed to load %s. use default value\n",
+			gl_conf->config_file);
 
 	/* command name alias */
 	if (strcmp(argv[1], "start") == 0)

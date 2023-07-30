@@ -1301,12 +1301,12 @@ parse_opt(int argc, char *argv[])
 {
 	int ch;
 
-	while ((ch = getopt(argc, argv, "Fc:P:p:m:")) != -1) {
+	while ((ch = getopt(argc, argv, "Ff:P:p:m:")) != -1) {
 		switch (ch) {
 		case 'F':
 			gl_conf->foreground = 1;
 			break;
-		case 'c':
+		case 'f':
 			free(gl_conf->config_file);
 			gl_conf->config_file = strdup(optarg);
 			break;
@@ -1324,7 +1324,7 @@ parse_opt(int argc, char *argv[])
 			break;
 		default:
 			fprintf(stderr,
-			    "usage: %s [-F] [-c config file] "
+			    "usage: %s [-F] [-f config file] "
 			    "[-p plugin directory] \n"
 			    "\t[-m unix domain socket permission] \n"
 			    "\t[-P pid file]\n",

@@ -7,37 +7,48 @@
 .Nd control utility for bhyve management daemon (bmd)
 .Sh SYNOPSIS
 .Nm
+.Op Fl f config_file
 .Cm list
 .Nm
+.Op Fl f config_file
 .Cm boot
 .Op Fl c 
 name
 .Nm
+.Op Fl f config_file
 .Cm install
 .Op Fl c
 name
 .Nm
+.Op Fl f config_file
 .Cm shutdown
 name
 .Nm
+.Op Fl f config_file
 .Cm poweroff
 name
 .Nm
+.Op Fl f config_file
 .Cm reset
 name
 .Nm
+.Op Fl f config_file
 .Cm console
 name
 .Nm
+.Op Fl f config_file
 .Cm showcomport
 name
 .Nm
+.Op Fl f config_file
 .Cm showconfig
 .Op name
 .Nm
+.Op Fl f config_file
 .Cm inspect
 name
 .Nm
+.Op Fl f config_file
 .Cm run
 .Op Fl i
 .Op Fl s
@@ -121,6 +132,11 @@ and sends a request of sub-command (excludes the
 sub-command). The unix domain
 socket path is read from
 .Xr bmd.conf 5 .
+The file path of
+.Xr bmd.conf 5
+can be specified
+.Fl f
+option.
 If
 .Xr bmd.conf 5
 is not readable, use the default path of
