@@ -86,6 +86,8 @@ Alias for boot.
 Boot from ISO media to install it. If
 .Fl c
 is specified, connect to the console after booting.
+Note that the installed system never reboots just quits even if user commands
+in anyway, reboot the virtual machine manually after shutting down it.
 .It Cm shudown Ar name
 Send SIGTERM to the bhyve process to trigger ACPI shutdown.
 .It Cm stop Ar name
