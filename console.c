@@ -25,33 +25,32 @@ sighandler_exit(int sig)
 	exit(0);
 }
 
+static ssize_t
+put_char(int fd, int c)
+{
+	ssize_t n;
+	while ((n = write(fd, &c, 1)) < 0)
+		if (stop || errno != EINTR)
+			break;
+	return n;
+}
+
 static int
 console_in(int fd)
 {
 	int c;
-	ssize_t n;
-	char ch;
 
 	while ((c = getchar()) != EOF) {
 		if (stop)
 			break;
 		if (c == '~') {
-			if ((c = getchar()) == '.')
-				break;
-			ch = '~';
-			while ((n = write(fd, &ch, 1)) < 0)
-				if (stop || errno != EINTR)
-					break;
-			if (n <= 0)
+			if ((c = getchar()) == '.' ||
+			    put_char(fd, '~') <= 0)
 				break;
 			if (c == '~')
 				continue;
 		}
-		ch = c;
-		while ((n = write(fd, &ch, 1)) < 0)
-			if (stop || errno != EINTR)
-				break;
-		if (n <= 0)
+		if (put_char(fd, c) <= 0)
 			break;
 	}
 
