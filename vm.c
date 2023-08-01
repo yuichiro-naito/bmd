@@ -66,9 +66,16 @@ static char *
 get_fbuf_option(int pcid, struct fbuf *fb)
 {
 	char *ret;
+	if (fb->password == NULL) {
+		if (asprintf(&ret, "%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
+			     pcid, fb->ipaddr, fb->port, fb->width, fb->height,
+			     fb->vgaconf, fb->wait ? ",wait" : "") < 0)
+			return NULL;
+		return ret;
+	}
 	if (asprintf(&ret, "%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s,password=%s",
-		pcid, fb->ipaddr, fb->port, fb->width, fb->height, fb->vgaconf,
-		fb->wait ? ",wait" : "", fb->password) < 0)
+		     pcid, fb->ipaddr, fb->port, fb->width, fb->height, fb->vgaconf,
+		     fb->wait ? ",wait" : "", fb->password) < 0)
 		return NULL;
 	return ret;
 }

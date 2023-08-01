@@ -1003,12 +1003,11 @@ struct fbuf *
 create_fbuf()
 {
 	struct fbuf *ret;
-	char *addr, *vga, *pass;
+	char *addr, *vga;
 	ret = calloc(1, sizeof(typeof(*ret)));
 	addr = strdup("0.0.0.0");
 	vga = strdup("io");
-	pass = strdup("password");
-	if (ret == NULL || addr == NULL || vga == NULL || pass == NULL)
+	if (ret == NULL || addr == NULL || vga == NULL)
 		goto err;
 
 	ret->enable = -1;
@@ -1017,13 +1016,11 @@ create_fbuf()
 	ret->port = 5900;
 	ret->width = 1024;
 	ret->height = 768;
-	ret->password = pass;
 	return ret;
 err:
 	free(ret);
 	free(addr);
 	free(vga);
-	free(pass);
 	return NULL;
 }
 

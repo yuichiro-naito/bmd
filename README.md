@@ -156,7 +156,7 @@ Following keys are available.
 | error_logfile | log filename of bhyve messages | no | (none) |
 | graphics | set "yes" to use frame buffer device | no | no |
 | graphics_listen | vnc port number | no | 5900 |
-| graphics_password | password for vnc access | no | password |
+| graphics_password | password for vnc access | no | (none) |
 | graphics_res | resolution of vnc<br>e.g. 1280x720 | no | 1024x768 |
 | graphics_vga | vga conf of bhyve<br>one of "on", "off", "io" | no | io |
 | graphics_wait | set "yes" to wait for initial connection to vnc | no | no |
