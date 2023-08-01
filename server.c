@@ -47,6 +47,7 @@ destroy_sock_buf(struct sock_buf *p)
 	LIST_REMOVE(p, next);
 	close(p->fd);
 	free(p->buf);
+	free(p->res_buf);
 	free(p);
 }
 
