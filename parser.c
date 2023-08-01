@@ -539,10 +539,10 @@ calc_expr(struct variables *vars, struct cfexpr *ex, char *fn, int ln)
 			return left + right;
 		case '-':
 			return left - right;
-		case '/':
-			return left / right;
 		case '*':
 			return left * right;
+		case '/':
+			return left / right;
 		case '%':
 			return left % right;
 		}
@@ -604,23 +604,21 @@ apply_global_vars(struct cfsection *sc)
 {
 	struct cfparam *pr;
 	struct cfvalue *vl;
-	char *key, *val;
+	char *val;
 	struct variables vars;
 
 	vars.global = global_vars;
 	vars.local = NULL;
 
-	TAILQ_FOREACH(pr, &sc->params, next) {
-		key = pr->key->s;
+	TAILQ_FOREACH(pr, &sc->params, next)
 		if (pr->key->type == CF_VAR) {
 			vl = TAILQ_FIRST(&pr->vals);
 			val = token_to_string(&vars, &vl->tokens);
 			if (val == NULL)
 				continue;
-			set_var(&vars, key, val);
+			set_var(&vars, pr->key->s, val);
 			free(val);
 		}
-	}
 
 	return 0;
 }
@@ -980,7 +978,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 {
 	struct cfsection *sc, *sn;
 	struct vm_conf *conf;
-	struct vm_conf_entry *conf_ent, *cen;
+	struct vm_conf_entry *conf_ent;
 	struct input_file *inf;
 	struct global_conf *global_conf;
 	struct vartree *gv;
@@ -1062,14 +1060,6 @@ set_global:
 		merge_global_conf(global_conf);
 	else
 		free_global_conf(global_conf);
-
-	goto cleanup;
-
-	LIST_FOREACH_SAFE (conf_ent, list, next, cen) {
-		free_vm_conf(&conf_ent->conf);
-		free_plugin_data(&conf_ent->pl_data);
-	}
-	LIST_INIT(list);
 
 cleanup:
 	yylex_destroy();
