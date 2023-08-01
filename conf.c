@@ -1058,7 +1058,7 @@ create_vm_conf(const char *vm_name)
 	ret->hostbridge = INTEL;
 	ret->fbuf = fbuf;
 	ret->name = name;
-	ret->loader_timeout = 3;
+	ret->loader_timeout = 15;
 	ret->stop_timeout = 300;
 	ret->utctime = true;
 	ret->backend = backend;
