@@ -1,0 +1,325 @@
+.Dd Jul 31, 2023
+.Dt BMD.CONF 5
+.Os
+.Sh NAME
+.Nm bmd.conf
+.Nd configuration file for
+.Xr bmd 8
+.Sh DESCRIPTION
+A
+.Xr bmd 8
+configuration file consists of 3 sections, global, vm, template.
+The global section defines
+.Xr bmd 8
+configurations and global variables. See VARIABLES for detail.
+Each Vm section defines VM configurations and vm scope variables.
+The templates are part of VM configurations common to multiple VMs.
+It is applied from a vm section or a template section. The same template
+can not be applied more than once.
+
+The section starts with its type name. The vm and template sections are
+followed by name. Vm names are unique identifier for each vm section and
+template names are also unique identifier for each template sections.
+
+In each sections, configurations are written in "key = value;" like C language
+statement. If a key takes multiple value, use "+=" operator or write multiple
+values separated by white spaces.
+
+The general syntax is:
+.Bd -literal -offset indent
+global {
+	global_parameter = "value1";
+	global_parameter = "value2";
+	...
+}
+template tmplA {
+	vm_parameter = "value1";
+	vm_parameter = "value2";
+	...
+}
+vm hostB {
+	vm_parameter = "value1";
+	vm_parameter = "value2";
+	...
+}
+.Ed
+.Ss Global Parameters
+.Bl -tag -width cmd_socket_path
+.It Cm cmd_socket_path = Ar pathname;
+Unix domain socket path. The default value is "/var/run/bmd.sock".
+.It Cm cmd_socket_mode = Ar mode;
+File mode bits in octal number. The default value is "0600".
+.It Cm vars_directory = Ar dirname;
+The directory to write UEFI variables. The default value is "/usr/local/var/cache/bmd".
+.It Cm nmdm_offset = Ar noffset;
+The offset of auto assigned nmdm number. The default value is "200".
+.It Cm pid_file = filepath;
+The file to write
+.Xr bmd 8
+pid. The default value is "/var/run/bmd.pid".
+.El
+.Ss Vm Parameters
+.Bl -tag -width installcmd
+.It Cm boot = Ar no | yes | oneshot | always ;
+.Bl -tag -width oneshot
+.It Cm no
+Do not boot at
+.Xr bmd 8
+starts. This is the default.
+.It Cm yes
+Boot at
+.Xr bmd 8
+starts or reloads configurations.
+.It Cm oneshot
+Boot at
+.Xr bmd 8
+starts and never reboots.
+.It Cm always
+Boot at
+.Xr bmd 8
+starts or reloads configurations. And always reboots VM after successful
+shutdown. If VM exits with an error,
+.Xr bmd 8
+does not reboot again.
+.El
+.It Cm boot_delay = Ar delay_second;
+Boot delay in seconds. The default value is "0".
+.It Cm comport = Ar com_device;
+Specify com1 port device (e.g. /dev/nmdm0B). "auto" assigns a nmdm device
+automatically.
+.It Cm debug_port = Ar port_number;
+Gdb debug port.
+.It Cm disk = (+=) Ar type:filename;
+Type is one of "nvme", "ahci", "ahci-hd", "virtio-blk" or can be omitted
+to specify the default type "virtio-blk".
+Filename is disk image filename(e.g. /var/images/vm-disk-0) or device file
+(e.g. /dev/zvol/zpool/vm-disk-1).
+.It Cm error_logfile = Ar filename;
+Log filename of bhyve messages.
+.It Cm graphics = Ar yes | no;
+Set "yes" to use frame buffer device. The default is "no".
+.It Cm graphics_listen = Ar port_num;
+Vnc port number. The default value is "5900".
+.It Cm graphics_password = Ar password;
+Password for vnc access. This is not set by default.
+.It Cm graphics_res = Ar width x height;
+Vnc resolution. The default value is "1280x720".
+.It Cm graphics_vga = Ar on | off | io;
+Vga conf of bhyve. The default is "io".
+.It Cm hostbridge = Ar standard | amd;
+Hostbridge device. The default is "standard".
+.It Cm install = Ar yes | no;
+Set "yes" to boot from ISO. The default is "no".
+.It Cm installcmd = Ar install_cmd;
+Install script for grub-bhyve. Setting "auto" inspects iso image.
+e.g. "kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd"
+.It Cm iso = (+=) Ar image_filepath;
+ISO image filename.
+.It Cm keymap = Ar keymap;
+Keymap for vnc.
+.It Cm loadcmd = Ar load_cmd;
+Boot script for grub-bhyve. Setting "auto" inspects disk image.
+e.g. "kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd"
+.It Cm loader = Ar bhyveload | grub | uefi;
+Specify boot loader. This parameter is mandatory.
+.It Cm loader_timeout = Ar timeout_sec;
+Loader timeout in seconds. The default value is "15".
+.It Xo
+.Cm memory = Ar memsize Ns Oo
+.Sm off
+.Cm K | k | M | m | G | g | T | t
+.Sm on
+.Oc ;
+.Xc
+Specify physical memory size. This parameter is mandatory.
+.It Cm name = Ar vmname;
+Change the virtual machine name from vm section name;
+.It Cm ncpu = Ar num;
+Set the number of CPUs for VM. This parameter is mandatory.
+.It Cm network = (+=) Ar type:bridge;
+Type is one of "e1000", "virtio-net"  or can be omitted to specify
+the default type "virtio-net". Bridge is a bridge name that a tap interface
+to be added. e.g. "bridge1"
+.It Cm owner = Ar user_name;
+Owner of VM. The default value is file owner in which vm section is written.
+.It Cm passthru = (+=) Ar bus/slot/function;
+PCI passthrough device id. e.g. 1/0/130
+.It Cm reboot_on_change = Ar yes | no;
+Set "yes" to force ACPI reboot if VM config file is change. The default is "no".
+.It Cm stop_timeout = Ar timeout_sec;
+VM exit timeout in seconds. if expired, force to kill VM. The default value is "300".
+.It Cm utctime = Ar yes | no;
+Set "yes" for RTC to keep UTC time. Set "no" for RTC to keep localtime.
+The default value is "yes".
+.It Cm wired_memory = Ar yes | no;
+Set "yes" to wire VM memory. The default is "no".
+.It Cm xhci_mouse = Ar yes | no;
+Set "yes" to use xhci tablet. The default is "no".
+.El
+.Ss String format
+Parameter values, including vm names and template names, can be single tokens
+or quoted strings.
+A token is any sequence of characters that are not considered special in
+the syntax of the configuration file (such as a semicolon or
+whitespace).
+If a value contains anything more than letters, numbers, dots, dashes
+and underscores, it is advisable to put quote marks around that value.
+Either single or double quotes may be used.
+.Pp
+Special characters may be quoted by preceding them with a backslash.
+Common C-style backslash character codes are also supported, including
+control characters and octal or hex ASCII codes.
+A backslash at the end of a line will ignore the subsequent newline and
+continue the string at the start of the next line.
+.Ss Variables
+A string may use shell-style variable substitution.
+A variable name preceded by a dollar sign, and possibly enclosed in braces,
+will be replaced with the value of variable.
+Variable substitution occurs in unquoted tokens or in double-quoted strings,
+but not in single-quote strings.
+.Pp
+A variable is defined in the way that the variable name is preceded with a
+dollar sign:
+.Bd -literal -offset indent
+$pathname = "/var/spool/vm/images";
+.Ed
+.Pp
+Variables belongs to either global or vm scope. The global scope variables
+are defined in the global section and refered in all other sections. The vm
+scope variable is defined in vm sections and available for the vm
+configurations. Variables in template section belongs to vm scope that applies
+the template. Vm scope variables before applying templates is available in the
+template. Variables defined in a template can be refered after applying the
+template. The following pre-defined variables are available.
+.Bl -tag -width LOCALBASE -offset indent
+.It Cm LOCALBASE
+The same value of LOCALBASE in compile time. (global scope)
+.It Cm ID
+Unique number for each individual VMs that starts from 0. (vm scope)
+.It Cm NAME
+Virtual machine name. (vm scope)
+.El
+.Ss Arithmetic Expansion
+Like
+.Xr sh 1 ,
+Arithmetic expantion provides a mechanism for evaluating an arithmetic
+expression:
+.Pp
+.D1 Li $(( Ns Ar expression Ns Li ))
+.Pp
+The allowed expressions are a subset of
+.Xr sh 1 ,
+summarized blow.
+.Bl -tag -width "Variables" -offset indent
+.It Values
+All values are type of
+.Ft longmax_t .
+.It Constans
+Decimal, octal (starting with
+.Li 0 )
+and hexadecimal (starting with
+.Li 0x )
+integer constants.
+.It Variables
+Both global and vm scope variables can be read and contain integer constants.
+.It Binary operators
+.Li "* / % + -"
+.El
+.Ss Macros
+2 macros are available.
+.Bl -tag -width .include
+.It Cm .apply Ar template_name Op ,template_name2 ;
+Apply the template(s). This macro can be written in vm and template sections.
+.It Cm .include Ar include_pattern ;
+Include another configuration file(s). This macro must be written outside of
+the sections. This is only one exception not to be written in the sections.
+The
+.Ar include_pattern
+can contain special charactors '*', '?', or '[', ']' that matches as same as
+shell wildcard.
+The
+.Ar include_pattern
+can contain global scope variable that is defined earlier
+than this macro.
+.Sh EXAMPLES
+
+.Bd -literal -offset ident
+global {
+	cmd_sock_mode = 0660;
+	$imgpath = /dev/zpol/zpool/images;
+	$isopath = /zpool/iso;
+}
+
+template default_disk {
+	disk = ${imgpath}/${NAME};
+}
+
+template graphics {
+	graphics = yes;
+	graphics_port = $((5900 + ${ID}));
+	xhci_mouse = yes;
+}
+
+template serial {
+	comport = auto;
+}
+
+template internet {
+	network = bridge0;
+}
+
+template grub_inspect {
+	loader = grub;
+	loadcmd = auto;
+	installcmd = auto;
+}
+
+vm freebsd {
+	boot = yes;
+	ncpu = 2;
+	memory = 2G;
+	iso = ${isopath}/FreeBSD-13.2-RELEASE-amd64-disc1.iso;
+	loader = bhyveload;
+	.apply default_disk, serial, internet;
+}
+
+vm netbsd {
+	boot = yes;
+	ncpu = 2;
+	memory = 2G;
+	iso = ${isopath}/NetBSD-9.2-amd64.iso;
+	.apply default_disk, serial, internet, grub_inspect;
+}
+
+vm openbsd {
+	boot = yes;
+	ncpu = 2;
+	memory = 2G;
+	iso = ${isopath}/OpenBSD-6.9-amd64.iso;
+	.apply default_disk, serial, internet, grub_inspect;
+}
+
+vm centos {
+	boot = yes;
+	ncpu = 2;
+	memory = 4G;
+	iso = ${isopath}/CentOS-8.2.2004-x86_64-dvd1.iso;
+	loader = uefi;
+	.apply default_disk, internet, graphics;
+}
+
+vm ubuntu {
+	boot = yes;
+	ncpu = 2;
+	memory = 4G;
+	iso = ${isopath}/ubuntu-20.04.2.0-desktop-amd64.iso;
+	loader = uefi;
+	.apply default_disk, internet, graphics;
+	graphics_res = 1280x720;
+}
+
+\&.include "bmd.d/*";
+.Ed
+.Sh SEE ALSO
+.Xr bmd 8 ,
+.Xr bmdctl 8

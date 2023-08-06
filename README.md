@@ -173,6 +173,7 @@ Following keys are available.
 | name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs | yes | (none) |
 | network | bridge name(s)<br>e.g. bridge0 e1000:bridge1 | no | (none) |
+| owner | owner of VM | no | same as the file owner in which the vm section is written |
 | passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |
 | reboot_on_change | set "yes" to force ACPI reboot if VM config file is changed when bmd reloads it| no | no |
 | stop_timeout | VM exit timeout in seconds<br>if expired, force to kill VM | no | 300 |
@@ -240,7 +241,7 @@ vm freebsd {
 	loader_timeout=15;
 	ncpu=2;
 	memory=2G;
-	iso=/zpool/iso/FreeBSD-13.0-RELEASE-amd64-disc1.iso;
+	iso=${isopath}/FreeBSD-13.0-RELEASE-amd64-disc1.iso;
 	loader=bhyveload;
 	.apply default_disk, serial, internet;
 }
@@ -253,7 +254,7 @@ vm netbsd {
 	boot=yes;
 	ncpu=2;
 	memory=2G;
-	iso=/zpool/iso/NetBSD-9.2-amd64.iso;
+	iso=${isopath}/NetBSD-9.2-amd64.iso;
 	.apply default_disk, serial, internet, grub_inspect;
 }
 ```
@@ -265,7 +266,7 @@ vm openbsd {
 	boot=yes;
 	ncpu=2;
 	memory=2G;
-	iso=/zpool/iso/OpenBSD-6.9-amd64.iso;
+	iso=${isopath}/OpenBSD-6.9-amd64.iso;
 	.apply default_disk, serial, internet, grub_inspect;
 }
 ```
