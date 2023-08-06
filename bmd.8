@@ -1,5 +1,5 @@
 .Dd Jul 27, 2023
-.Dt BMD 1
+.Dt BMD 8
 .Os
 .Sh NAME
 .Nm bmd
@@ -21,10 +21,10 @@ exit code 0 (rebooted),
 spawns the bhyve process again. The
 .Nm
 recieves control commands from
-.Xr bmdctl 1
+.Xr bmdctl 8
 to manage bhyve processes via unix
 domain socket. See
-.Xr bmdctl 1
+.Xr bmdctl 8
 for detail.
 .Sh OPTIONS
 .Bl -tag -width ident
@@ -55,11 +55,11 @@ to change the path.
 The
 .Nm
 waits for control commands from
-.Xr bmdctl 1
+.Xr bmdctl 8
 via unix domain socket. When
 .Nm
 receives a boot request from
-.Xr bmdctl 1 ,
+.Xr bmdctl 8 ,
 .Nm
 reloads the configuration file to check updates for boot target. If any
 updates are found, the
