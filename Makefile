@@ -1,6 +1,6 @@
 MK_DEBUG_FILES?= no
 LOCALBASE?= /usr/local
-SUBDIR=	plugins rc.d
+SUBDIR=	rc.d
 BINDIR=	$(LOCALBASE)/sbin
 MANDIR= $(LOCALBASE)/man/man
 DIRS=	VMCONFDIR UEFIVARDIR
