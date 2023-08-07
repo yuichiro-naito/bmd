@@ -12,7 +12,7 @@ rcvar="bmd_enable"
 command="%%LOCALBASE%%/sbin/${name}"
 pidfile="/var/run/bmd.pid"
 extra_commands="reload"
-required_modules="vmm"
+required_modules="nmdm vmm"
 
 load_rc_config $name
 run_rc_command "$1"
