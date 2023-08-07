@@ -29,6 +29,7 @@ usage(int argc, char *argv[])
 	    "  reset <name>         : reset VM\n"
 	    "  console <name>       : connect to com port\n"
 	    "  showcomport <name>   : show comport\n"
+	    "  showvgaport <name>   : show vgaport\n"
 	    "  showconfig [<name>]  : show VM config\n"
 	    "  inspect <name>       : inspect and print installcmd & loadcmd\n"
 	    "  run [-i] [-s] <name> : directly run with serial console\n"
@@ -246,6 +247,41 @@ end:
 }
 
 int
+do_show_vgaport(const char *name)
+{
+	int ret = 0;
+	nvlist_t *cmd, *res = NULL;
+	const char *vgaport = NULL;
+
+	cmd = nvlist_create(0);
+	nvlist_add_string(cmd, "command", "showvgaport");
+	nvlist_add_string(cmd, "name", name);
+
+	if ((res = send_recv(cmd)) == NULL) {
+		ret = 1;
+		goto end;
+	}
+
+	if (nvlist_get_bool(res, "error")) {
+		ret = 1;
+		printf("%s\n", nvlist_get_string(res, "reason"));
+		goto end;
+	}
+
+	if (nvlist_exists_string(res, "vgaport"))
+		vgaport = nvlist_get_string(res, "vgaport");
+
+	printf("%s\n", vgaport);
+
+end:
+	nvlist_destroy(cmd);
+	nvlist_destroy(res);
+	free_global_vars();
+	free_gl_conf();
+	return ret;
+}
+
+int
 do_showconfig(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen;
@@ -308,6 +344,9 @@ control(int argc, char *argv[])
 
 	if (strcmp(argv[1], "showconfig") == 0)
 		return do_showconfig(argv[2]);
+
+	if (strcmp(argv[1], "showvgaport") == 0)
+		return do_show_vgaport(argv[2]);
 
 	if (argc == 3) {
 		if (strcmp(argv[1], "inspect") == 0)

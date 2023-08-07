@@ -41,6 +41,10 @@ name
 name
 .Nm
 .Op Fl f config_file
+.Cm showvgaport
+name
+.Nm
+.Op Fl f config_file
 .Cm showconfig
 .Op name
 .Nm
@@ -101,6 +105,8 @@ Connect to the console of the virtual machine. Type '~.' escape sequence to
 quit the console.
 .It Cm showcomport Ar name
 Print the console device file. (nmdm)
+.It Cm showvgaport Ar name
+Print the vnc listen address and port number that are separated by space.
 .It Cm showconfig Op Ar name
 Parse the configuration file and show virtual machine configurations. This is
 for debugging the configuration parser.

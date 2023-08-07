@@ -518,6 +518,40 @@ ret:
 }
 
 static nvlist_t *
+showvgaport_command(int s, const nvlist_t *nv, uid_t user)
+{
+	const char *name, *reason;
+	struct vm_entry *vm_ent;
+	nvlist_t *res;
+	bool error = false;
+	char vgaport[128];
+
+	res = nvlist_create(0);
+
+	if ((name = nvlist_get_string(nv, "name")) == NULL ||
+	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
+	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
+		error = true;
+		reason = "VM not found";
+		goto ret;
+	}
+
+	if (VM_CONF(vm_ent)->fbuf->enable &&
+	    snprintf(vgaport, sizeof(vgaport), "%s %d",
+		     VM_CONF(vm_ent)->fbuf->ipaddr,
+		     VM_CONF(vm_ent)->fbuf->port) > 0)
+		nvlist_add_string(res, "vgaport", vgaport);
+	else
+		nvlist_add_string(res, "vgaport", "(disabled)");
+
+ret:
+	nvlist_add_bool(res, "error", error);
+	if (error)
+		nvlist_add_string(res, "reason", reason);
+	return res;
+}
+
+static nvlist_t *
 list_command(int s, const nvlist_t *nv, uid_t user)
 {
 	size_t i, count = 0;
@@ -659,6 +693,7 @@ struct command_entry command_list[] = {
 	{ "poweroff", &poweroff_command },
 	{ "reset", &reset_command },
 	{ "showcomport", &showcomport_command },
+	{ "showvgaport", &showvgaport_command },
 	{ "shutdown", &shutdown_command },
 };
 
