@@ -23,9 +23,8 @@ So, it is better that disk images are created to follow the policy.
 
 ## Requirements
 
-1. ndm kernel module
-2. grub2-bhyve package
-3. uefi-edk2-bhyve-csm package
+1. grub2-bhyve package
+2. uefi-edk2-bhyve-csm package
 
 ## Installation
 
