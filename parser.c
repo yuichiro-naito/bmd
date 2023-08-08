@@ -862,6 +862,12 @@ push_file(char *fn)
 	if (fn == NULL)
 		return 0;
 
+	TAILQ_FOREACH (file, &input_file_list, next)
+		if (strcmp(file->filename, fn) == 0) {
+			ERR("%s is already included\n", fn);
+			return -1;
+		}
+
 	if ((file = malloc(sizeof(*file))) == NULL)
 		return -1;
 
