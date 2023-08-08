@@ -858,37 +858,37 @@ push_file(char *fn)
 {
 	FILE *fp;
 	struct input_file *file;
+	char *rpath;
 
-	if (fn == NULL)
+	if (fn == NULL || (rpath = realpath(fn, NULL)) == NULL)
 		return 0;
 
 	TAILQ_FOREACH (file, &input_file_list, next)
-		if (strcmp(file->filename, fn) == 0) {
-			ERR("%s is already included\n", fn);
-			return -1;
+		if (strcmp(file->filename, rpath) == 0) {
+			ERR("%s is already included\n", rpath);
+			goto err;
 		}
 
 	if ((file = malloc(sizeof(*file))) == NULL)
-		return -1;
+		goto err;
 
-	if ((file->filename = strdup(fn)) == NULL) {
-		free(file);
-		return -1;
+	if ((fp = fopen(rpath, "r")) == NULL) {
+		ERR("failed to open %s\n", rpath);
+		goto err2;
 	}
-
-	if ((fp = fopen(fn, "r")) == NULL) {
-		ERR("failed to open %s\n", fn);
-		free(file->filename);
-		free(file);
-		return -1;
-	}
+	file->filename = rpath;
 	file->line = 0;
 	file->fp = fp;
 	TAILQ_INSERT_TAIL(&input_file_list, file, next);
 	if (cur_file == NULL)
 		cur_file = TAILQ_FIRST(&input_file_list);
-	INFO("load config %s\n", fn);
+	INFO("load config %s\n", rpath);
 	return 0;
+err2:
+	free(file);
+err:
+	free(rpath);
+	return -1;
 }
 
 static struct input_file *
@@ -960,7 +960,7 @@ glob_path(struct cftokens *ts)
 		return;
 
 	if (path[0] != '/' &&
-	    (conf = strdup(gl_conf->config_file)) != NULL) {
+	    (conf = strdup(TAILQ_FIRST(ts)->filename)) != NULL) {
 		dir = dirname(conf);
 		if (asprintf(&npath, "%s/%s", dir, path) >= 0) {
 			free(path);
