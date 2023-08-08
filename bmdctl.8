@@ -62,7 +62,7 @@ The
 .Nm
 command is a control utility for virtual machines which are managed by
 .Xr bmd 8 .
-Root privileged user can control all virtual machines. Non-priviledged user
+Root privileged user can control all virtual machines. Non-privileged user
 can control its own virtual machines.
 
 .Bl -tag -width ".Cm showcomport Fl name"
@@ -92,10 +92,10 @@ Boot from ISO media to install it. If
 is specified, connect to the console after booting.
 Note that the installed system never reboots just quits even if user commands
 in anyway, reboot the virtual machine manually after shutting down it.
-.It Cm shudown Ar name
+.It Cm shutdown Ar name
 Send SIGTERM to the bhyve process to trigger ACPI shutdown.
 .It Cm stop Ar name
-Alias for shtudown.
+Alias for shutdown.
 .It Cm poweroff Ar name
 Force to quit the bhyve process.
 .It Cm reset Ar name
@@ -124,7 +124,7 @@ and
 Boot the virtual machine directly. The virtual machine runs out of control
 from
 .Xr bmd 8 .
-Root priviledge is required. If
+Root privilege is required. If
 .Fl i
 is specified, boot from ISO image. If
 .Fl s

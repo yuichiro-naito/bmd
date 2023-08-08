@@ -15,19 +15,19 @@
 The
 .Nm
 utility spawns bhyve processes according to the configuration file,
-and waits for them to terminate. If a bhyve proccess terminates with
+and waits for them to terminate. If a bhyve process terminates with
 exit code 0 (rebooted),
 .Nm
 spawns the bhyve process again. The
 .Nm
-recieves control commands from
+receives control commands from
 .Xr bmdctl 8
 to manage bhyve processes via unix
 domain socket. See
 .Xr bmdctl 8
 for detail.
 .Sh OPTIONS
-.Bl -tag -width ident
+.Bl -tag -width indent
 .It Fl F
 Run in foreground.
 .It Fl f Ar config_file
@@ -76,6 +76,11 @@ then quit the daemon.
 .It SIGHUP
 Reload the configuration file.
 .El
+.Sh PLUGINS
+.Nm
+loads plugins on start up. Plugins extend the functionality of
+.Nm .
+And also add configuration parameters for extended functionality if necessary.
 .Sh FILES
 .Bl -tag -width /usr/local/var/cache/bmd -compact
 .It Pa /var/run/bmd.pid

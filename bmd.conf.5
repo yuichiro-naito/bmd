@@ -187,11 +187,11 @@ $pathname = "/var/spool/vm/images";
 .Ed
 .Pp
 Variables belongs to either global or vm scope. The global scope variables
-are defined in the global section and refered in all other sections. The vm
+are defined in the global section and referred in all other sections. The vm
 scope variable is defined in vm sections and available for the vm
 configurations. Variables in template section belongs to vm scope that applies
 the template. Vm scope variables before applying templates is available in the
-template. Variables defined in a template can be refered after applying the
+template. Variables defined in a template can be referred after applying the
 template. The following pre-defined variables are available.
 .Bl -tag -width LOCALBASE -offset indent
 .It Cm LOCALBASE
@@ -204,7 +204,7 @@ Virtual machine name. (vm scope)
 .Ss Arithmetic Expansion
 Like
 .Xr sh 1 ,
-Arithmetic expantion provides a mechanism for evaluating an arithmetic
+Arithmetic expansion provides a mechanism for evaluating an arithmetic
 expression:
 .Pp
 .D1 Li $(( Ns Ar expression Ns Li ))
@@ -216,7 +216,7 @@ summarized blow.
 .It Values
 All values are type of
 .Ft longmax_t .
-.It Constans
+.It Constants
 Decimal, octal (starting with
 .Li 0 )
 and hexadecimal (starting with
@@ -237,7 +237,7 @@ Include another configuration file(s). This macro must be written outside of
 the sections. This is only one exception not to be written in the sections.
 The
 .Ar include_pattern
-can contain special charactors '*', '?', or '[', ']' that matches as same as
+can contain special characters '*', '?', or '[', ']' that matches as same as
 shell wildcard.
 The
 .Ar include_pattern
@@ -245,7 +245,7 @@ can contain global scope variable that is defined earlier
 than this macro.
 .Sh EXAMPLES
 
-.Bd -literal -offset ident
+.Bd -literal -offset indent
 global {
 	cmd_sock_mode = 0660;
 	$imgpath = /dev/zpol/zpool/images;
