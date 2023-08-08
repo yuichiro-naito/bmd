@@ -87,6 +87,7 @@ struct cfsection {
 	int			applied;
 	int			duplicate;
 	uid_t                   owner;
+	char                    *filename;
 };
 
 STAILQ_HEAD(cffiles, cffile);

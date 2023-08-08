@@ -863,6 +863,11 @@ push_file(char *fn)
 	if (fn == NULL || (rpath = realpath(fn, NULL)) == NULL)
 		return 0;
 
+	if (strncmp(rpath, "/dev", 4) == 0) {
+		ERR("%s: include denied\n", rpath);
+		goto err;
+	}
+
 	TAILQ_FOREACH (file, &input_file_list, next)
 		if (strcmp(file->filename, rpath) == 0) {
 			ERR("%s is already included\n", rpath);
@@ -949,18 +954,27 @@ glob_path(struct cftokens *ts)
 	struct cftoken *tk, *tn;
 	char *path, *conf, *dir, *npath;
 	struct variables vars;
+	struct stat st;
 	glob_t g;
 	int i;
 
 	vars.global = global_vars;
 	vars.local = NULL;
 
-	path = token_to_string(&vars, ts);
-	if (path == NULL)
-		return;
+	if ((tk = TAILQ_FIRST(ts)) == NULL)
+		goto ret;
+
+	if (stat(tk->filename, &st) < 0 || st.st_uid != 0) {
+		ERR("%s: .include macro is not allowed.\n",
+		    tk->filename);
+		goto ret;
+	}
+
+	if ((path = token_to_string(&vars, ts)) == NULL)
+		goto ret;
 
 	if (path[0] != '/' &&
-	    (conf = strdup(TAILQ_FIRST(ts)->filename)) != NULL) {
+	    (conf = strdup(tk->filename)) != NULL) {
 		dir = dirname(conf);
 		if (asprintf(&npath, "%s/%s", dir, path) >= 0) {
 			free(path);
@@ -971,15 +985,16 @@ glob_path(struct cftokens *ts)
 
 	if (glob(path, 0, NULL, &g) < 0) {
 		ERR("failed to glob %s\n", path);
-		free(path);
-		return;
+		goto ret2;
 	}
 
 	for (i = 0; i < g.gl_pathc; i++)
 		push_file(g.gl_pathv[i]);
 
 	globfree(&g);
+ret2:
 	free(path);
+ret:
 	TAILQ_FOREACH_SAFE (tk, ts, next, tn)
 		free_cftoken(tk);
 	free(ts);
@@ -1074,6 +1089,8 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	TAILQ_FOREACH(sc, &cfglobals, next)
 		if (sc->owner == 0)
 			gl_conf_set_params(global_conf, &vars, sc);
+		else
+			ERR("%s: global section is not allowed.\n", sc->filename);
 
 	if (list == NULL)
 		goto set_global;

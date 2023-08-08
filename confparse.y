@@ -495,6 +495,7 @@ add_section(enum SECTION sec, char *name)
 	memset(v, 0, sizeof(*v));
 	v->name = name;
 	v->owner = peek_fileowner();
+	v->filename = peek_filename();
 	TAILQ_INIT(&v->params);
 	TAILQ_INSERT_TAIL(sections[sec], v, next);
 	return v;
