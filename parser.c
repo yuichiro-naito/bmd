@@ -1066,7 +1066,8 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	}
 
 	TAILQ_FOREACH(sc, &cfglobals, next)
-		gl_conf_set_params(global_conf, &vars, sc);
+		if (sc->owner == 0)
+			gl_conf_set_params(global_conf, &vars, sc);
 
 	if (list == NULL)
 		goto set_global;

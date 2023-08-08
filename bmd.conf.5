@@ -11,7 +11,9 @@ A
 configuration file consists of 3 sections, global, vm, template.
 The global section defines
 .Xr bmd 8
-configurations and global variables. See VARIABLES for detail.
+configurations and global variables. See Global Parameters for detail.
+The global section must be written in a file which root privileged user owns.
+If the other user owns the file, the global section is parsed but ignored.
 Each Vm section defines VM configurations and vm scope variables.
 The templates are part of VM configurations common to multiple VMs.
 It is applied from a vm section or a template section. The same template

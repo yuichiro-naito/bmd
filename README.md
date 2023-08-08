@@ -84,6 +84,8 @@ key-value parameters and variables settings.
 1. Global section
 
    Global section contains bmd options and global variables.
+   The global section must be written in a file which root privileged user owns.
+   If the other user owns the file, the global section is parsed but ignored.
 
 2. Template section
 
