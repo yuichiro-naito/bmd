@@ -31,7 +31,6 @@ So, it is better that disk images are created to follow the policy.
 ```
 $ make
 $ sudo make install
-$ sudo make installconfig
 ```
 
 If you want to install different path from `/usr/local`,
