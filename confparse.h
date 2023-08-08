@@ -110,3 +110,13 @@ void glob_path(struct cftokens *ts);
 int apply_global_vars(struct cfsection *sc);
 char *peek_filename();
 uid_t peek_fileowner();
+
+void free_cfexpr(struct cfexpr *ex);
+void free_cftoken(struct cftoken *tk);
+void free_cftokens(struct cftokens *ts);
+void free_cfvalue(struct cfvalue *vl);
+void free_cfvalues(struct cfvalues *vs);
+void free_cfparam(struct cfparam *pr);
+void free_cfparams(struct cfparams *ps);
+void free_cfsection(struct cfsection *sec);
+void free_cfsections(struct cfsections *ss);

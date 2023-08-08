@@ -762,7 +762,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 	return 0;
 }
 
-static void
+void
 free_cfexpr(struct cfexpr *ex)
 {
 	if (ex == NULL)
@@ -773,7 +773,7 @@ free_cfexpr(struct cfexpr *ex)
 	free(ex);
 }
 
-static void
+void
 free_cftoken(struct cftoken *tk)
 {
 	if (tk == NULL)
@@ -783,34 +783,74 @@ free_cftoken(struct cftoken *tk)
 	free(tk);
 }
 
-static void
-free_cfvalue(struct cfvalue *vl)
+void
+free_cftokens(struct cftokens *ts)
 {
 	struct cftoken *tk, *tn;
-	TAILQ_FOREACH_SAFE(tk, &vl->tokens, next, tn)
+	if (ts == NULL)
+		return;
+	TAILQ_FOREACH_SAFE(tk, ts, next, tn)
 		free_cftoken(tk);
+}
+
+void
+free_cfvalue(struct cfvalue *vl)
+{
+	if (vl == NULL)
+		return;
+	free_cftokens(&vl->tokens);
 	free(vl);
 }
 
-static void
-free_cfparam(struct cfparam *pr)
+void
+free_cfvalues(struct cfvalues *vs)
 {
 	struct cfvalue	*vl, *vn;
-	TAILQ_FOREACH_SAFE(vl, &pr->vals, next, vn)
+	if (vs == NULL)
+		return;
+	TAILQ_FOREACH_SAFE(vl, vs, next, vn)
 		free_cfvalue(vl);
+}
+
+void
+free_cfparam(struct cfparam *pr)
+{
+	if (pr == NULL)
+		return;
+	free_cfvalues(&pr->vals);
 	free_cftoken(pr->key);
 	free(pr);
 }
 
-static void
-free_cfsection(struct cfsection *sec)
+void
+free_cfparams(struct cfparams *ps)
 {
 	struct cfparam *pr, *pn;
-	TAILQ_FOREACH_SAFE(pr, &sec->params, next, pn)
+	if (ps == NULL)
+		return;
+	TAILQ_FOREACH_SAFE(pr, ps, next, pn)
 		free_cfparam(pr);
+}
 
+void
+free_cfsection(struct cfsection *sec)
+{
+	if (sec == NULL)
+		return;
+	free_cfparams(&sec->params);
 	free(sec->name);
 	free(sec);
+}
+
+void
+free_cfsections(struct cfsections *ss)
+{
+	struct cfsection *sc, *sn;
+
+	if (ss == NULL)
+		return;
+	TAILQ_FOREACH_SAFE(sc, ss, next, sn)
+		free_cfsection(sc);
 }
 
 static int
@@ -1002,19 +1042,25 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)
 		ERR("%s\n", "failed to set \"LOCALBASE\" variable!");
 
-	if (push_file(gl_conf->config_file) < 0)
+	if (push_file(gl_conf->config_file) < 0) {
+		free_vartree(gv);
+		free(global_conf);
 		return -1;
+	}
 
 	inf = peek_file();
 	yyin = inf->fp;
 
 	if (yyparse() || yynerrs) {
 		fclose(yyin);
+		free_vartree(gv);
+		free(global_conf);
 		rc = -1;
 		goto cleanup;
 	}
 
 	if (check_duplicate() != 0) {
+		free_vartree(gv);
 		rc = -1;
 		goto cleanup;
 	}

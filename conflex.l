@@ -215,6 +215,8 @@ text2lval(size_t triml, size_t trimr, int tovar)
 	const char *s, *se;
 
 	yylval.cs = d = emalloc(yyleng - trimr - triml + 1);
+	if (d == NULL)
+		return 0;
 	se = yytext + (yyleng - trimr);
 	for (s = yytext + triml; s < se; s++, d++) {
 		if (*s != '\\') {
