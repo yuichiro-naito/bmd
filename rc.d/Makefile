@@ -1,12 +1,12 @@
 LOCALBASE?=	/usr/local
-CONFSDIR=	$(LOCALBASE)/etc/rc.d
-CONFS=		bmd
-CONFSMODE_bmd= 0755
+SCRIPTS=	bmd
+SCRIPTSNAME_bmd=bmd
+SCRIPTSDIR=	$(LOCALBASE)/etc/rc.d
 
 bmd:	bmd.in
 	sed 's|%%LOCALBASE%%|$(LOCALBASE)|' < bmd.in > bmd
 
 clean:
-	rm -f $(CONFS)
+	rm -f $(SCRIPTS)
 
 .include <bsd.prog.mk>
