@@ -1273,19 +1273,18 @@ stop_virtual_machines()
 	while (count > 0) {
 		if (kevent_get(&ev, 1, NULL) < 0)
 			return -1;
-		if (ev.udata != NULL) {
-			event = ev.udata;
-			if (event->type == EVENT &&
-			    event->kev.filter == EVFILT_PROC)
-				count--;
-			do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
-			if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
-				ERR("%s\n", "callback failed");
-			if (do_remove) {
-				LIST_REMOVE(event, next);
-				free(event);
-			}
+		if (ev.udata == NULL)
 			continue;
+		event = ev.udata;
+		if (event->type == EVENT &&
+		    event->kev.filter == EVFILT_PROC)
+			count--;
+		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
+		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
+			ERR("%s\n", "callback failed");
+		if (do_remove) {
+			LIST_REMOVE(event, next);
+			free(event);
 		}
 	}
 #if __FreeBSD_version < 1400059
@@ -1398,7 +1397,11 @@ main(int argc, char *argv[])
 	if (load_config_file(&vm_conf_list, true) < 0)
 		return 1;
 
+#if __FreeBSD_version >= 1400088 || (__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
+#else
 	if ((eventq = kqueue()) < 0) {
+#endif
 		ERR("%s\n", "can not open kqueue");
 		return 1;
 	}
