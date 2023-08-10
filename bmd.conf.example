@@ -1,0 +1,75 @@
+global {
+	cmd_sock_mode = 0660;
+	$imgpath = /dev/zpol/zpool/images;
+	$isopath = /zpool/iso;
+}
+
+template default_disk {
+	disk = ${imgpath}/${NAME};
+}
+
+template graphics {
+	graphics = yes;
+	graphics_port = $((5900 + ${ID}));
+	xhci_mouse = yes;
+}
+
+template serial {
+	comport = auto;
+}
+
+template internet {
+	network = bridge0;
+}
+
+template grub_inspect {
+	loader = grub;
+	loadcmd = auto;
+	installcmd = auto;
+}
+
+vm freebsd {
+	boot = yes;
+	ncpu = 2;
+	memory = 2G;
+	iso = ${isopath}/FreeBSD-13.2-RELEASE-amd64-disc1.iso;
+	loader = bhyveload;
+	.apply default_disk, serial, internet;
+}
+
+vm netbsd {
+	boot = yes;
+	ncpu = 2;
+	memory = 2G;
+	iso = ${isopath}/NetBSD-9.2-amd64.iso;
+	.apply default_disk, serial, internet, grub_inspect;
+}
+
+vm openbsd {
+	boot = yes;
+	ncpu = 2;
+	memory = 2G;
+	iso = ${isopath}/OpenBSD-6.9-amd64.iso;
+	.apply default_disk, serial, internet, grub_inspect;
+}
+
+vm centos {
+	boot = yes;
+	ncpu = 2;
+	memory = 4G;
+	iso = ${isopath}/CentOS-8.2.2004-x86_64-dvd1.iso;
+	loader = uefi;
+	.apply default_disk, internet, graphics;
+}
+
+vm ubuntu {
+	boot = yes;
+	ncpu = 2;
+	memory = 4G;
+	iso = ${isopath}/ubuntu-20.04.2.0-desktop-amd64.iso;
+	loader = uefi;
+	.apply default_disk, internet, graphics;
+	graphics_res = 1280x720;
+}
+
+.include "bmd.d/*";
