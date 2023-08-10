@@ -22,6 +22,7 @@
 #include "log.h"
 #include "server.h"
 #include "vm.h"
+#include "bmd_plugin.h"
 
 /*
   List of VM configurations.
@@ -84,7 +85,7 @@ kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 }
 
 static struct event *
-create_event0(enum STRUCT_TYPE type, int (*cb)(int ident, void *data), void *data)
+create_event0(enum STRUCT_TYPE type, event_call_back cb, void *data)
 {
 	struct event *ev;
 
@@ -102,7 +103,7 @@ create_event0(enum STRUCT_TYPE type, int (*cb)(int ident, void *data), void *dat
 #define create_plugin_event(c, d) create_event0(PLUGIN, (c), (d))
 
 int
-plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data)
+plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 {
 	struct event *ev;
 
@@ -121,7 +122,7 @@ plugin_wait_for_process(pid_t pid, int (*cb)(int ident, void *data), void *data)
 }
 
 int
-plugin_set_timer(int second, int (*cb)(int ident, void *data), void *data)
+plugin_set_timer(int second, plugin_call_back cb, void *data)
 {
 	struct event *ev;
 
@@ -131,7 +132,7 @@ plugin_set_timer(int second, int (*cb)(int ident, void *data), void *data)
 	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
 	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
 	if (kevent_set(&ev->kev, 1) < 0) {
-		ERR("failed to wait plugin process (%s)\n", strerror(errno));
+		ERR("failed to plugin set timer (%s)\n", strerror(errno));
 		free(ev);
 		return -1;
 	}
@@ -885,7 +886,7 @@ get_nmdm_number(const char *p)
 static int
 assign_comport(struct vm_entry *vm_ent)
 {
-	int i, n, v, max = -1;
+	int i, n, max = -1;
 	struct dirent **names;
 	char *new_com;
 	struct vm_entry *e;
@@ -900,20 +901,13 @@ assign_comport(struct vm_entry *vm_ent)
 		return 0;
 
 	/* If no need to assign comport, copy from `struct vm_conf.comport`. */
-	if (strcasecmp(conf->comport, "auto")) {
-		if ((VM_ASCOMPORT(vm_ent) = strdup(conf->comport)) == NULL)
-			return -1;
-		return 0;
-	}
+	if (strcasecmp(conf->comport, "auto"))
+		return (VM_ASCOMPORT(vm_ent) = strdup(conf->comport)) ? 0 : -1;
 
 	/* Get maximum nmdm number of all VMs. */
 	SLIST_FOREACH (e, &vm_list, next) {
-		v = get_nmdm_number(VM_CONF(e)->comport);
-		if (v > max)
-			max = v;
-		v = get_nmdm_number(VM_ASCOMPORT(e));
-		if (v > max)
-			max = v;
+		max = MAX(get_nmdm_number(VM_CONF(e)->comport), max);
+		max = MAX(get_nmdm_number(VM_ASCOMPORT(e)), max);
 	}
 
 	/* Get maximum nmdm number in "/dev" directory. */
@@ -921,9 +915,7 @@ assign_comport(struct vm_entry *vm_ent)
 		return -1;
 
 	for (i = 0; i < n; i++) {
-		v = get_nmdm_number(names[i]->d_name);
-		if (v > max)
-			max = v;
+		max = MAX(get_nmdm_number(names[i]->d_name), max);
 		free(names[i]);
 	}
 	free(names);
@@ -1018,7 +1010,6 @@ start_virtual_machine(struct vm_entry *vm_ent)
 static int
 start_virtual_machines()
 {
-	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
 	struct kevent sigev[3];
@@ -1031,16 +1022,14 @@ start_virtual_machines()
 		return -1;
 
 	LIST_FOREACH (conf_ent, &vm_conf_list, next) {
-		vm_ent = create_vm_entry(conf_ent);
-		if (vm_ent == NULL)
+		if ((vm_ent = create_vm_entry(conf_ent)) == NULL)
 			return -1;
-		conf = &conf_ent->conf;
-		if (conf->boot == NO)
+		if (VM_CONF(vm_ent)->boot == NO)
 			continue;
-		if (conf->boot_delay > 0) {
-			if (set_timer(vm_ent, conf->boot_delay) < 0)
+		if (VM_CONF(vm_ent)->boot_delay > 0) {
+			if (set_timer(vm_ent, VM_CONF(vm_ent)->boot_delay) < 0)
 				ERR("failed to set boot delay timer for vm %s\n",
-				    conf->name);
+				    VM_CONF(vm_ent)->name);
 			continue;
 		}
 		start_virtual_machine(vm_ent);
@@ -1088,8 +1077,7 @@ reload_virtual_machines()
 		conf = &conf_ent->conf;
 		vm_ent = lookup_vm_by_name(conf->name);
 		if (vm_ent == NULL) {
-			vm_ent = create_vm_entry(conf_ent);
-			if (vm_ent == NULL)
+			if ((vm_ent = create_vm_entry(conf_ent)) == NULL)
 				return -1;
 			VM_NEWCONF(vm_ent) = conf;
 			if (conf->boot == NO)

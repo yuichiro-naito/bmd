@@ -209,8 +209,7 @@ retry:
 			sb->buf_size = ntohl(*((int32_t *)sb->size));
 			if (sb->buf_size > 1024 * 1024)
 				return -1;
-			sb->buf = malloc(sb->buf_size);
-			if (sb->buf == NULL)
+			if ((sb->buf = malloc(sb->buf_size)) == NULL)
 				return -1;
 		}
 	} else {
@@ -575,8 +574,7 @@ list_command(int s, const nvlist_t *nv, uid_t user)
 	if (count == 0)
 		goto ret;
 
-	list = malloc(count * sizeof(nvlist_t *));
-	if (list == NULL) {
+	if ((list = malloc(count * sizeof(nvlist_t *))) == NULL) {
 		error = true;
 		reason = "can not allocate memory";
 		goto ret;

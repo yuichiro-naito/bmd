@@ -83,7 +83,6 @@ enum STRUCT_TYPE { EVENT, PLUGIN };
 /*
   Entry of vm list.
   The individual entries indicate the virtual machine process.
-  Make sure that 'type' is the first member of this structure.
  */
 struct vm_entry {
 	struct vm vm;
@@ -97,17 +96,17 @@ struct vm_entry {
    Event Structure.
  */
 LIST_HEAD(events, event);
+typedef int (*event_call_back)(int ident, void *data);
 struct event {
 	enum STRUCT_TYPE type;
 	struct kevent kev;
 	void *data;
-	int (*cb)(int ident, void *data);
+	event_call_back cb;
 	LIST_ENTRY(event) next;
 };
 
 /*
   Socker buffer.
-  Make sure that 'type' is the first member of this structure.
  */
 struct sock_buf {
 	LIST_ENTRY(sock_buf) next;

@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "conf.h"
+#include "bmd_plugin.h"
 
 struct id_entry {
 	SLIST_ENTRY(id_entry) next;
