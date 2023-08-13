@@ -26,7 +26,7 @@ sighandler_exit(int sig)
 }
 
 static ssize_t
-put_char(int fd, int c)
+put_char(int fd, char c)
 {
 	ssize_t n;
 	while ((n = write(fd, &c, 1)) < 0)
