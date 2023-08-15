@@ -48,9 +48,14 @@ redirect_to_com(struct vm *vm)
 	if ((com = vm->assigned_comport) == NULL)
 		com = "/dev/null";
 
-	/* Do not wait for peer connects to this nmdm. */
+	/*
+	  Set O_NONBLOCK not to wait for peer connects to this nmdm.
+	  The kernel sometimes fails to open with ENOENT, retry open it.
+	  Basically the nmdm device is automatically created, I'm not sure why
+	  ENOENT is returned.
+	 */
 	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
-		if (errno != EINTR)
+		if (errno != EINTR && errno != ENOENT)
 			break;
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
