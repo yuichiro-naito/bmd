@@ -40,13 +40,15 @@
 	} while (0)
 
 static int
-redirect_to_com(struct vm *vm)
+redirect_to_com(struct vm *vm, bool redirect_stdin)
 {
-	int fd;
+	int fd, flag;
 	char *com;
 
 	if ((com = vm->assigned_comport) == NULL)
 		com = "/dev/null";
+
+	flag = (redirect_stdin) ? O_RDWR : O_WRONLY;
 
 	/*
 	  Set O_NONBLOCK not to wait for peer connects to this nmdm.
@@ -54,13 +56,15 @@ redirect_to_com(struct vm *vm)
 	  Basically the nmdm device is automatically created, I'm not sure why
 	  ENOENT is returned.
 	 */
-	while ((fd = open(com, O_WRONLY | O_NONBLOCK)) < 0)
+	while ((fd = open(com, flag | O_NONBLOCK)) < 0)
 		if (errno != EINTR && errno != ENOENT)
 			break;
 	if (fd < 0) {
 		ERR("can't open %s (%s)\n", com, strerror(errno));
 		return -1;
 	}
+	if (redirect_stdin)
+		dup2(fd, 0);
 	dup2(fd, 1);
 	dup2(fd, 2);
 
@@ -262,7 +266,7 @@ grub_load(struct vm *vm)
 
 	cmd = create_load_command(conf, &len);
 
-	if (pipe(ifd) < 0) {
+	if (cmd != NULL && pipe(ifd) < 0) {
 		ERR("can not create pipe (%s)\n", strerror(errno));
 		free(cmd);
 		return -1;
@@ -272,18 +276,24 @@ grub_load(struct vm *vm)
 	if (pid > 0) {
 		vm->pid = pid;
 		vm->state = LOAD;
-		close(ifd[1]);
-		vm->infd = ifd[0];
+		if (cmd != NULL) {
+			close(ifd[1]);
+			vm->infd = ifd[0];
+		} else
+			vm->infd = -1;
 		vm->outfd = -1;
 		vm->errfd = -1;
-		if (cmd != NULL)
+		if (cmd != NULL) {
 			write(ifd[0], cmd, len + 1);
-		free(cmd);
+			free(cmd);
+		}
 	} else if (pid == 0) {
-		close(ifd[0]);
-		dup2(ifd[1], 0);
+		if (cmd != NULL) {
+			close(ifd[0]);
+			dup2(ifd[1], 0);
+		}
 		if (doredirect)
-			redirect_to_com(vm);
+			redirect_to_com(vm, (cmd == NULL));
 
 		setenv("TERM", "vt100", 1);
 		i = 0;
