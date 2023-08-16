@@ -567,7 +567,7 @@ on_accept_cmd_sock(int ident, void *data)
 	}
 
 	if (wait_for_sock_buf(sb) < 0) {
-		close(n);
+		destroy_sock_buf(sb);
 		return -1;
 	}
 
