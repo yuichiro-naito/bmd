@@ -91,17 +91,6 @@ close_timeout_sock_buf(int timeout)
 			destroy_sock_buf(p);
 }
 
-struct sock_buf *
-lookup_sock_buf(int fd)
-{
-	struct sock_buf *p;
-
-	LIST_FOREACH (p, &sock_list, next)
-		if (p->fd == fd)
-			return p;
-	return NULL;
-}
-
 void
 clear_sock_buf(struct sock_buf *p)
 {
