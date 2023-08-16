@@ -4,6 +4,7 @@
 #include <sys/queue.h>
 #include <sys/nv.h>
 #include <sys/event.h>
+#include <sys/ucred.h>
 
 #include "conf.h"
 #include "bmd_plugin.h"
@@ -121,6 +122,7 @@ struct sock_buf {
 	size_t res_bytes;
 	char *res_buf;
 	time_t event_time;
+	struct xucred peer;
 };
 
 LIST_HEAD(vm_conf_head, vm_conf_entry);

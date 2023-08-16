@@ -30,11 +30,17 @@ struct sock_buf *
 create_sock_buf(int fd)
 {
 	struct sock_buf *r;
+	socklen_t sz;
 
 	if ((r = calloc(1, sizeof(*r))) == NULL)
 		return NULL;
 	r->fd = fd;
 	time(&r->event_time);
+
+	sz = sizeof(r->peer);
+	if  (getsockopt(fd, SOL_LOCAL, LOCAL_PEERCRED, &r->peer, &sz) < 0)
+		r->peer.cr_uid = UID_NOBODY;
+
 	LIST_INSERT_HEAD(&sock_list, r, next);
 	return r;
 }
@@ -723,13 +729,6 @@ recv_command(struct sock_buf *sb)
 	char *reason = "unknown command";
 	nvlist_t *nv, *res = NULL;
 	cfunc func;
-	struct xucred peer;
-	socklen_t sz;
-	uid_t user;
-
-	sz = sizeof(peer);
-	user = (getsockopt(sb->fd, SOL_LOCAL, LOCAL_PEERCRED, &peer, &sz) < 0) ?
-		UID_NOBODY : peer.cr_uid;
 
 	if ((nv = nvlist_unpack(sb->buf, sb->buf_size, 0)) == NULL)
 		return -1;
@@ -740,7 +739,7 @@ recv_command(struct sock_buf *sb)
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	res = (*func)(sb->fd, nv, user);
+	res = (*func)(sb->fd, nv, sb->peer.cr_uid);
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {
