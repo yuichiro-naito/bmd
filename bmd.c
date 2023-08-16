@@ -85,58 +85,74 @@ kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 }
 
 static struct event *
-create_event0(enum STRUCT_TYPE type, event_call_back cb, void *data)
+create_event(event_call_back cb, void *data)
 {
 	struct event *ev;
 
 	if ((ev = malloc(sizeof(*ev))) == NULL)
 		return NULL;
 
-	ev->type = type;
+	ev->type = EVENT;
 	ev->cb = cb;
 	ev->data = data;
 
 	return ev;
 }
 
-#define create_event(c, d) create_event0(EVENT, (c), (d))
-#define create_plugin_event(c, d) create_event0(PLUGIN, (c), (d))
+static int
+register_event0(enum STRUCT_TYPE type, struct kevent *kev, event_call_back cb,
+	       void *data)
+{
+	struct event *ev;
+
+	if ((ev = malloc(sizeof(*ev))) == NULL)
+		return -1;
+
+	ev->type = type;
+	ev->kev = *kev;
+	ev->kev.udata = ev;
+	ev->cb = cb;
+	ev->data = data;
+
+	if (kevent_set(&ev->kev, 1) < 0) {
+		free(ev);
+		return -1;
+	}
+
+	LIST_INSERT_HEAD(&events, ev, next);
+	return 0;
+}
+
+#define register_event(b, c, d) register_event0(EVENT, (b), (c), (d))
+#define register_plugin_event(b, c, d) register_event0(PLUGIN, (b), (c), (d))
 
 int
 plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 {
-	struct event *ev;
+	struct kevent kev;
 
-	if ((ev = create_plugin_event(cb, data)) == NULL)
-		return -1;
+	EV_SET(&kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
+	       NOTE_EXIT, 0, NULL);
 
-	EV_SET(&ev->kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
-	       NOTE_EXIT, 0, ev);
-	if (kevent_set(&ev->kev, 1) < 0) {
+	if (register_plugin_event(&kev, cb, data) < 0) {
 		ERR("failed to wait plugin process (%s)\n", strerror(errno));
-		free(ev);
 		return -1;
 	}
-	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 }
 
 int
 plugin_set_timer(int second, plugin_call_back cb, void *data)
 {
-	struct event *ev;
+	struct kevent kev;
 
-	if ((ev = create_plugin_event(cb, data)) == NULL)
-		return -1;
+	EV_SET(&kev, ++timer_id, EVFILT_TIMER,
+	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, NULL);
 
-	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
-	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
-	if (kevent_set(&ev->kev, 1) < 0) {
+	if (register_plugin_event(&kev, cb, data) < 0) {
 		ERR("failed to plugin set timer (%s)\n", strerror(errno));
-		free(ev);
 		return -1;
 	}
-	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 }
 
@@ -275,21 +291,16 @@ on_timer(int ident, void *data)
 int
 set_timer(struct vm_entry *vm_ent, int second)
 {
-	struct event *ev;
+	struct kevent kev;
 
-	if ((ev = create_event(on_timer, vm_ent)) == NULL)
-		goto err;
+	EV_SET(&kev, ++timer_id, EVFILT_TIMER,
+	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, NULL);
 
-	EV_SET(&ev->kev, ++timer_id, EVFILT_TIMER,
-	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, ev);
-	if (kevent_set(&ev->kev, 1) < 0)
-		goto err;
-	LIST_INSERT_HEAD(&events, ev, next);
+	if (register_event(&kev, on_timer, vm_ent) < 0) {
+		ERR("failed to set timer (%s)\n", strerror(errno));
+		return -1;
+	}
 	return 0;
-err:
-	free(ev);
-	ERR("failed to set timer (%s)\n", strerror(errno));
-	return -1;
 }
 
 /**
@@ -390,21 +401,16 @@ on_vm_exit(int ident, void *data)
 int
 wait_for_vm(struct vm_entry *vm_ent)
 {
-	struct event *ev;
+	struct kevent kev;
 
-	if ((ev = create_event(on_vm_exit, vm_ent)) == NULL)
-		return -1;
+	EV_SET(&kev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
+	       NOTE_EXIT, 0, NULL);
 
-	EV_SET(&ev->kev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
-	       NOTE_EXIT, 0, ev);
-
-	if (kevent_set(&ev->kev, 1) < 0) {
+	if (register_event(&kev, on_vm_exit, vm_ent) < 0) {
 		ERR("failed to wait process (%s)\n", strerror(errno));
-		free(ev);
 		return -1;
 	}
 
-	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 }
 
@@ -420,13 +426,13 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 			switch (e->kev.filter) {
 			case EVFILT_READ:
 				ev[0] = e;
-				memcpy(&kev[i], &e->kev, sizeof(struct kevent));
+				kev[i] = e->kev;
 				kev[i].flags = recv_f;
 				i++;
 				break;
 			case EVFILT_WRITE:
 				ev[1] = e;
-				memcpy(&kev[i], &e->kev, sizeof(struct kevent));
+				kev[i] = e->kev;
 				kev[i].flags = send_f;
 				i++;
 				break;
@@ -577,20 +583,15 @@ on_accept_cmd_sock(int ident, void *data)
 static int
 wait_for_cmd_sock(int sock)
 {
-	struct event *ev;
+	struct kevent kev;
 
-	if ((ev = create_event(on_accept_cmd_sock, NULL)) == NULL)
-		return -1;
+	EV_SET(&kev, sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
 
-	EV_SET(&ev->kev, sock, EVFILT_READ, EV_ADD, 0, 0, ev);
-
-	if (kevent_set(&ev->kev, 1) < 0) {
+	if (register_event(&kev, on_accept_cmd_sock, NULL) < 0) {
 		ERR("failed to wait socket recv (%s)\n", strerror(errno));
-		free(ev);
 		return -1;
 	}
 
-	LIST_INSERT_HEAD(&events, ev, next);
 	return 0;
 }
 
