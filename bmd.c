@@ -84,21 +84,6 @@ kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 	return rc;
 }
 
-static struct event *
-create_event(event_call_back cb, void *data)
-{
-	struct event *ev;
-
-	if ((ev = malloc(sizeof(*ev))) == NULL)
-		return NULL;
-
-	ev->type = EVENT;
-	ev->cb = cb;
-	ev->data = data;
-
-	return ev;
-}
-
 static int
 register_event0(enum STRUCT_TYPE type, struct kevent *kev, event_call_back cb,
 	       void *data)
@@ -108,13 +93,13 @@ register_event0(enum STRUCT_TYPE type, struct kevent *kev, event_call_back cb,
 	if ((ev = malloc(sizeof(*ev))) == NULL)
 		return -1;
 
+	kev->udata = ev;
 	ev->type = type;
 	ev->kev = *kev;
-	ev->kev.udata = ev;
 	ev->cb = cb;
 	ev->data = data;
 
-	if (kevent_set(&ev->kev, 1) < 0) {
+	if (kevent_set(kev, 1) < 0) {
 		free(ev);
 		return -1;
 	}
@@ -125,6 +110,38 @@ register_event0(enum STRUCT_TYPE type, struct kevent *kev, event_call_back cb,
 
 #define register_event(b, c, d) register_event0(EVENT, (b), (c), (d))
 #define register_plugin_event(b, c, d) register_event0(PLUGIN, (b), (c), (d))
+
+static int
+register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
+{
+	int i;
+	struct event *ev[n];
+
+	for (i = 0; i < n; i++)
+		ev[i] = NULL;
+
+	for (i = 0; i < n; i++) {
+		if ((ev[i] = malloc(sizeof(struct event))) == NULL)
+			goto err;
+		kev[i].udata = ev[i];
+		ev[i]->type = EVENT;
+		ev[i]->kev = kev[i];
+		ev[i]->cb = cb[i];
+		ev[i]->data = data[i];
+	}
+
+	if (kevent_set(kev, n) < 0)
+		goto err;
+
+	for (i = 0; i < n; i++)
+		LIST_INSERT_HEAD(&events, ev[i], next);
+
+	return 0;
+err:
+	for (i = 0; i < n; i++)
+		free(ev[i]);
+	return -1;
+}
 
 int
 plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
@@ -183,43 +200,30 @@ on_read_vm_output(int fd, void *data)
 static int
 wait_for_vm_output(struct vm_entry *vm_ent)
 {
-	int i = 0, j;
-	struct event *ev[2] = {NULL, NULL};
+	int i = 0;
 	struct kevent kev[2];
+	static event_call_back cb[2] = {on_read_vm_output, on_read_vm_output};
+	void *data[2];
 
 	if (VM_OUTFD(vm_ent) != -1) {
-		if ((ev[i] = create_event(on_read_vm_output, vm_ent)) == NULL)
-			goto err;
-
-		EV_SET(&ev[i]->kev, VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
-		       ev[i]);
-		kev[i] = ev[i]->kev;
+		EV_SET(&kev[i], VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
+		       NULL);
+		data[i] = vm_ent;
 		i++;
 	}
 	if (VM_ERRFD(vm_ent) != -1) {
-		if ((ev[i] = create_event(on_read_vm_output, vm_ent)) == NULL)
-			goto err;
-
-		EV_SET(&ev[i]->kev, VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
-		       ev[i]);
-		kev[i] = ev[i]->kev;
+		EV_SET(&kev[i], VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
+		       NULL);
+		data[i] = vm_ent;
 		i++;
 	}
 
-	if (kevent_set(kev, i) < 0) {
+	if (register_events(kev, cb, data, i) < 0) {
 		ERR("failed to wait vm fds (%s)\n", strerror(errno));
-		goto err;
+		return -1;
 	}
 
-	for (j = 0; j < i; j++)
-		LIST_INSERT_HEAD(&events, ev[j], next);
-
 	return 0;
-err:
-	for (j = 0; j < i; j++)
-		free(ev[j]);
-
-	return -1;
 }
 
 static int
@@ -527,33 +531,18 @@ on_send_sock_buf(int ident, void *data)
 static int
 wait_for_sock_buf(struct sock_buf *sb)
 {
-	struct event *ev[2];
 	struct kevent kev[2];
+	static event_call_back cb[2] = {on_recv_sock_buf, on_send_sock_buf};
+	void *data[2] = {sb, sb};
 
-	ev[0] = create_event(on_recv_sock_buf, sb);
-	ev[1] = create_event(on_send_sock_buf, sb);
+	EV_SET(&kev[0], sb->fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+	EV_SET(&kev[1], sb->fd, EVFILT_WRITE, EV_ADD, EV_DISABLE, 0, NULL);
 
-	if (ev[0] == NULL || ev[1] == NULL) {
-		free(ev[0]);
-		free(ev[1]);
-		return -1;
-	}
-
-	EV_SET(&ev[0]->kev, sb->fd, EVFILT_READ, EV_ADD, 0, 0, ev[0]);
-	kev[0] = ev[0]->kev;
-
-	EV_SET(&ev[1]->kev, sb->fd, EVFILT_WRITE, EV_ADD, EV_DISABLE, 0, ev[1]);
-	kev[1] = ev[1]->kev;
-
-	if (kevent_set(kev, 2) < 0) {
+	if (register_events(kev, cb, data, 2) < 0) {
 		ERR("failed to wait socket buffer (%s)\n", strerror(errno));
-		free(ev[0]);
-		free(ev[1]);
 		return -1;
 	}
 
-	LIST_INSERT_HEAD(&events, ev[1], next);
-	LIST_INSERT_HEAD(&events, ev[0], next);
 	return 0;
 }
 
