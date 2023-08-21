@@ -118,10 +118,10 @@ register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
 	struct event *ev[n];
 
 	for (i = 0; i < n; i++)
-		ev[i] = NULL;
+		ev[i] = malloc(sizeof(struct event));
 
 	for (i = 0; i < n; i++) {
-		if ((ev[i] = malloc(sizeof(struct event))) == NULL)
+		if (ev[i] == NULL)
 			goto err;
 		kev[i].udata = ev[i];
 		ev[i]->type = EVENT;
