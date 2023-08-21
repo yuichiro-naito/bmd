@@ -155,10 +155,10 @@ int
 do_list()
 {
 	int ret = 0;
-	nvlist_t *cmd, *res = NULL;
+	nvlist_t **l, *cmd, *res = NULL;
 	size_t i, count;
 	const static char *fmt = "%20s%5s%7s%10s%12s%12s\n";
-	const struct nvlist *const *list;
+	const nvlist_t *const *list;
 
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command", "list");
@@ -181,16 +181,23 @@ do_list()
 		goto end;
 
 	list = nvlist_get_nvlist_array(res, "vm_list", &count);
-	qsort((void *)list, count, sizeof(nvlist_t *), compare_by_name);
+	if ((l = malloc(sizeof(nvlist_t *) * count)) == NULL) {
+		fprintf(stderr, "failed to allocate memory\n");
+		ret = 1;
+		goto end;
+	}
+	memcpy(l, list, sizeof(nvlist_t *) * count);
+	qsort(l, count, sizeof(nvlist_t *), compare_by_name);
 	for (i = 0; i < count; i++) {
 		printf(fmt,
-		       nvlist_get_string(list[i], "name"),
-		       nvlist_get_string(list[i], "ncpu"),
-		       nvlist_get_string(list[i], "memory"),
-		       nvlist_get_string(list[i], "loader"),
-		       nvlist_get_string(list[i], "state"),
-		       nvlist_get_string(list[i], "owner"));
+		       nvlist_get_string(l[i], "name"),
+		       nvlist_get_string(l[i], "ncpu"),
+		       nvlist_get_string(l[i], "memory"),
+		       nvlist_get_string(l[i], "loader"),
+		       nvlist_get_string(l[i], "state"),
+		       nvlist_get_string(l[i], "owner"));
 	}
+	free(l);
 
 end:
 	nvlist_destroy(cmd);
