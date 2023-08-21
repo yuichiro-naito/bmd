@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/queue.h>
+#if __FreeBSD_version >= 1400095
+#include <sys/queue_mergesort.h>
+#endif
 #include <sys/sysctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -307,7 +310,7 @@ err:
 }
 
 static int
-compare_disk_info(const void *l, const void *r)
+compare_disk_info(const void *l, const void *r, void *thunk)
 {
 	const struct disk_info *a, *b;
 	int c;
@@ -346,6 +349,7 @@ compare_disk_info(const void *l, const void *r)
 	return a->slice_index - b->slice_index;
 }
 
+#if __FreeBSD_version < 1400095
 static void
 sort_disk_info_list(struct disk_info_head *list, int nlist)
 {
@@ -359,7 +363,7 @@ sort_disk_info_list(struct disk_info_head *list, int nlist)
 	SLIST_FOREACH(di, list, next)
 		array[i++] = di;
 
-	qsort(array, nlist, sizeof(struct disk_info *), compare_disk_info);
+	qsort_r(array, nlist, sizeof(struct disk_info *), compare_disk_info, NULL);
 
 	for (i = 0; i < nlist - 1; i++)
 		SLIST_NEXT(array[i], next) = array[i + 1];
@@ -367,6 +371,7 @@ sort_disk_info_list(struct disk_info_head *list, int nlist)
 
 	SLIST_FIRST(list) = array[0];
 }
+#endif
 
 static int
 parse_disks(char *line, struct disk_info_head *list, int nlist)
@@ -426,7 +431,11 @@ parse_disks(char *line, struct disk_info_head *list, int nlist)
 		*e = t;
 	}
 
+#if __FreeBSD_version >= 1400095
+	SLIST_MERGESORT(list, NULL, compare_disk_info, disk_info, next);
+#else
 	sort_disk_info_list(list, nlist);
+#endif
 	return 0;
 err:
 	free_disk_info(di);
