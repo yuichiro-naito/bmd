@@ -75,7 +75,6 @@ console_out(int fd)
 
 		written = 0;
 	retry:
-		n = 0;
 		while ((n = write(1, buf + written, sz - written)) < 0)
 			if (errno != EINTR)
 				break;
