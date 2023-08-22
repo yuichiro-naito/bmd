@@ -55,8 +55,14 @@ static int cmd_sock;
  */
 static int timer_id = 0;
 
+/*
+  Received SIGTERM flag
+ */
+static int sigterm = 0;
+
 extern struct vm_method bhyve_method;
 
+static int reload_virtual_machines();
 static void stop_virtual_machine(struct vm_entry *vm_ent);
 static void free_vm_entry(struct vm_entry *vm_ent);
 
@@ -998,17 +1004,35 @@ start_virtual_machine(struct vm_entry *vm_ent)
 }
 
 static int
+on_sigterm(int ident, void *data)
+{
+	INFO("%s\n", "stopping daemon");
+	sigterm++;
+	return 0;
+}
+
+static int
+on_sighup(int ident, void *data)
+{
+	INFO("%s\n", "reload config file");
+	reload_virtual_machines();
+	return 0;
+}
+
+static int
 start_virtual_machines()
 {
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
 	struct kevent sigev[3];
+	static event_call_back cb[3] = {on_sigterm, on_sigterm, on_sighup};
+	static void *data[3] = {NULL, NULL, NULL};
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 
-	if (kevent_set(sigev, 3) < 0)
+	if (register_events(sigev, cb, data, 3) < 0)
 		return -1;
 
 	LIST_FOREACH (conf_ent, &vm_conf_list, next) {
@@ -1188,18 +1212,20 @@ event_loop()
 	if (wait_for_cmd_sock(cmd_sock) < 0)
 		return -1;
 
-wait:
-	to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
-	if ((n = kevent_get(&ev, 1, to)) < 0) {
-		ERR("kevent failure (%s)\n", strerror(errno));
-		return -1;
-	}
-	if (n == 0) {
-		close_timeout_sock_buf(COMMAND_TIMEOUT_SEC);
-		goto wait;
-	}
-
-	if (ev.udata != NULL) {
+	while (sigterm == 0) {
+		to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
+		if ((n = kevent_get(&ev, 1, to)) < 0) {
+			ERR("kevent failure (%s)\n", strerror(errno));
+			return -1;
+		}
+		if (n == 0) {
+			close_timeout_sock_buf(COMMAND_TIMEOUT_SEC);
+			continue;
+		}
+		if (ev.udata == NULL) {
+			ERR("recieved unexpcted event! (%d)", ev.filter);
+			return -1;
+		}
 		event = ev.udata;
 		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
 		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
@@ -1208,27 +1234,8 @@ wait:
 			LIST_REMOVE(event, next);
 			free(event);
 		}
-		goto wait;
 	}
 
-	if (ev.filter == EVFILT_SIGNAL) {
-		switch (ev.ident) {
-		case SIGTERM:
-		case SIGINT:
-			INFO("%s\n", "stopping daemon");
-			goto end;
-		case SIGHUP:
-			INFO("%s\n", "reload config file");
-			reload_virtual_machines();
-			goto wait;
-		}
-	} else {
-		ERR("recieved unexpcted event! (%d)", ev.filter);
-		return -1;
-	}
-
-	goto wait;
-end:
 	return 0;
 }
 
