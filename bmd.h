@@ -48,7 +48,7 @@ struct vm_conf_entry {
 	LIST_ENTRY(vm_conf_entry) next;
 };
 
-enum STRUCT_TYPE { EVENT, PLUGIN };
+enum EVENT_TYPE { EVENT, PLUGIN };
 
 #define VM_START(v)         (v)->method->vm_start(&(v)->vm, (v)->pl_conf)
 #define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm, (v)->pl_conf)
@@ -99,7 +99,7 @@ struct vm_entry {
 LIST_HEAD(events, event);
 typedef int (*event_call_back)(int ident, void *data);
 struct event {
-	enum STRUCT_TYPE type;
+	enum EVENT_TYPE type;
 	struct kevent kev;
 	void *data;
 	event_call_back cb;

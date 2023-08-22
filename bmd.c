@@ -91,7 +91,7 @@ kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 }
 
 static int
-register_event0(enum STRUCT_TYPE type, struct kevent *kev, event_call_back cb,
+register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 	       void *data)
 {
 	struct event *ev;
