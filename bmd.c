@@ -38,7 +38,7 @@ SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 /*
   All Events
 */
-struct events events = LIST_HEAD_INITIALIZER(events);
+LIST_HEAD(, event) event_list = LIST_HEAD_INITIALIZER();
 
 /*
   Global event queue
@@ -110,7 +110,7 @@ register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 		return -1;
 	}
 
-	LIST_INSERT_HEAD(&events, ev, next);
+	LIST_INSERT_HEAD(&event_list, ev, next);
 	return 0;
 }
 
@@ -140,7 +140,7 @@ register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
 		goto err;
 
 	for (i = 0; i < n; i++)
-		LIST_INSERT_HEAD(&events, ev[i], next);
+		LIST_INSERT_HEAD(&event_list, ev[i], next);
 
 	return 0;
 err:
@@ -187,7 +187,7 @@ on_read_vm_output(int fd, void *data)
 	struct kevent *kev;
 
 	if (write_err_log(fd, VM_PTR(vm_ent)) == 0) {
-		LIST_FOREACH_SAFE (ev, &events, next, evn) {
+		LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
 			kev = &ev->kev;
 			if (ev->data != vm_ent || kev->ident != fd ||
 			    kev->filter != EVFILT_READ)
@@ -238,7 +238,7 @@ stop_waiting_vm_output(struct vm_entry *vm_ent)
 	struct event *ev, *evn;
 	struct kevent *kev;
 
-	LIST_FOREACH_SAFE (ev, &events, next, evn) {
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
 		kev = &ev->kev;
 		if (ev->data != vm_ent ||
 		    (kev->ident != VM_OUTFD(vm_ent) &&
@@ -262,9 +262,9 @@ free_events()
 {
 	struct event *ev, *evn;
 
-	LIST_FOREACH_SAFE (ev, &events, next, evn)
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn)
 		free(ev);
-	LIST_INIT(&events);
+	LIST_INIT(&event_list);
 }
 
 static int
@@ -321,7 +321,7 @@ clear_all_timers(struct vm_entry *vm_ent)
 {
 	struct event *ev, *evn;
 
-	LIST_FOREACH_SAFE (ev, &events, next, evn) {
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
 		if (ev->kev.filter != EVFILT_TIMER || ev->data != vm_ent)
 			continue;
 		ev->kev.flags = EV_DELETE;
@@ -431,7 +431,7 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 	struct event *e, *ev[2] = {NULL, NULL};
 	struct kevent kev[2];
 
-	LIST_FOREACH (e, &events, next) {
+	LIST_FOREACH (e, &event_list, next) {
 		if (e->data == sb) {
 			switch (e->kev.filter) {
 			case EVFILT_READ:
@@ -477,7 +477,7 @@ stop_waiting_sock_buf(struct sock_buf *sb)
 {
 	struct event *ev, *evn;
 
-	LIST_FOREACH_SAFE (ev, &events, next, evn)
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn)
 		if (ev->data == sb) {
 			ev->kev.flags = EV_DELETE;
 			if (kevent_set(&ev->kev, 1) < 0) {
@@ -721,7 +721,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 
 	STAILQ_FOREACH_SAFE (nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
-	LIST_FOREACH_SAFE (ev, &events, next, evn) {
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
 		if (ev->data != vm_ent)
 			continue;
 		/*

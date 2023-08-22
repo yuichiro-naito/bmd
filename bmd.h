@@ -96,7 +96,6 @@ struct vm_entry {
 /*
    Event Structure.
  */
-LIST_HEAD(events, event);
 typedef int (*event_call_back)(int ident, void *data);
 struct event {
 	enum EVENT_TYPE type;
