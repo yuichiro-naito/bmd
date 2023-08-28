@@ -1,15 +1,24 @@
 LOCALBASE?=		/usr/local
 CFLAGS+=	-g -Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LIB=		-lnv
-TESTS= conf_test
+OBJS= bmd.o ../console.o ../inspect_grub.o ../vm.o ../conf.o ../control.o \
+../parser.o ../conflex.o ../global.o ../server.o ../confparse.o ../inspect.o ../tap.o
+
+TESTS= conf_test parser_test
 
 test: $(TESTS)
 .for t in $(TESTS)
 	./$t
 .endfor
 
+bmd.o: ../bmd.o
+	objcopy -N main ../bmd.o bmd.o
+
 conf_test: ../conf.o conf_test.c
 	$(CC) $(CFLAGS) -o conf_test conf_test.c ../conf.o $(LIB)
 
+parser_test:  parser_test.c $(OBJS)
+	$(CC) $(CFLAGS) -o parser_test parser_test.c $(OBJS) $(LIB)
+
 clean:
-	rm -f conf_test *.core
+	rm -f $(TESTS) bmd.o *.core
