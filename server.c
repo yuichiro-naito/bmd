@@ -330,7 +330,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	if (compare_vm_conf(&ret->conf, VM_CONF(vm_ent)) != 0) {
+	if (compare_vm_conf_entry(ret, VM_CONF_ENT(vm_ent)) != 0) {
 		LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));

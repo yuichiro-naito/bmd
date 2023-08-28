@@ -148,6 +148,7 @@ int start_virtual_machine(struct vm_entry *vm_ent);
 int direct_run(const char *name, bool install, bool single);
 
 int load_config_file(struct vm_conf_head *list, bool update_gl_conf);
+int compare_vm_conf_entry(struct vm_conf_entry *a, struct vm_conf_entry *b);
 
 extern struct global_conf *gl_conf;
 #endif

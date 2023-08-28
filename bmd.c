@@ -1117,7 +1117,7 @@ reload_virtual_machines()
 		}
 		VM_NEWCONF(vm_ent) = conf;
 		if (conf->boot != NO && conf->reboot_on_change &&
-		    compare_vm_conf(conf, VM_CONF(vm_ent)) != 0) {
+		    compare_vm_conf_entry(conf_ent, VM_CONF_ENT(vm_ent)) != 0) {
 			switch (VM_STATE(vm_ent)) {
 			case TERMINATE:
 				set_timer(vm_ent, MAX(conf->boot_delay, 1));
@@ -1553,4 +1553,22 @@ err:
 	remove_plugins();
 	free_id_list();
 	return 1;
+}
+
+int
+compare_vm_conf_entry(struct vm_conf_entry *a, struct vm_conf_entry *b)
+{
+	int rc;
+	struct plugin_data *pa, *pb;
+
+	if ((rc = compare_vm_conf(&a->conf, &b->conf)) != 0)
+		return rc;
+
+	for(pa = SLIST_FIRST(&a->pl_data), pb = SLIST_FIRST(&b->pl_data);
+	    pa != NULL && pb != NULL;
+	    pa = SLIST_NEXT(pa, next), pb = SLIST_NEXT(pb, next))
+		if ((rc = compare_nvlist(pa->pl_conf, pb->pl_conf)) != 0)
+			return rc;
+
+	return 0;
 }
