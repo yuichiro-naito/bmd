@@ -143,7 +143,9 @@ Type is one of "e1000", "virtio-net"  or can be omitted to specify
 the default type "virtio-net". Bridge is a bridge name that a tap interface
 to be added. e.g. "bridge1"
 .It Cm owner = Ar user_name;
-Owner of VM. The default value is file owner in which vm section is written.
+Owner of VM. The default value is the file owner in which vm section is written.
+Setting owner is permitted if the file owner is root privileged user or as same
+as the file owner.
 .It Cm passthru = (+=) Ar bus/slot/function;
 PCI passthrough device id. e.g. 1/0/130
 .It Cm reboot_on_change = Ar yes | no;

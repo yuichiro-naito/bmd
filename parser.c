@@ -248,6 +248,11 @@ parse_owner(struct vm_conf *conf, char *val)
 	if ((pwd = getpwnam(val)) < 0)
 		return -1;
 
+	if (get_owner(conf) != 0 && get_owner(conf) != pwd->pw_uid) {
+		ERR("%s\n", "Changing owner is not allowed.");
+		return -1;
+	}
+
 	return set_owner(conf, pwd->pw_uid);
 }
 
