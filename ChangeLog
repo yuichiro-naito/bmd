@@ -1,0 +1,7 @@
+* Current
+	- Setting owner parameter is allowed to root file owner.
+	  (2017dd5f0d59be77f8a9850fc92d83ea6e637c28)
+	- Compare parameters that plugins extend to check if VM conf is updated.
+	  (9c6d3684feee1d60e2e88ad2d840a03023a16404)
+* 1.0
+	- Initial Release.
