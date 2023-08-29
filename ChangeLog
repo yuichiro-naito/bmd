@@ -1,4 +1,6 @@
 * Current
+	- Setting 0 or negative value in loader_timeout disables the loder timeout.
+	  (e34a6b7e70eae71e752e06a5298e0f03a959249c)
 	- Setting owner parameter is allowed to root file owner.
 	  (2017dd5f0d59be77f8a9850fc92d83ea6e637c28)
 	- Compare parameters that plugins extend to check if VM conf is updated.
