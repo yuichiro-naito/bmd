@@ -125,7 +125,8 @@ e.g. "kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd"
 .It Cm loader = Ar bhyveload | grub | uefi;
 Specify boot loader. This parameter is mandatory.
 .It Cm loader_timeout = Ar timeout_sec;
-Loader timeout in seconds. The default value is "15".
+Loader timeout in seconds. If set to 0 or negative value, timeout is disabled.
+The default value is "15".
 .It Xo
 .Cm memory = Ar memsize Ns Oo
 .Sm off
@@ -151,7 +152,7 @@ PCI passthrough device id. e.g. 1/0/130
 .It Cm reboot_on_change = Ar yes | no;
 Set "yes" to force ACPI reboot if VM config file is change. The default is "no".
 .It Cm stop_timeout = Ar timeout_sec;
-VM exit timeout in seconds. if expired, force to kill VM. The default value is "300".
+VM exit timeout in seconds. if expired, force to kill VM. The default value is "300". This timeout will never be disabled.
 .It Cm utctime = Ar yes | no;
 Set "yes" for RTC to keep UTC time. Set "no" for RTC to keep localtime.
 The default value is "yes".
