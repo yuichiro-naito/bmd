@@ -904,12 +904,7 @@ err:
 static struct input_file *
 pop_file()
 {
-	struct input_file *ret;
-
-	ret = cur_file;
-	if (ret)
-		cur_file = TAILQ_NEXT(cur_file, next);
-	return ret;
+	return (cur_file = cur_file ? TAILQ_NEXT(cur_file, next) : NULL);
 }
 
 static struct input_file *
@@ -1012,8 +1007,6 @@ yywrap(void) {
 	if ((ifp = pop_file()) == NULL)
 		return 1;
 
-	if ((ifp = peek_file()) == NULL)
-		return 1;
 	yyin = ifp->fp;
 	lineno = 1;
 	return 0;
