@@ -295,8 +295,6 @@ on_timer(int ident, void *data)
 
 /*
  * Set event timer.
- * Event timer has 2 types. One is for stop timeout, the other is delay boot.
- * If an event is for delay boot, set flag = 1.
  */
 int
 set_timer(struct vm_entry *vm_ent, int second)
@@ -432,26 +430,26 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 	struct kevent kev[2];
 
 	LIST_FOREACH (e, &event_list, next) {
-		if (e->data == sb) {
-			switch (e->kev.filter) {
-			case EVFILT_READ:
-				ev[0] = e;
-				kev[i] = e->kev;
-				kev[i].flags = recv_f;
-				i++;
-				break;
-			case EVFILT_WRITE:
-				ev[1] = e;
-				kev[i] = e->kev;
-				kev[i].flags = send_f;
-				i++;
-				break;
-			default:
-				break;
-			}
-			if (i >= 2)
-				break;
+		if (e->data != sb)
+			continue;
+		switch (e->kev.filter) {
+		case EVFILT_READ:
+			ev[0] = e;
+			kev[i] = e->kev;
+			kev[i].flags = recv_f;
+			i++;
+			break;
+		case EVFILT_WRITE:
+			ev[1] = e;
+			kev[i] = e->kev;
+			kev[i].flags = send_f;
+			i++;
+			break;
+		default:
+			break;
 		}
+		if (i >= 2)
+			break;
 	}
 
 	if (i == 0)
@@ -477,17 +475,18 @@ stop_waiting_sock_buf(struct sock_buf *sb)
 {
 	struct event *ev, *evn;
 
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn)
-		if (ev->data == sb) {
-			ev->kev.flags = EV_DELETE;
-			if (kevent_set(&ev->kev, 1) < 0) {
-				ERR("failed to remove socket events(%s)\n",
-				    strerror(errno));
-				return -1;
-			}
-			LIST_REMOVE(ev, next);
-			free(ev);
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
+		if (ev->data != sb)
+			continue;
+		ev->kev.flags = EV_DELETE;
+		if (kevent_set(&ev->kev, 1) < 0) {
+			ERR("failed to remove socket events(%s)\n",
+			    strerror(errno));
+			return -1;
 		}
+		LIST_REMOVE(ev, next);
+		free(ev);
+	}
 
 	return 0;
 }
@@ -804,12 +803,12 @@ set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 	char *backend = conf_ent->conf.backend;
 
 	SLIST_FOREACH (pd, &conf_ent->pl_data, next) {
-		m = pd->ent->desc.method;
-		if (m && strcmp(m->name, backend) == 0) {
-			VM_METHOD(vm_ent) = m;
-			VM_PLCONF(vm_ent) = pd->pl_conf;
-			return 0;
-		}
+		if ((m = pd->ent->desc.method) == NULL ||
+		    strcmp(m->name, backend) != 0)
+			continue;
+		VM_METHOD(vm_ent) = m;
+		VM_PLCONF(vm_ent) = pd->pl_conf;
+		return 0;
 	}
 
 	return -1;
@@ -821,11 +820,9 @@ vm_method_exists(char *name)
 	struct plugin_entry *pl_ent;
 	struct vm_method *m;
 
-	SLIST_FOREACH (pl_ent, &plugin_list, next) {
-		m = pl_ent->desc.method;
-		if (m && strcmp(m->name, name) == 0)
+	SLIST_FOREACH (pl_ent, &plugin_list, next)
+		if ((m = pl_ent->desc.method) && strcmp(m->name, name) == 0)
 			return 0;
-	}
 
 	return -1;
 }
@@ -1224,7 +1221,7 @@ event_loop()
 		}
 		if (ev.udata == NULL) {
 			ERR("recieved unexpcted event! (%d)", ev.filter);
-			return -1;
+			continue;
 		}
 		event = ev.udata;
 		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
