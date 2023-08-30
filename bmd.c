@@ -1069,6 +1069,13 @@ lookup_vm_by_name(const char *name)
 	return NULL;
 }
 
+static void
+move_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
+{
+	free_plugin_data(&dst->pl_data);
+	SLIST_CONCAT(&dst->pl_data, &src->pl_data, plugin_data, next);
+}
+
 static int
 reload_virtual_machines()
 {
@@ -1112,6 +1119,7 @@ reload_virtual_machines()
 				if (errno != EINTR)
 					break;
 		}
+		move_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
 		VM_NEWCONF(vm_ent) = conf;
 		if (conf->boot != NO && conf->reboot_on_change &&
 		    compare_vm_conf_entry(conf_ent, VM_CONF_ENT(vm_ent)) != 0) {
