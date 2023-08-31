@@ -1070,10 +1070,14 @@ lookup_vm_by_name(const char *name)
 }
 
 static void
-move_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
+copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 {
-	free_plugin_data(&dst->pl_data);
-	SLIST_CONCAT(&dst->pl_data, &src->pl_data, plugin_data, next);
+	struct plugin_data *da, *db;
+
+	for (da = SLIST_FIRST(&dst->pl_data), db = SLIST_FIRST(&src->pl_data);
+	     da != NULL && db != NULL && da->ent == db->ent;
+	     da = SLIST_NEXT(da, next), db = SLIST_NEXT(db, next))
+		nvlist_copy_missing_key(da->pl_conf, db->pl_conf);
 }
 
 static int
@@ -1119,7 +1123,7 @@ reload_virtual_machines()
 				if (errno != EINTR)
 					break;
 		}
-		move_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
+		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
 		VM_NEWCONF(vm_ent) = conf;
 		if (conf->boot != NO && conf->reboot_on_change &&
 		    compare_vm_conf_entry(conf_ent, VM_CONF_ENT(vm_ent)) != 0) {

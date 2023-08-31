@@ -1692,3 +1692,73 @@ compare_nvlist(const nvlist_t *a, const nvlist_t *b)
 
 	return 0;
 }
+
+int
+nvlist_copy_missing_key(nvlist_t *dst, nvlist_t *src)
+{
+	const char *k;
+	int t;
+	void *cookie = NULL;
+	const void *bin;
+	const bool *ba;
+	const uint64_t *na;
+	const char * const *sa;
+	const nvlist_t * const *nva;
+	const int *da;
+	size_t sz;
+
+	while ((k = nvlist_next(src, &t, &cookie)) != NULL)
+		if (! nvlist_exists_type(dst, k, t))
+			switch(t) {
+			case	NV_TYPE_NULL:
+				nvlist_add_null(dst, k);
+				break;
+			case	NV_TYPE_BOOL:
+				nvlist_add_bool(dst, k,
+						  nvlist_get_bool(src, k));
+				break;
+			case	NV_TYPE_NUMBER:
+				nvlist_add_number(dst, k,
+						  nvlist_get_number(src, k));
+				break;
+			case	NV_TYPE_STRING:
+				nvlist_add_string(dst, k,
+						  nvlist_get_string(src, k));
+				break;
+			case	NV_TYPE_NVLIST:
+				nvlist_add_nvlist(dst, k,
+						  nvlist_get_nvlist(src, k));
+				break;
+			case	NV_TYPE_DESCRIPTOR:
+				nvlist_add_descriptor(dst, k,
+						  nvlist_get_descriptor(src, k));
+				break;
+			case	NV_TYPE_BINARY:
+				bin = nvlist_get_binary(src, k, &sz);
+				nvlist_add_binary(dst, k, bin, sz);
+				break;
+			case	NV_TYPE_BOOL_ARRAY:
+				ba = nvlist_get_bool_array(src, k, &sz);
+				nvlist_add_bool_array(dst, k, ba, sz);
+				break;
+			case	NV_TYPE_NUMBER_ARRAY:
+				na = nvlist_get_number_array(src, k, &sz);
+				nvlist_add_number_array(dst, k, na, sz);
+				break;
+			case	NV_TYPE_STRING_ARRAY:
+				sa = nvlist_get_string_array(src, k, &sz);
+				nvlist_add_string_array(dst, k, sa, sz);
+				break;
+			case	NV_TYPE_NVLIST_ARRAY:
+				nva = nvlist_get_nvlist_array(src, k, &sz);
+				nvlist_add_nvlist_array(dst, k, nva, sz);
+				break;
+			case	NV_TYPE_DESCRIPTOR_ARRAY:
+				da = nvlist_get_descriptor_array(src, k, &sz);
+				nvlist_add_descriptor_array(dst, k, da, sz);
+				break;
+			}
+
+
+	return 0;
+}

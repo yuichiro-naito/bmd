@@ -184,6 +184,7 @@ int compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b);
 int compare_net_conf(const struct net_conf *a, const struct net_conf *b);
 int compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b);
 int compare_nvlist(const nvlist_t *a, const nvlist_t *b);
+int nvlist_copy_missing_key(nvlist_t *dst, nvlist_t *src);
 
 int set_var0(struct vartree *vars, char *k, const char *v);
 int set_var(struct variables *vars, char *k, const char *v);
