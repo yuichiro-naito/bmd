@@ -1077,7 +1077,9 @@ copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 	for (da = SLIST_FIRST(&dst->pl_data), db = SLIST_FIRST(&src->pl_data);
 	     da != NULL && db != NULL && da->ent == db->ent;
 	     da = SLIST_NEXT(da, next), db = SLIST_NEXT(db, next))
-		nvlist_copy_missing_key(da->pl_conf, db->pl_conf);
+		if (da->ent->desc.on_reload_config)
+			da->ent->desc.on_reload_config(da->pl_conf,
+						       db->pl_conf);
 }
 
 static int

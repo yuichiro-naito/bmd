@@ -136,7 +136,7 @@ struct vm_method {
 	void (*vm_cleanup)(struct vm *, nvlist_t *);
 };
 
-#define PLUGIN_VERSION 11
+#define PLUGIN_VERSION 12
 
 /*
   Plugin Description
@@ -147,10 +147,11 @@ struct vm_method {
           finalize: a function called before plugin is removed.
   on_status_change: a function called when VM state changed. (*2)
       parse_config: a function called while parsing VM configuratin (*2)
+  on_reload_config: copy plugin data while reloading VM configuration (*2)
 
   *1: PLUGIN_ENV pointer is available while plugin is loaded.
   *2: nvlist_t pointer is available while VM is existing, unless removed from
-      config file and reloaded.
+      config file nor reloaded.
 
   All other pointers in arguments are local scope to the function.
  */
@@ -159,9 +160,10 @@ typedef struct plugin_desc {
 	char *name;
 	int (*initialize)();
 	void (*finalize)();
-	void (*on_status_change)(struct vm *, nvlist_t *);
-	int (*parse_config)(nvlist_t *, const char *, const char *);
+	void (*on_status_change)(struct vm *vm, nvlist_t *conf);
+	int (*parse_config)(nvlist_t *conf, const char *key, const char *val);
 	struct vm_method *method;
+	void (*on_reload_config)(nvlist_t *new_conf, nvlist_t *old_conf);
 } PLUGIN_DESC;
 
 #endif
