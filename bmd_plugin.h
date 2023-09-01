@@ -143,15 +143,18 @@ struct vm_method {
 
            version: must set PLUGIN_VERSION
               name: plugin name
-        initialize: a function called after plugin is loaded. (*1)
+        initialize: a function called after plugin is loaded.
           finalize: a function called before plugin is removed.
-  on_status_change: a function called when VM state changed. (*2)
-      parse_config: a function called while parsing VM configuratin (*2)
-  on_reload_config: copy plugin data while reloading VM configuration (*2)
+  on_status_change: a function called when VM state changed. (*1)
+      parse_config: a function called while parsing VM configuratin (*1)
+  on_reload_config: copy plugin data while reloading VM configuration (*1)
 
-  *1: PLUGIN_ENV pointer is available while plugin is loaded.
-  *2: nvlist_t pointer is available while VM is existing, unless removed from
-      config file nor reloaded.
+  *1: The nvlist_t pointer is available while VM is existing, unless VM is
+      removed from the config file nor VM configuration is reloaded.
+
+  When VM configuration is reloaded, 'parse_config' is called and then
+  on_reload_confg is called. Plugins have a chance to copy its data from
+  old config to new one.
 
   All other pointers in arguments are local scope to the function.
  */
