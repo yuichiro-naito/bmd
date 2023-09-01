@@ -99,6 +99,7 @@ int get_stop_timeout(struct vm_conf *conf);
 char *get_grub_run_partition(struct vm_conf *conf);
 char *get_debug_port(struct vm_conf *conf);
 uid_t get_owner(struct vm_conf *conf);
+gid_t get_group(struct vm_conf *conf);
 enum BOOT get_boot(struct vm_conf *conf);
 enum HOSTBRIDGE_TYPE get_hostbridge(struct vm_conf *conf);
 char *get_backend(struct vm_conf *conf);

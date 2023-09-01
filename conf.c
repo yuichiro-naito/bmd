@@ -627,6 +627,22 @@ get_owner(struct vm_conf *conf)
 }
 
 int
+set_group(struct vm_conf *conf, gid_t group)
+{
+	if (conf == NULL)
+		return 0;
+
+	conf->group = group;
+	return 0;
+}
+
+gid_t
+get_group(struct vm_conf *conf)
+{
+	return conf->group;
+}
+
+int
 set_boot(struct vm_conf *conf, enum BOOT boot)
 {
 	if (conf == NULL)
@@ -1063,6 +1079,7 @@ create_vm_conf(const char *vm_name)
 	ret->stop_timeout = 300;
 	ret->utctime = true;
 	ret->backend = backend;
+	ret->group = -1;
 
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
@@ -1262,6 +1279,8 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(loader_timeout);
 	CMP_NUM(stop_timeout);
 	CMP_NUM(hostbridge);
+	CMP_NUM(owner);
+	CMP_NUM(group);
 	CMP_STR(debug_port);
 	CMP_STR(ncpu);
 	CMP_STR(memory);

@@ -374,7 +374,7 @@ get_peer_comport(const char *comport)
 }
 
 static int
-chown_comport(const char *comport, uid_t user)
+chown_comport(const char *comport, struct xucred *ucred)
 {
 	int i, rc;
 	struct stat st;
@@ -385,7 +385,7 @@ chown_comport(const char *comport, uid_t user)
 
 	for (i = 0; i < 5; i++) {
 		if (stat(fn, &st) < 0 ||
-		    chown(fn, user, st.st_gid) < 0) {
+		    chown(fn, ucred->cr_uid, st.st_gid) < 0) {
 			rc = -1;
 			usleep(1000);
 			continue;
@@ -398,13 +398,33 @@ chown_comport(const char *comport, uid_t user)
 	return rc;
 }
 
+static int
+check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
+{
+	uid_t owner = VM_CONF(vm_ent)->owner;
+	gid_t group = VM_CONF(vm_ent)->group;
+	int i;
+
+	if (ucred->cr_uid == 0 || ucred->cr_uid == owner)
+		return 0;
+
+	if (group == -1)
+		return -1;
+
+	for (i = 0; i < ucred->cr_ngroups; i++)
+		if (ucred->cr_groups[i] == group)
+			return 0;
+
+	return -1;
+}
+
 /*
  * The argument `style` must be one of followings.
  *  -  0 = boot
  *  -  1 = install
  */
 static nvlist_t *
-boot0_command(int s, const nvlist_t *nv, int style, uid_t user)
+boot0_command(int s, const nvlist_t *nv, int style, struct xucred *ucred)
 {
 	const char *name, *reason, *comport;
 	struct vm_entry *vm_ent = NULL;
@@ -418,7 +438,7 @@ boot0_command(int s, const nvlist_t *nv, int style, uid_t user)
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
+	    (check_owner(vm_ent, ucred) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -460,7 +480,7 @@ ret:
 		nvlist_add_string(res, "reason", reason);
 	if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
 		       (comport = VM_CONF(vm_ent)->comport))) {
-		if (chown_comport(comport, user) < 0)
+		if (chown_comport(comport, ucred) < 0)
 			ERR("failed to change owner (%s)\n", comport);
 		nvlist_add_string(res, "comport", comport);
 	}
@@ -468,19 +488,19 @@ ret:
 }
 
 static nvlist_t *
-boot_command(int s, const nvlist_t *nv, uid_t user)
+boot_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
-	return boot0_command(s, nv, 0, user);
+	return boot0_command(s, nv, 0, ucred);
 }
 
 static nvlist_t *
-install_command(int s, const nvlist_t *nv, uid_t user)
+install_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
-	return boot0_command(s, nv, 1, user);
+	return boot0_command(s, nv, 1, ucred);
 }
 
 static nvlist_t *
-showcomport_command(int s, const nvlist_t *nv, uid_t user)
+showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -492,7 +512,7 @@ showcomport_command(int s, const nvlist_t *nv, uid_t user)
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
+	    (check_owner(vm_ent, ucred) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -500,7 +520,7 @@ showcomport_command(int s, const nvlist_t *nv, uid_t user)
 
 	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
 
-	chown_comport(comport, user);
+	chown_comport(comport, ucred);
 
 	nvlist_add_string(res, "comport", comport ? comport : "(null)");
 
@@ -512,7 +532,7 @@ ret:
 }
 
 static nvlist_t *
-showvgaport_command(int s, const nvlist_t *nv, uid_t user)
+showvgaport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -524,7 +544,7 @@ showvgaport_command(int s, const nvlist_t *nv, uid_t user)
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
+	    (check_owner(vm_ent, ucred) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -546,7 +566,7 @@ ret:
 }
 
 static nvlist_t *
-list_command(int s, const nvlist_t *nv, uid_t user)
+list_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	size_t i, count = 0;
 	const char *reason;
@@ -561,7 +581,7 @@ list_command(int s, const nvlist_t *nv, uid_t user)
 	res = nvlist_create(0);
 
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
-		if (user > 0 && VM_CONF(vm_ent)->owner != user)
+		if (check_owner(vm_ent, ucred) != 0)
 			continue;
 		count++;
 	}
@@ -577,7 +597,7 @@ list_command(int s, const nvlist_t *nv, uid_t user)
 
 	i = 0;
 	SLIST_FOREACH (vm_ent, &vm_list, next) {
-		if (user > 0 && VM_CONF(vm_ent)->owner != user)
+		if (check_owner(vm_ent, ucred) != 0)
 			continue;
 		p = nvlist_create(0);
 		nvlist_add_string(p, "name", VM_CONF(vm_ent)->name);
@@ -604,7 +624,7 @@ ret:
 }
 
 static nvlist_t *
-vm_down_command(int s, const nvlist_t *nv, int how, uid_t user)
+vm_down_command(int s, const nvlist_t *nv, int how,  struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -614,7 +634,7 @@ vm_down_command(int s, const nvlist_t *nv, int how, uid_t user)
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (user > 0 && VM_CONF(vm_ent)->owner != user)) {
+	    (check_owner(vm_ent, ucred) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -654,24 +674,24 @@ ret:
 }
 
 static nvlist_t *
-shutdown_command(int s, const nvlist_t *nv, uid_t user)
+shutdown_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
-	return vm_down_command(s, nv, 0, user);
+	return vm_down_command(s, nv, 0, ucred);
 }
 
 static nvlist_t *
-reset_command(int s, const nvlist_t *nv, uid_t user)
+reset_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
-	return vm_down_command(s, nv, 1, user);
+	return vm_down_command(s, nv, 1, ucred);
 }
 
 static nvlist_t *
-poweroff_command(int s, const nvlist_t *nv, uid_t user)
+poweroff_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
-	return vm_down_command(s, nv, 2, user);
+	return vm_down_command(s, nv, 2, ucred);
 }
 
-typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv, uid_t user);
+typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv, struct xucred *ucred);
 
 struct command_entry {
 	char *name;
@@ -728,7 +748,7 @@ recv_command(struct sock_buf *sb)
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	res = (*func)(sb->fd, nv, sb->peer.cr_uid);
+	res = (*func)(sb->fd, nv, &sb->peer);
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {

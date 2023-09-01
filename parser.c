@@ -5,6 +5,7 @@
 #include <glob.h>
 #include <libgen.h>
 #include <pwd.h>
+#include <grp.h>
 
 #include "log.h"
 #include "confparse.h"
@@ -243,17 +244,42 @@ parse_debug_port(struct vm_conf *conf, char *val)
 static int
 parse_owner(struct vm_conf *conf, char *val)
 {
+	char *user, *group, *val2 = NULL;
 	struct passwd *pwd;
+	struct group  *grp;
 
-	if ((pwd = getpwnam(val)) < 0)
-		return -1;
+	if (strchr(val, ':') != NULL) {
+		if ((val2 = strdup(val)) == NULL)
+			return -1;
+		group = strchr(val2, ':');
+		*group++ = '\0';
+		user = val2;
+	} else {
+		user = val;
+		group = NULL;
+	}
+
+	if ((pwd = getpwnam(user)) < 0)
+		goto err;
 
 	if (get_owner(conf) != 0 && get_owner(conf) != pwd->pw_uid) {
 		ERR("%s\n", "Changing owner is not allowed.");
-		return -1;
+		goto err;
 	}
 
-	return set_owner(conf, pwd->pw_uid);
+	if (group != NULL && (grp = getgrnam(group)) < 0)
+		goto err;
+
+	set_owner(conf, pwd->pw_uid);
+
+	if (group != NULL)
+		set_group(conf, grp->gr_gid);
+
+	free(val2);
+	return 0;
+err:
+	free(val2);
+	return -1;
 }
 
 static int

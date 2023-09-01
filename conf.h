@@ -88,6 +88,7 @@ struct vm_conf {
 	char *err_logfile;
 	char *grub_run_partition;
 	uid_t owner;
+	gid_t group;
 	enum BOOT boot;
 	enum HOSTBRIDGE_TYPE hostbridge;
 	int ndisks;
@@ -152,6 +153,7 @@ int set_stop_timeout(struct vm_conf *conf, int timeout);
 int set_grub_run_partition(struct vm_conf *conf, const char *partition);
 int set_debug_port(struct vm_conf *conf, const char *port);
 int set_owner(struct vm_conf *conf, uid_t owner);
+int set_group(struct vm_conf *conf, gid_t group);
 int set_boot(struct vm_conf *conf, enum BOOT boot);
 int set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type);
 int set_backend(struct vm_conf *conf, char *backend);

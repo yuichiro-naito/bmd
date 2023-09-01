@@ -41,6 +41,7 @@ get_stop_timeout;
 get_grub_run_partition;
 get_debug_port;
 get_owner;
+get_group;
 get_boot;
 get_hostbridge;
 get_backend;
