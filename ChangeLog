@@ -1,4 +1,6 @@
 * Current
+	- Add support of group name in owner parameter value.
+	  (722d1f3ddec00779842b93fdddfda07c8f3ce90b)
 	- Keep plugin configurations when VM configutaions are reloaded.
 	  (77dfa49a6294bc96f3de151c05027b80cfa757b7)
 	- Setting 0 or negative value in loader_timeout disables the loder timeout.
