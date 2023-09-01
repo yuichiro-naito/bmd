@@ -1,7 +1,6 @@
 * Current
-* 1.1
 	- Keep plugin configurations when VM configutaions are reloaded.
-	  (f731bf146791c8009602f7436b74c3d280d3608d)
+	  (77dfa49a6294bc96f3de151c05027b80cfa757b7)
 	- Setting 0 or negative value in loader_timeout disables the loder timeout.
 	  (e34a6b7e70eae71e752e06a5298e0f03a959249c)
 	- Setting owner parameter is allowed to root file owner.
