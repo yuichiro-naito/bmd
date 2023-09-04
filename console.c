@@ -12,6 +12,7 @@
 #include "server.h"
 
 static int stop = 0;
+static struct termios defterm, term;
 
 static void
 sighandler_stop(int sig)
@@ -35,6 +36,14 @@ put_char(int fd, char c)
 	return n;
 }
 
+static void
+suspend(int local_only)
+{
+	tcsetattr(0, TCSADRAIN, &defterm);
+	kill(local_only ? getpid() : 0, SIGTSTP);
+	tcsetattr(0, TCSADRAIN, &term);
+}
+
 static int
 console_in(int fd)
 {
@@ -44,11 +53,22 @@ console_in(int fd)
 		if (stop)
 			break;
 		if (c == '~') {
-			if ((c = getchar()) == '.' ||
-			    put_char(fd, '~') <= 0)
-				break;
-			if (c == '~')
+			switch (c = getchar()) {
+			case '.':
+			case 4: /* ^D */
+				return 0;
+			case 0x19: /* ^Y */
+				suspend(1);
 				continue;
+			case 0x1a: /* ^Z */
+				suspend(0);
+				continue;
+			case '~':
+				break;
+			default:
+				if (put_char(fd, '~') <= 0)
+					return 0;
+			}
 		}
 		if (put_char(fd, c) <= 0)
 			break;
@@ -115,12 +135,12 @@ console(int fd)
 {
 	int status;
 	pid_t out_pid;
-	struct termios term;
 
 	if (ttysetup(fd, 115200) < 0)
 		return -1;
 
-	tcgetattr(0, &term);
+	tcgetattr(0, &defterm);
+	term = defterm;
 	term.c_lflag &= ~(ICANON | IEXTEN | ECHO);
 	term.c_iflag &= ~(INPCK | ICRNL);
 	term.c_oflag &= ~OPOST;
