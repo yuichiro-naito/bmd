@@ -1,3 +1,4 @@
+#include <sys/param.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -5,6 +6,9 @@
 #include "log.h"
 #include "conf.h"
 #include "bmd_plugin.h"
+
+#define CMP(a,b)    ((a) < (b) ? -1 : ((a) == (b) ? 0 : 1))
+#define CMP_RETURN(a,b)  if ((a) != (b)) return (a) < (b) ? -1 : 1
 
 struct id_entry {
 	SLIST_ENTRY(id_entry) next;
@@ -1127,6 +1131,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 
 	fprintf(fp, fmt, "name", conf->name);
 	fprintf(fp, dfmt, "owner", conf->owner);
+	fprintf(fp, dfmt, "group", conf->group);
 	fprintf(fp, fmt, "ncpu", conf->ncpu);
 	fprintf(fp, fmt, "memory", conf->memory);
 	fprintf(fp, fmt, "wired_memory", bool_str[conf->wired_memory]);
@@ -1492,9 +1497,7 @@ compare_nvlist_number(const nvlist_t *a, const char *k, const nvlist_t *b)
 	da = nvlist_get_number(a, k);
 	db = nvlist_get_number(b, k);
 
-	if (da == db)
-		return 0;
-	return (da < db) ? -1 : 1;
+	return CMP(da, db);
 }
 
 static int
@@ -1527,142 +1530,96 @@ compare_nvlist_descriptor(const nvlist_t *a, const char *k, const nvlist_t *b)
 	da = nvlist_get_descriptor(a, k);
 	db = nvlist_get_descriptor(b, k);
 
-	if (da == db)
-		return 0;
-	return (da < db) ? -1 : 1;
+	return CMP(da, db);
 }
 
 static int
 compare_nvlist_binary(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
 	const void *da, *db;
-	size_t sa, sb, min;
+	size_t sa, sb;
 	int rc;
 
 	da = nvlist_get_binary(a, k, &sa);
 	db = nvlist_get_binary(b, k, &sb);
+	if ((rc = memcmp(da, db, MIN(sa, sb))) != 0)
+		return rc;
 
-	if (sa == sb)
-		return memcmp(da, db, sa);
-	min = (sa < sb) ? sa : sb;
-	rc = memcmp(da, db, min);
-	if (rc == 0)
-		return (sa < sb) ? -1 : 1;
-
-	return rc;
+	return CMP(sa, sb);
 }
 
 static int
 compare_nvlist_bool_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
 	const bool *da, *db;
-	size_t i, sa, sb, min;
-	int rc;
+	size_t i, sa, sb;
 
 	da = nvlist_get_bool_array(a, k, &sa);
 	db = nvlist_get_bool_array(b, k, &sb);
-	if (sa == sb) {
-		for (i = 0; i < sa; i++)
-			if ((rc = da[i] - db[i]) != 0)
-				return rc;
-		return 0;
-	}
-	min = (sa < sb) ? sa : sb;
-	for (i = 0; i < min; i++)
-		if ((rc = da[i] - db[i]) != 0)
-			return rc;
-	return (sa < sb) ? -1 : 1;
+	for (i = 0; i < MIN(sa, sb); i++)
+		CMP_RETURN(da[i], db[i]);
+
+	return CMP(sa, sb);
 }
 
 static int
 compare_nvlist_number_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
 	const uint64_t *da, *db;
-	size_t i, sa, sb, min;
+	size_t i, sa, sb;
 
 	da = nvlist_get_number_array(a, k, &sa);
 	db = nvlist_get_number_array(b, k, &sb);
-	if (sa == sb) {
-		for (i = 0; i < sa; i++)
-			if (da[i] != db[i])
-				return (da[i] < db[i]) ? -1 : 1;
-		return 0;
-	}
-	min = (sa < sb) ? sa : sb;
-	for (i = 0; i < min; i++)
-		if (da[i] != db[i])
-			return (da[i] < db[i]) ? -1 : 1;
+	for (i = 0; i < MIN(sa, sb); i++)
+		CMP_RETURN(da[i], db[i]);
 
-	return (sa < sb) ? -1 : 1;
+	return CMP(sa, sb);
 }
 
 static int
 compare_nvlist_string_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
 	const char * const *da, * const *db;
-	size_t i, sa, sb, min;
+	size_t i, sa, sb;
 	int rc;
 
 	da = nvlist_get_string_array(a, k, &sa);
 	db = nvlist_get_string_array(b, k, &sb);
-	if (sa == sb) {
-		for (i = 0; i < sa; i++)
-			if ((rc = strcmp(da[i], db[i])) != 0)
-				return rc;
-		return 0;
-	}
-	min = (sa < sb) ? sa : sb;
-	for (i = 0; i < min; i++)
+	for (i = 0; i < MIN(sa, sb); i++)
 		if ((rc = strcmp(da[i], db[i])) != 0)
 			return rc;
 
-	return (sa < sb) ? -1 : 1;
+	return CMP(sa, sb);
 }
 
 static int
 compare_nvlist_nvlist_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
 	const nvlist_t * const *da, * const *db;
-	size_t i, sa, sb, min;
+	size_t i, sa, sb;
 	int rc;
 
 	da = nvlist_get_nvlist_array(a, k, &sa);
 	db = nvlist_get_nvlist_array(b, k, &sb);
-	if (sa == sb) {
-		for (i = 0; i < sa; i++)
-			if ((rc = compare_nvlist(da[i], db[i])) != 0)
-				return rc;
-		return 0;
-	}
-	min = (sa < sb) ? sa : sb;
-	for (i = 0; i < min; i++)
+	for (i = 0; i < MIN(sa, sb); i++)
 		if ((rc = compare_nvlist(da[i], db[i])) != 0)
 			return rc;
 
-	return (sa < sb) ? -1 : 1;
+	return CMP(sa, sb);
 }
 
 static int
 compare_nvlist_descriptor_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
 	const int *da, *db;
-	size_t i, sa, sb, min;
+	size_t i, sa, sb;
 
 	da = nvlist_get_descriptor_array(a, k, &sa);
 	db = nvlist_get_descriptor_array(b, k, &sb);
-	if (sa == sb) {
-		for (i = 0; i < sa; i++)
-			if (da[i] != db[i])
-				return (da[i] < db[i]) ? -1 : 1;
-		return 0;
-	}
-	min = (sa < sb) ? sa : sb;
-	for (i = 0; i < min; i++)
-		if (da[i] != db[i])
-			return (da[i] < db[i]) ? -1 : 1;
+	for (i = 0; i < MIN(sa, sb); i++)
+		CMP_RETURN(da[i], db[i]);
 
-
-	return (sa < sb) ? -1 : 1;
+	return CMP(sa, sb);
 }
 
 typedef int (*nvcomp)(const nvlist_t *a, const char *k, const nvlist_t *b);
