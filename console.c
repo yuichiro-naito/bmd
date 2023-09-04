@@ -171,8 +171,7 @@ console(int fd)
 int
 attach_console(const char *vmname, const char *comport)
 {
-	int fd;
-
+	int fd, rc;
 	char *port = get_peer_comport(comport);
 
 	if (port == NULL) {
@@ -180,24 +179,25 @@ attach_console(const char *vmname, const char *comport)
 		return 1;
 	}
 
-	if ((fd = open(port, O_RDWR)) < 0) {
+	if ((fd = rc = open(port, O_RDWR)) < 0) {
 		fprintf(stderr, "failed to open %s (%s)\n", port,
 			strerror(errno));
-		free(port);
-		return 1;
+		goto err;
 	}
 
-	if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
+	if ((rc = flock(fd, LOCK_EX | LOCK_NB)) < 0) {
 		fprintf(stderr, "%s's console is already used\n", vmname);
-		free(port);
-		close(fd);
-		return 1;
+		goto err2;
 	}
 
-	console(fd);
+	if ((rc = console(fd)) < 0)
+		fprintf(stderr, "failed to setup console\n");
+
 
 	flock(fd, LOCK_UN);
+err2:
 	close(fd);
+err:
 	free(port);
-	return 0;
+	return rc < 0 ? 1 : 0;
 }
