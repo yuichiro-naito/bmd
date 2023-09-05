@@ -98,8 +98,7 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", conf->name, getpid()) <
-	    0)
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", conf->name, getpid()) < 0)
 		return -1;
 
 	fd = mkstemp(fn);
@@ -115,13 +114,9 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	}
 	*mapfile = fn;
 
-	fp = fdopen(fd, "w+");
-	if (fp == NULL) {
+	if ((fp = fdopen(fd, "w+")) == NULL) {
 		ERR("can't open mapfile (%s)\n", strerror(errno));
-		unlink(fn);
-		*mapfile = NULL;
-		free(fn);
-		return -1;
+		goto err2;
 	}
 
 	i = 0;
@@ -139,6 +134,7 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 err:
 	ERR("can't write mapfile (%s)\n", strerror(errno));
 	fclose(fp);
+err2:
 	*mapfile = NULL;
 	unlink(fn);
 	free(fn);
@@ -446,8 +442,7 @@ assign_taps(struct vm *vm)
 		return 0;
 
 	STAILQ_FOREACH (nc, &conf->nets, next) {
-		nnc = copy_net_conf(nc);
-		if (nnc == NULL)
+		if ((nnc = copy_net_conf(nc)) == NULL)
 			goto err;
 		STAILQ_INSERT_TAIL(&vm->taps, nnc, next);
 	}
@@ -767,8 +762,16 @@ write_err_log(int fd, struct vm *vm)
 			if ((rc = write(vm->logfd, buf + n, size - n)) < 0)
 				if (errno != EINTR && errno != EAGAIN)
 					break;
-			if (rc > 0)
-				n += rc;
+			rc = 0;
+			if (rc < 0)
+				ERR("%s: failed to write err_logfile (%s)\n",
+				    vm->conf->name, strerror(errno));
+			if (rc <= 0) {
+				close(vm->logfd);
+				vm->logfd = -1;
+				break;
+			}
+			n += rc;
 		}
 	}
 
