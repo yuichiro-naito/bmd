@@ -1,4 +1,4 @@
-.Dd Jul 27, 2023
+.Dd Sep 5, 2023
 .Dt bmdctl 8
 .Os
 .
@@ -101,8 +101,7 @@ Force to quit the bhyve process.
 .It Cm reset Ar name
 Force to reset the bhyve process.
 .It Cm console Ar name
-Connect to the console of the virtual machine. Type '~.' escape sequence to
-quit the console.
+Connect to the console of the virtual machine. See ESCAPE SEQUENCES below.
 .It Cm showcomport Ar name
 Print the console device file. (nmdm)
 .It Cm showvgaport Ar name
@@ -149,6 +148,31 @@ If
 .Xr bmd.conf 5
 is not readable, use the default path of
 .Pa /var/run/bmd.sock .
+.Sh ESCAPE SEQUENCES
+The following escape sequences are available for
+.Nm
+.Ic console .
+.Bl -tag -width ".Ic ~. No or Ic ~^D"
+.It Ic ~. No or Ic ~^D
+Drop connection and exit.
+.It Ic ~^Z
+Stop
+.Nm
+.Ic console
+(only available with job control).
+.It Ic ~^Y
+Stop only the
+.Dq "local side"
+of
+.Nm
+.Ic console
+(only available with job control); the
+.Dq "remote side"
+of
+.Nm
+.Ic console ,
+the side that displays output from the remote host, is left running.
+.El
 .Sh SEE ALSO
 .Xr bmd 8 ,
 .Xr bmd.conf 5
