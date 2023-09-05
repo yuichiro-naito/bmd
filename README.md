@@ -154,7 +154,7 @@ Following keys are available.
 | comport | Specify com1 port<br> e.g. /dev/nmdm0B <br> "auto" assigns nmdm number automatically | no | (none) |
 | debug_port | gdb debug port | no | (none) |
 | disk | disk image filename(s)<br>e.g.<br>/var/images/vm-disk-0 nvme:/var/images/vm-disk-1 | yes | (none) |
-| error_logfile | log filename of bhyve messages | no | (none) |
+| err_logfile | log filename of bhyve messages | no | (none) |
 | graphics | set "yes" to use frame buffer device | no | no |
 | graphics_listen | vnc port number | no | 5900 |
 | graphics_password | password for vnc access | no | (none) |
