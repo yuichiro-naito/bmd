@@ -128,7 +128,9 @@ static int
 parse_disk(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	const char **p, *types[] = { "ahci-hd", "virtio-blk", "nvme" };
+	char * const *p;
+	static char * const types[] = {
+		"ahci-hd", "virtio-blk", "nvme" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
@@ -143,7 +145,8 @@ static int
 parse_iso(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	const char **p, *types[] = { "ahci-cd" };
+	char * const *p;
+	static char * const types[] = { "ahci-cd" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
@@ -158,7 +161,8 @@ static int
 parse_net(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	const char **p, *types[] = { "virtio-net", "e1000" };
+	char * const *p;
+	static char * const types[] = { "virtio-net", "e1000" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
@@ -193,7 +197,8 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	const char **p, *values[] = { "uefi", "csm", "bhyveload", "grub" };
+	char * const *p;
+	static char * const values[] = { "uefi", "csm", "bhyveload", "grub" };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
@@ -279,8 +284,9 @@ err:
 static int
 parse_boot(struct vm_conf *conf, char *val)
 {
-	const char **p, *values[] = { "yes", "true", "oneshot", "always" };
-	enum BOOT r[] = { YES, YES, ONESHOT, ALWAYS, NO };
+	char * const *p;
+	static char * const values[] = { "yes", "true", "oneshot", "always" };
+	static enum BOOT const r[] = { YES, YES, ONESHOT, ALWAYS, NO };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
@@ -292,8 +298,11 @@ parse_boot(struct vm_conf *conf, char *val)
 static int
 parse_hostbridge(struct vm_conf *conf, char *val)
 {
-	const char **p, *values[] = { "none", "standard", "intel", "amd" };
-	enum HOSTBRIDGE_TYPE t[] = { NONE, INTEL, INTEL, AMD };
+	char * const *p;
+	static char * const values[] = {
+		"none", "standard", "intel", "amd" };
+	static enum HOSTBRIDGE_TYPE const t[] = {
+		NONE, INTEL, INTEL, AMD };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
