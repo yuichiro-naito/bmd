@@ -180,6 +180,166 @@ plugin_set_timer(int second, plugin_call_back cb, void *data)
 }
 
 static int
+send_fd(int sock, int fd)
+{
+	int rc;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	struct iovec iov;
+	char result;
+
+	result = fd < 0 ? 0 : 1;
+	memset(&msg, 0, sizeof(msg));
+	iov.iov_base = &result;
+	iov.iov_len = sizeof(result);
+
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	if (result) {
+		msg.msg_controllen = CMSG_SPACE(sizeof(int));
+		msg.msg_control = calloc(1, msg.msg_controllen);
+		if (msg.msg_control == NULL)
+			return -1;
+
+		cmsg = msg.msg_control;
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_type = SCM_RIGHTS;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
+		memcpy(CMSG_DATA(cmsg), &fd, sizeof(fd));
+	}
+
+	while ((rc = sendmsg(sock, &msg, 0)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+	if (result)
+		free(msg.msg_control);
+	return rc;
+}
+
+static int
+recv_fd(int sock)
+{
+	int rc, fd;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	struct iovec iov;
+	char result = 0;
+
+	memset(&msg, 0, sizeof(msg));
+	memset(&iov, 0, sizeof(iov));
+	iov.iov_base = &result;
+	iov.iov_len = sizeof(result);
+
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_controllen = CMSG_SPACE(sizeof(int));
+	msg.msg_control = calloc(1, msg.msg_controllen);
+	if (msg.msg_control == NULL)
+		return -1;
+
+	while ((rc = recvmsg(sock, &msg, MSG_CMSG_CLOEXEC)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+
+	if (rc < 0 || result == 0)
+		goto err;
+
+	cmsg = CMSG_FIRSTHDR(&msg);
+	if (cmsg->cmsg_level != SOL_SOCKET ||
+	    cmsg->cmsg_type != SCM_RIGHTS)
+		goto err;
+
+	memcpy(&fd, CMSG_DATA(cmsg), sizeof(int));
+
+	free(msg.msg_control);
+	return fd;
+err:
+	free(msg.msg_control);
+	return -1;
+
+}
+
+static int
+send_ack(int sock)
+{
+	int rc;
+	static char *buf = "ack";
+
+	while ((rc = send(sock, buf, strlen(buf) + 1, 0)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+
+	return rc;
+}
+
+static int
+recv_ack(int sock)
+{
+	int rc;
+	char buf[8];
+
+	while ((rc = recv(sock, buf, sizeof(buf), 0)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+
+	return rc;
+}
+
+static int
+open_err_logfile(struct vm_conf *conf)
+{
+	int fd;
+	pid_t pid;
+	int socks[2];
+	struct stat st;
+
+	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0)
+		return -1;
+
+	if ((pid = fork()) < 0) {
+		close(socks[0]);
+		close(socks[1]);
+		return -1;
+	}
+
+	if (pid == 0) {
+		close(socks[0]);
+		if (conf->group != -1)
+			setgid(conf->group);
+		if (conf->owner > 0)
+			setuid(conf->owner);
+
+		while ((fd = open(conf->err_logfile,
+				  O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
+				  0644)) < 0)
+			if (errno != EINTR)
+				break;
+
+		if (fd >= 0 &&
+		    (fstat(fd, &st) < 0 || (! S_ISREG(st.st_mode)))) {
+			close(fd);
+			fd = -1;
+		}
+
+		send_fd(socks[1], fd);
+		recv_ack(socks[1]);
+		close(socks[1]);
+		exit(0);
+	}
+
+	close(socks[1]);
+
+	fd = recv_fd(socks[0]);
+	send_ack(socks[0]);
+	while (waitpid(pid, NULL, 0) < 0)
+		if (errno != EINTR)
+			break;
+
+	close(socks[0]);
+	return fd;
+}
+
+static int
 on_read_vm_output(int fd, void *data)
 {
 	struct vm_entry *vm_ent = data;
@@ -991,11 +1151,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	}
 
 	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
-		while ((VM_LOGFD(vm_ent) = open(conf->err_logfile,
-						O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
-						0644)) < 0)
-			if (errno != EINTR)
-				break;
+		VM_LOGFD(vm_ent) = open_err_logfile(conf);
 
 	return 0;
 }
@@ -1118,12 +1274,7 @@ reload_virtual_machines()
 		if (VM_LOGFD(vm_ent) != -1 &&
 		    VM_CONF(vm_ent)->err_logfile != NULL) {
 			VM_CLOSE(vm_ent, LOGFD);
-			while ((VM_LOGFD(vm_ent) =
-				open(VM_CONF(vm_ent)->err_logfile,
-				     O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
-				     0644)) < 0)
-				if (errno != EINTR)
-					break;
+			VM_LOGFD(vm_ent) = open_err_logfile(conf);
 		}
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
 		VM_NEWCONF(vm_ent) = conf;
