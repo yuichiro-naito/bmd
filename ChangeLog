@@ -1,4 +1,6 @@
 * Current
+	- Open 'err_logfile' under the user credential.
+	  (804ba24e973f1181f2b6d54ff25e2c1deaa4c502)
 	- Add support of ~^D, ~^Z, and ~^Y for `bmdctl console`.
 	  (4f2a16328f96e5fd9e68458b61e33ac456ae82b3)
 	- Add support of group name in owner parameter value.
