@@ -336,6 +336,8 @@ open_err_logfile(struct vm_conf *conf)
 			break;
 
 	close(socks[0]);
+	if (fd < 0)
+		ERR("%s: failed to open %s\n", conf->name, conf->err_logfile);
 	return fd;
 }
 
