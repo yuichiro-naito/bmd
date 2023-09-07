@@ -258,7 +258,7 @@ parse_owner(struct vm_conf *conf, char *val)
 		group = NULL;
 	}
 
-	if ((pwd = getpwnam(user)) < 0)
+	if ((pwd = getpwnam(user)) == NULL)
 		goto err;
 
 	if (get_owner(conf) != 0 && get_owner(conf) != pwd->pw_uid) {
@@ -266,7 +266,7 @@ parse_owner(struct vm_conf *conf, char *val)
 		goto err;
 	}
 
-	if (group != NULL && (grp = getgrnam(group)) < 0)
+	if (group != NULL && (grp = getgrnam(group)) == NULL)
 		goto err;
 
 	set_owner(conf, pwd->pw_uid);
