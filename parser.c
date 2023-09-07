@@ -893,6 +893,7 @@ push_file(char *fn)
 	FILE *fp;
 	struct input_file *file;
 	char *rpath;
+	struct stat st;
 
 	if (fn == NULL || (rpath = realpath(fn, NULL)) == NULL)
 		return 0;
@@ -915,6 +916,10 @@ push_file(char *fn)
 		ERR("failed to open %s\n", rpath);
 		goto err2;
 	}
+	if (fstat(fileno(fp), &st) < 0 || (! S_ISREG(st.st_mode))) {
+		ERR("%s is not a file\n", rpath);
+		goto err3;
+	}
 	file->filename = rpath;
 	file->line = 0;
 	file->fp = fp;
@@ -923,6 +928,8 @@ push_file(char *fn)
 		cur_file = TAILQ_FIRST(&input_file_list);
 	INFO("load config %s\n", rpath);
 	return 0;
+err3:
+	fclose(fp);
 err2:
 	free(file);
 err:
