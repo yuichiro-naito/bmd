@@ -1,4 +1,5 @@
 * Current
+* 2.0
 	- Open 'err_logfile' under the user credential.
 	  (804ba24e973f1181f2b6d54ff25e2c1deaa4c502)
 	- Add support of ~^D, ~^Z, and ~^Y for `bmdctl console`.
