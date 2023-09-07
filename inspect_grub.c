@@ -309,8 +309,13 @@ err:
 	return -1;
 }
 
+#if __FreeBSD_version < 1400071
+static int
+compare_disk_info(void *thunk, const void *l, const void *r)
+#else
 static int
 compare_disk_info(const void *l, const void *r, void *thunk)
+#endif
 {
 	const struct disk_info *a, *b;
 	int c;
@@ -363,8 +368,11 @@ sort_disk_info_list(struct disk_info_head *list, int nlist)
 	SLIST_FOREACH(di, list, next)
 		array[i++] = di;
 
+#if __FreeBSD_version < 1400071
+	qsort_r(array, nlist, sizeof(struct disk_info *), NULL, compare_disk_info);
+#else
 	qsort_r(array, nlist, sizeof(struct disk_info *), compare_disk_info, NULL);
-
+#endif
 	for (i = 0; i < nlist - 1; i++)
 		SLIST_NEXT(array[i], next) = array[i + 1];
 	SLIST_NEXT(array[nlist - 1], next) = NULL;
