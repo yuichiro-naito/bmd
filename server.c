@@ -520,7 +520,8 @@ showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 
 	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
 
-	chown_comport(comport, ucred);
+	if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN)
+		chown_comport(comport, ucred);
 
 	nvlist_add_string(res, "comport", comport ? comport : "(null)");
 
