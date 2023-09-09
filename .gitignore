@@ -1,7 +1,12 @@
 bmd
 bmd.debug
 bmd.full
-bmd.1.gz
+bmd.8.gz
+bmdctl.8.gz
+bmd.conf.5.gz
+conflex.c
+confparse.c
+y.tab.c
+y.tab.h
 .depend*
 *.o
-*.so
