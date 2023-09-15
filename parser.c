@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <ctype.h>
 #include <glob.h>
@@ -241,6 +242,30 @@ parse_debug_port(struct vm_conf *conf, char *val)
 }
 
 static int
+is_in_group(char *user, gid_t base, gid_t target)
+{
+	gid_t *grlist = NULL;
+	int i, ngroups;
+
+	ngroups = sysconf(_SC_NGROUPS_MAX) + 1;
+	if ((grlist = malloc(sizeof(gid_t) * ngroups)) == NULL ||
+	    getgrouplist(user, base, grlist, &ngroups) < 0)
+		goto err;
+
+	for (i = 0; i < ngroups; i++)
+		if (grlist[i] == target)
+			break;
+	if (i == ngroups)
+		goto err;
+
+	free(grlist);
+	return 0;
+err:
+	free(grlist);
+	return -1;
+}
+
+static int
 parse_owner(struct vm_conf *conf, char *val)
 {
 	char *user, *group, *val2 = NULL;
@@ -266,8 +291,15 @@ parse_owner(struct vm_conf *conf, char *val)
 		goto err;
 	}
 
-	if (group != NULL && (grp = getgrnam(group)) == NULL)
-		goto err;
+	if (group != NULL) {
+		if ((grp = getgrnam(group)) == NULL)
+			goto err;
+		if (get_owner(conf) != 0 &&
+		    is_in_group(pwd->pw_name, pwd->pw_gid, grp->gr_gid) < 0) {
+			ERR("%s is not a member of %s group.\n", user, group);
+			goto err;
+		}
+	}
 
 	set_owner(conf, pwd->pw_uid);
 
