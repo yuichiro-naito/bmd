@@ -1,4 +1,4 @@
-.Dd Sep 5, 2023
+.Dd Sep 20, 2023
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -108,6 +108,8 @@ Password for vnc access. This is not set by default.
 Vnc resolution. The default value is "1280x720".
 .It Cm graphics_vga = Ar on | off | io;
 Vga conf of bhyve. The default is "io".
+.It Cm graphics_wait = Ar yes | no;
+Wait for vnc connection before booting. The default is "no".
 .It Cm hostbridge = Ar standard | amd;
 Hostbridge device. The default is "standard".
 .It Cm install = Ar yes | no;
