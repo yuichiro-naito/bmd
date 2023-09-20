@@ -1449,7 +1449,7 @@ parse_opt(int argc, char *argv[])
 {
 	int ch;
 
-	while ((ch = getopt(argc, argv, "Ff:P:p:m:")) != -1) {
+	while ((ch = getopt(argc, argv, "Ff:P:p:m:v")) != -1) {
 		switch (ch) {
 		case 'F':
 			gl_conf->foreground = 1;
@@ -1470,12 +1470,17 @@ parse_opt(int argc, char *argv[])
 			free(gl_conf->unix_domain_socket_mode);
 			gl_conf->unix_domain_socket_mode = strdup(optarg);
 			break;
+		case 'v':
+			printf("BMD (Bhyve Management Daemon) version %s\n",
+			       BMD_VERSION);
+			exit(0);
 		default:
 			fprintf(stderr,
 			    "usage: %s [-F] [-f config file] "
 			    "[-p plugin directory] \n"
 			    "\t[-m unix domain socket permission] \n"
-			    "\t[-P pid file]\n",
+			    "\t[-P pid file]\n"
+			    "\t[-v\n",
 			    argv[0]);
 			return -1;
 		}
