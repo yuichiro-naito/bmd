@@ -608,6 +608,10 @@ calc_expr(struct variables *vars, struct cfexpr *ex, char *fn, int ln)
 		case '*':
 			return left * right;
 		case '/':
+			if (right == 0) {
+				ERR("%s line %d: divided by zero\n", fn, ln);
+				return 0;
+			}
 			return left / right;
 		case '%':
 			return left % right;
