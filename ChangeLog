@@ -1,4 +1,9 @@
 * Current
+* 2.1
+	- Add '-v' option to `bmd`.
+	  (7de73175018f9517050a62cb88ca717982f03672)
+	- Limit user privileged owner must be in the specified group.
+	  (26f0ab420ad145f7bc5e474a5626c31baeb14ad4)
 * 2.0
 	- Open 'err_logfile' under the user credential.
 	  (804ba24e973f1181f2b6d54ff25e2c1deaa4c502)
