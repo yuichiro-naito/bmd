@@ -1,4 +1,6 @@
 * Current
+	- Fix gid handling for the 'err_logfile' parameter.
+	  (79a65ef84d011b8145554bed327dbc369d6ecb4a)
 	- Fix handing of '0' value in vm configuration file.
 	  (b77ff613039f64a98b3562dc132b279d553f7077)
 	  (c24b47dab5ed9370783503b0ec401a0ff64e5d26)
