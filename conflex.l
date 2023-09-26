@@ -71,7 +71,7 @@ int lineno = 1;
 				(void)text2lval(0, 0, 0);
 				return NUMBER;
 			}
-<AR>\-?[1-9][0-9]*		{
+<AR>\-?[0-9][0-9]*		{
 				(void)text2lval(0, 0, 0);
 				return NUMBER;
 			}
