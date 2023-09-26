@@ -1,4 +1,7 @@
 * Current
+	- Fix handing of '0' value in vm configuration file.
+	  (b77ff613039f64a98b3562dc132b279d553f7077)
+	  (c24b47dab5ed9370783503b0ec401a0ff64e5d26)
 * 2.1
 	- Add '-v' option to `bmd`.
 	  (7de73175018f9517050a62cb88ca717982f03672)
