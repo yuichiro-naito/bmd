@@ -17,6 +17,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <pwd.h>
 
 #include "bmd.h"
 #include "log.h"
@@ -292,6 +293,8 @@ open_err_logfile(struct vm_conf *conf)
 	pid_t pid;
 	int socks[2];
 	struct stat st;
+	gid_t group;
+	struct passwd *pwd;
 
 	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0)
 		return -1;
@@ -304,10 +307,14 @@ open_err_logfile(struct vm_conf *conf)
 
 	if (pid == 0) {
 		close(socks[0]);
-		if (conf->group != -1)
-			setgid(conf->group);
-		if (conf->owner > 0)
+		if (conf->owner > 0) {
+			if ((group = conf->group) == -1)
+				group = (pwd = getpwuid(conf->owner)) ?
+					pwd->pw_gid : GID_NOBODY;
+
+			setgid(group);
 			setuid(conf->owner);
+		}
 
 		while ((fd = open(conf->err_logfile,
 				  O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,

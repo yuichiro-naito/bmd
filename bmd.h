@@ -12,6 +12,7 @@
 #define BMD_VERSION "2.1"
 
 #define UID_NOBODY   65534
+#define GID_NOBODY   65534
 
 /*
   Command timeout in second.
