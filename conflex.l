@@ -50,36 +50,45 @@ int lineno = 1;
 
 %option noinput
 %option nounput
+%option stack
 
-%start _ DQ AR
+%start _ DQ AR PR
 
 %%
 
 			/* Whitespace or equivalent */
-<_,AR>[ \t]+		;
+<_,AR,PR>[ \t]+		;
 <_>#.*			;
 <_>\/\/.*		;
-<_>\$\(\(		{
-				BEGIN AR;
+<_,DQ>\$\(\(		{
+				yy_push_state(AR);
 				return BEGIN_AR;
 			}
-<AR>\-?0x[0-9a-fA-F]+	{
+<AR,PR>0x[0-9a-fA-F]+	{
 				(void)text2lval(0, 0, 0);
 				return NUMBER;
 			}
-<AR>\-?0[0-7]+		{
+<AR,PR>0[0-7]+		{
 				(void)text2lval(0, 0, 0);
 				return NUMBER;
 			}
-<AR>\-?[0-9][0-9]*		{
+<AR,PR>[0-9][0-9]*		{
 				(void)text2lval(0, 0, 0);
 				return NUMBER;
 			}
-<AR>[\+\-\*\/%\(\)]	{
+<AR,PR>[\+\-\*\/%]	{
+				return yytext[0];
+			}
+<AR,PR>\(		{
+				yy_push_state(PR);
+				return yytext[0];
+			}
+<PR>\)			{
+				yy_pop_state();
 				return yytext[0];
 			}
 <AR>\)\)		{
-				BEGIN _;
+				yy_pop_state();
 				return END_AR;
 			}
 <_>\/\*([^*]|(\*+([^*\/])))*\*+\/ {
@@ -153,11 +162,11 @@ int lineno = 1;
 <DQ>\"			BEGIN _;
 
 			/* Variables, single-word or bracketed */
-<_,DQ,AR>$[A-Za-z_][A-Za-z_0-9]* {
+<_,DQ,AR,PR>$[A-Za-z_][A-Za-z_0-9]* {
 				(void)text2lval(1, 0, 0);
 				return VAR;
 			}
-<_,AR>$\{([^\n{}]|\\(.|\n))*\} |
+<_,AR,PR>$\{([^\n{}]|\\(.|\n))*\} |
 <DQ>$\{([^\n\"{}]|\\(.|\n))*\} {
 				(void)text2lval(2, 1, 0);
 				return VAR;

@@ -448,6 +448,54 @@ expr	: NUMBER
 		$$->right = NULL;
 		$$->val = NULL;
 	}
+	| '-' NUMBER
+	{
+		struct cfexpr *n;
+		$$ = emalloc(sizeof(struct cfexpr));
+		n = emalloc(sizeof(struct cfexpr));
+		if ($2 == NULL || $$ == NULL || n == NULL) {
+			free($2);
+			free_cfexpr($$);
+			free_cfexpr(n);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		n->type = CF_NUM;
+		n->op = '\0';
+		n->left = NULL;
+		n->right = NULL;
+		n->val = $2;
+
+		$$->type = CF_EXPR;
+		$$->op = '~';
+		$$->left = n;
+		$$->right = NULL;
+		$$->val = NULL;
+	}
+	| '-' VAR
+	{
+		struct cfexpr *v;
+		$$ = emalloc(sizeof(struct cfexpr));
+		v = emalloc(sizeof(struct cfexpr));
+		if ($2 == NULL || $$ == NULL || v == NULL) {
+			free($2);
+			free_cfexpr($$);
+			free_cfexpr(v);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		v->type = CF_VAR;
+		v->op = '\0';
+		v->left = NULL;
+		v->right = NULL;
+		v->val = $2;
+
+		$$->type = CF_EXPR;
+		$$->op = '~';
+		$$->left = v;
+		$$->right = NULL;
+		$$->val = NULL;
+	}
 	| '(' expr ')'
 	{
 		$$ = $2;
