@@ -1,4 +1,8 @@
 * Current
+	- Fix to handle arithmetic expression in double quote.
+	  Fix to handle a negative value and variable.
+	  Fix to handle parentheses in arithmetic expression.
+	  (c9d77128f73c6ef132979e71b1cf92742d2dd57d)
 	- Fix gid handling for the 'err_logfile' parameter.
 	  (79a65ef84d011b8145554bed327dbc369d6ecb4a)
 	- Fix handing of '0' value in vm configuration file.
