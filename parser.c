@@ -568,8 +568,8 @@ lookup_template(const char *name)
 	return NULL;
 }
 
-static long
-calc_expr(struct variables *vars, struct cfexpr *ex, char *fn, int ln)
+static int
+calc_expr(struct variables *vars, struct cfexpr *ex, long *v, char *fn, int ln)
 {
 	char *p, *val;
 	long n, left, right;
@@ -577,44 +577,60 @@ calc_expr(struct variables *vars, struct cfexpr *ex, char *fn, int ln)
 	switch (ex->type) {
 	case CF_NUM:
 		n = strtol(ex->val, &p, 0);
-		if (*p != '\0')
-			n = 0;
-		return n;
+		if (*p != '\0') {
+			ERR("%s line %d: %s is not a number\n",
+			    fn, ln, ex->val);
+			return -1;
+		}
+		*v = n;
+		return 0;
 	case CF_VAR:
-		if (vars == NULL)
+		if (vars == NULL) {
+			*v = 0;
 			return 0;
+		}
 		if ((val = get_var(vars, ex->val)) == NULL) {
 			ERR("%s line %d: ${%s} is undefined\n",
 			    fn, ln, ex->val);
-			return 0;
+			return -1;
 		}
 		n = strtol(val, &p, 0);
 		if (*p != '\0') {
 			ERR("%s line %d: ${%s} is not a number\n",
 			    fn, ln, ex->val);
+			return -1;
+		}
+		*v = n;
+		return 0;
+	case CF_EXPR:
+		if (calc_expr(vars, ex->left, &left, fn, ln) < 0)
+			return -1;
+		if (ex->op == '~') {
+			*v = -1 * left;
 			return 0;
 		}
-		return n;
-	case CF_EXPR:
-		if (ex->op == '~')
-			return -1 * calc_expr(vars, ex->left, fn, ln);
-		left = calc_expr(vars, ex->left, fn, ln);
-		right = calc_expr(vars, ex->right, fn, ln);
+		if (calc_expr(vars, ex->right, &right, fn, ln) < 0)
+			return -1;
 		switch (ex->op) {
 		case '+':
-			return left + right;
+			*v = left + right;
+			return 0;
 		case '-':
-			return left - right;
+			*v = left - right;
+			return 0;
 		case '*':
-			return left * right;
+			*v = left * right;
+			return 0;
 		case '/':
 			if (right == 0) {
 				ERR("%s line %d: divided by zero\n", fn, ln);
-				return 0;
+				return -1;
 			}
-			return left / right;
+			*v = left / right;
+			return 0;
 		case '%':
-			return left % right;
+			*v = left % right;
+			return 0;
 		}
 		break;
 	default:
@@ -651,7 +667,8 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 			fwrite(val, 1, strlen(val), fp);
 			break;
 		case CF_EXPR:
-			num = calc_expr(vars, tk->expr, tk->filename, tk->lineno);
+			if (calc_expr(vars, tk->expr, &num, tk->filename, tk->lineno) < 0)
+				goto err;
 			fprintf(fp, "%ld", num);
 			break;
 		case CF_NUM:
