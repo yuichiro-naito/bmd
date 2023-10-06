@@ -1069,7 +1069,7 @@ create_vm_conf(const char *vm_name)
 	if (get_id(name, &id) == 0) {
 		snprintf(idnum, sizeof(idnum), "%u", id);
 		if (set_var0(local, "ID", idnum) < 0)
-			ERR("failed to set \"NAME\" variable! (%s)\n",
+			ERR("failed to set \"ID\" variable! (%s)\n",
 			    strerror(errno));
 	} else
 		ERR("failed to allocate \"ID\" number! (%s)\n",

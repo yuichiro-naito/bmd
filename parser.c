@@ -85,7 +85,9 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 	arg = TAILQ_FIRST(&vl->args);
 	TAILQ_FOREACH (def, &tp->argdefs, next) {
 		argval = token_to_string(&conf->vars, arg ? &arg->tokens : &def->tokens);
-		set_var0(args, def->name, argval ? argval : "");
+		if (set_var0(args, def->name, argval ? argval : "") < 0)
+			ERR("failed to set \"%s\" argument! (%s)\n",
+			    def->name, strerror(errno));
 		free(argval);
 		arg = arg ? TAILQ_NEXT(arg, next) : NULL;
 	}
@@ -337,9 +339,16 @@ parse_owner(struct vm_conf *conf, char *val)
 	}
 
 	set_owner(conf, pwd->pw_uid);
+	if (set_var(&conf->vars, "OWNER", user) < 0)
+		ERR("failed to set \"OWNER\" variable! (%s)\n",
+		    strerror(errno));
 
-	if (group != NULL)
+	if (group != NULL) {
 		set_group(conf, grp->gr_gid);
+		if (set_var(&conf->vars, "GROUP", group) < 0)
+			ERR("failed to set \"GROUP\" variable! (%s)\n",
+			    strerror(errno));
+	}
 
 	free(val2);
 	return 0;
@@ -740,7 +749,10 @@ apply_global_vars(struct cfsection *sc)
 			val = token_to_string(&vars, &vl->tokens);
 			if (val == NULL)
 				continue;
-			set_var(&vars, pr->key->s, val);
+			if (set_var(&vars, pr->key->s, val) < 0)
+				ERR("failed to set \"%s\" variable! (%s)\n",
+				    pr->key->s, strerror(errno));
+
 			free(val);
 		}
 
@@ -762,7 +774,10 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 			val = token_to_string(vars, &vl->tokens);
 			if (val == NULL)
 				continue;
-			set_var(vars, key, val);
+			if (set_var(vars, key, val) < 0)
+				ERR("failed to set \"%s\" variable! (%s)\n",
+				    key, strerror(errno));
+
 			free(val);
 			continue;
 		}
@@ -843,7 +858,9 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 			val = token_to_string(&conf->vars, &vl->tokens);
 			if (val == NULL)
 				continue;
-			set_var(&conf->vars, key, val);
+			if (set_var(&conf->vars, key, val) < 0)
+				ERR("failed to set \"%s\" variable! (%s)\n",
+				    key, strerror(errno));
 			free(val);
 			continue;
 		}
@@ -1216,6 +1233,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	struct variables vars;
 	int rc = 0;
 	struct plugin_data_head head;
+	struct passwd *pw;
 
 	gv = malloc(sizeof(*gv));
 	global_conf = calloc(1, sizeof(*global_conf));
@@ -1278,6 +1296,13 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		}
 		conf->vars.global = gv;
 		conf->owner = sc->owner;
+		if ((pw = getpwuid(conf->owner)) == NULL ||
+		    set_var(&conf->vars, "OWNER", pw->pw_name) < 0)
+			ERR("failed to set \"OWNER\" variable! (%s)\n",
+			    strerror(errno));
+		if (set_var(&conf->vars, "GROUP", "") < 0)
+			ERR("failed to set \"GROUP\" variable! (%s)\n",
+			    strerror(errno));
 		if ((conf_ent = realloc(conf, sizeof(*conf_ent))) == NULL) {
 			free_plugin_data(&head);
 			free_vm_conf(conf);
