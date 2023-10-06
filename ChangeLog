@@ -1,4 +1,6 @@
 * Current
+	- Introduce template arguments.
+	  (cbf44be103d76d35b7eac329bbd5209ccffcf4e0)
 	- Fix to handle arithmetic expression in double quote.
 	  Fix to handle a negative value and variable.
 	  Fix to handle parentheses in arithmetic expression.
