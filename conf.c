@@ -434,9 +434,6 @@ set_name(struct vm_conf *conf, const char *name)
 {
 	if (conf == NULL)
 		return 0;
-	if (set_var(&conf->vars, "NAME", name) < 0)
-		ERR("failed to set \"NAME\" variable! (%s)\n",
-		    strerror(errno));
 	return set_string(&conf->name, name);
 }
 

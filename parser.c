@@ -7,6 +7,7 @@
 #include <libgen.h>
 #include <pwd.h>
 #include <grp.h>
+#include <errno.h>
 
 #include "log.h"
 #include "confparse.h"
@@ -101,6 +102,9 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 static int
 parse_name(struct vm_conf *conf, char *val)
 {
+	if (set_var(&conf->vars, "NAME", val) < 0)
+		ERR("failed to set \"NAME\" variable! (%s)\n",
+		    strerror(errno));
 	set_name(conf, val);
 	return 0;
 }
