@@ -8,7 +8,7 @@
 .Sh DESCRIPTION
 A
 .Xr bmd 8
-configuration file consists of 3 sections, global, vm, template.
+configuration file consists of 3 types of sections, global, vm, template.
 The global section defines
 .Xr bmd 8
 configurations and global variables. See Global Parameters for detail.
@@ -16,8 +16,10 @@ The global section must be written in a file which root privileged user owns.
 If the other user owns the file, the global section is parsed but ignored.
 Each Vm section defines VM configurations and vm scope variables.
 The templates are part of VM configurations common to multiple VMs.
-It is applied from a vm section or a template section. The same template
-can not be applied more than once.
+It is applied with optional arguments from a vm section or a template section.
+The same template can not be applied more than once.
+Each template argument can take a default value in case it is omitted.
+The default value is written following the "=" after the argument.
 
 The section starts with its type name. The vm and template sections are
 followed by name. Vm names are unique identifier for each vm section and
@@ -34,9 +36,9 @@ global {
 	global_parameter = "value2";
 	...
 }
-template tmplA {
+template tmplA(param = "sample") {
 	vm_parameter = "value1";
-	vm_parameter = "value2";
+	vm_parameter = $param;
 	...
 }
 vm hostB {
@@ -247,8 +249,8 @@ Both global and vm scope variables can be read and contain integer constants.
 .Ss Macros
 2 macros are available.
 .Bl -tag -width .include
-.It Cm .apply Ar template_name Op ,template_name2 ;
-Apply the template(s). This macro can be written in vm and template sections.
+.It Cm .apply Ar template_name Op (arg1, ...), template_name2 ;
+Apply the template(s) with optional arguments. This macro can be written in vm and template sections.
 .It Cm .include Ar include_pattern ;
 Include another configuration file(s). This macro must be written outside of
 the sections. This is only one exception not to be written in the sections.
