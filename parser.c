@@ -48,23 +48,54 @@ parse_int(int *val, char *value)
 	return 0;
 }
 
+static char *token_to_string(struct variables *vars, struct cftokens *tokens);
+
 static int
-parse_apply(struct vm_conf *conf, char *val)
+parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 {
+	int rc;
 	struct cfsection *tp;
+	char *val, *argval;
+	struct vartree *args, *old_args;
+	struct cfargdef *def;
+	struct cfarg    *arg;
+
+	val = token_to_string(&conf->vars, &vl->tokens);
+	if (val == NULL)
+		return -1;
 
 	tp = lookup_template(val);
 	if (tp == NULL) {
 		ERR("%s: unknown template %s\n", conf->name, val);
+		free(val);
 		return -1;
 	}
 	if (tp->applied) {
 		ERR("%s: template %s is already applied\n", conf->name, val);
+		free(val);
 		return 0;
+	}
+	free(val);
+
+	if ((args = malloc(sizeof(*args))) == NULL)
+		return -1;
+	RB_INIT(args);
+
+	arg = TAILQ_FIRST(&vl->args);
+	TAILQ_FOREACH (def, &tp->argdefs, next) {
+		argval = token_to_string(&conf->vars, arg ? &arg->tokens : &def->tokens);
+		set_var0(args, def->name, argval ? argval : "");
+		free(argval);
+		arg = arg ? TAILQ_NEXT(arg, next) : NULL;
 	}
 
 	tp->applied++;
-	return vm_conf_set_params(conf, tp);
+	old_args = conf->vars.args;
+	conf->vars.args = args;
+	rc = vm_conf_set_params(conf, tp);
+	conf->vars.args = old_args;
+	free_vartree(args);
+	return rc;
 }
 
 static int
@@ -484,7 +515,6 @@ struct parser_entry {
 
 /* must be sorted by name */
 struct parser_entry parser_list[] = {
-	{ ".apply",  &parse_apply, NULL },
 	{ "backend", &parse_backend, NULL },
 	{ "boot", &parse_boot, NULL },
 	{ "boot_delay", &parse_boot_delay, NULL },
@@ -637,7 +667,8 @@ calc_expr(struct variables *vars, struct cfexpr *ex, long *v, char *fn, int ln)
 		break;
 	}
 
-	return 0;
+	ERR("%s line %d: unknown operator\n", fn, ln);
+	return -1;
 }
 
 static char *
@@ -649,7 +680,8 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 	struct cftoken *tk;
 	long num;
 
-	fp = open_memstream(&str, &len);
+	if ((fp = open_memstream(&str, &len)) == NULL)
+		return NULL;
 
 	TAILQ_FOREACH(tk, tokens, next) {
 		switch (tk->type) {
@@ -696,6 +728,7 @@ apply_global_vars(struct cfsection *sc)
 
 	vars.global = global_vars;
 	vars.local = NULL;
+	vars.args = NULL;
 
 	TAILQ_FOREACH(pr, &sc->params, next)
 		if (pr->key->type == CF_VAR) {
@@ -793,6 +826,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 {
 	struct cfparam *pr;
 	struct cfvalue *vl;
+	struct cftoken *tk;
 	struct parser_entry *parser;
 	struct vm_conf_entry *conf_ent = (struct vm_conf_entry *)conf;
 	char *key, *val;
@@ -809,6 +843,11 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 			free(val);
 			continue;
 		}
+		if (strcasecmp(key, ".apply") == 0) {
+			TAILQ_FOREACH(vl, &pr->vals, next)
+				parse_apply(conf, vl);
+			continue;
+		}
 		parser = bsearch(key, parser_list,
 				 sizeof(parser_list) / sizeof(parser_list[0]),
 				 sizeof(parser_list[0]), compare_parser_entry);
@@ -820,9 +859,8 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 				continue;
 			if (parser) {
 				if ((*parser->parse)(conf, val) < 0) {
-					struct cftoken *tk = TAILQ_FIRST(&vl->tokens);
-					if (tk == NULL)
-						tk = pr->key;
+					tk = TAILQ_FIRST(&vl->tokens);
+					tk = tk ? tk : pr->key;
 					ERR("%s line %d: vm %s: invalid value: %s = %s\n",
 					    tk->filename, tk->lineno,
 					    sc->name, key, val);
@@ -834,9 +872,8 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 					    pr->key->filename, pr->key->lineno,
 					    sc->name, key);
 				} else	if (rc < 0) {
-					struct cftoken *tk = TAILQ_FIRST(&vl->tokens);
-					if (tk == NULL)
-						tk = pr->key;
+					tk = TAILQ_FIRST(&vl->tokens);
+					tk = tk ? tk : pr->key;
 					ERR("%s line %d: %s: invalid value: %s = %s\n",
 					    tk->filename, tk->lineno,
 					    sc->name, key, val);
@@ -938,6 +975,47 @@ free_cfsections(struct cfsections *ss)
 		return;
 	TAILQ_FOREACH_SAFE(sc, ss, next, sn)
 		free_cfsection(sc);
+}
+
+void
+free_cfarg(struct cfarg *ag)
+{
+	if (ag == NULL)
+		return;
+	free_cftokens(&ag->tokens);
+	free(ag);
+}
+
+void
+free_cfargs(struct cfargs *as)
+{
+	struct cfarg *ag, *an;
+	if (as == NULL)
+		return;
+	TAILQ_FOREACH_SAFE (ag, as, next, an)
+		free_cfarg(ag);
+	free(as);
+}
+
+void
+free_cfargdef(struct cfargdef *ad)
+{
+	if (ad == NULL)
+		return;
+	free(ad->name);
+	free_cftokens(&ad->tokens);
+	free(ad);
+}
+
+void
+free_cfargdefs(struct cfargdefs *ds)
+{
+	struct cfargdef *ad, *an;
+	if (ds == NULL)
+		return;
+	TAILQ_FOREACH_SAFE (ad, ds, next, an)
+		free_cfargdef(ad);
+	free(ds);
 }
 
 static int
@@ -1049,6 +1127,7 @@ glob_path(struct cftokens *ts)
 
 	vars.global = global_vars;
 	vars.local = NULL;
+	vars.args = NULL;
 
 	if ((tk = TAILQ_FIRST(ts)) == NULL)
 		goto ret;
@@ -1145,6 +1224,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	RB_INIT(gv);
 	vars.local = NULL;
 	vars.global = gv;
+	vars.args = NULL;
 	cur_file = NULL;
 
 	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)

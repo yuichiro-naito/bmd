@@ -122,12 +122,12 @@ int lineno = 1;
 <_>\+=			{
 				return PLEQ;
 			}
-<_>[,;={}]		{
+<_>[,;={}()]		{
 				return yytext[0];
 			}
 
 			/* Atomic (unquoted) strings */
-<_,DQ>[A-Za-z0-9_!%&()\-.:<>?@\[\]^`|~]+ |
+<_,DQ>[A-Za-z0-9_!%&\-.:<>?@\[\]^`|~]+ |
 <_,DQ>\\(.|\n|[0-7]{1,3}|x[0-9A-Fa-f]{1,2}) |
 <_,DQ>[$*+/\\]		{
 				(void)text2lval(0, 0, 0);

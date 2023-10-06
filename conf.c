@@ -1065,6 +1065,7 @@ create_vm_conf(const char *vm_name)
 
 	RB_INIT(local);
 	ret->vars.local = local;
+	ret->vars.args = NULL;
 	if (set_var0(local, "NAME", name) < 0)
 		ERR("failed to set \"NAME\" variable! (%s)\n",
 		    strerror(errno));
@@ -1369,6 +1370,18 @@ compare_variable_key(struct conf_var *a, struct conf_var *b)
 }
 
 int
+del_var(struct vartree *vars, char *k)
+{
+	struct conf_var key = {.key = k, .val = NULL};
+
+	if (k == NULL)
+		return -1;
+
+	RB_REMOVE(vartree, vars, &key);
+	return 0;
+}
+
+int
 set_var0(struct vartree *vars, char *k, const char *v)
 {
 	struct conf_var *n, key = {.key = k, .val = NULL};
@@ -1402,6 +1415,8 @@ set_var0(struct vartree *vars, char *k, const char *v)
 int
 set_var(struct variables *vars, char *k, const char *v)
 {
+	if (vars->args)
+		del_var(vars->args, k);
 	if (vars->local)
 		return set_var0(vars->local, k, v);
 	if (vars->global)
@@ -1465,7 +1480,8 @@ get_var(struct variables *vars, char *k)
 	 * that global variables are re-writable in vm and
 	 * template section.
 	 */
-	if ((ret = get_var0(vars->local, k)) == NULL &&
+	if ((ret = get_var0(vars->args, k)) == NULL &&
+	    (ret = get_var0(vars->local, k)) == NULL &&
 	    (ret = get_var0(vars->global, k)) == NULL)
 		return NULL;
 

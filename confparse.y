@@ -62,6 +62,10 @@ static void free_all_cfsections();
 	struct cftokens		*ts;
 	struct cftoken		*tk;
 	struct cfexpr		*ex;
+	struct cfarg            *ag;
+	struct cfargs           *as;
+	struct cfargdef         *ad;
+	struct cfargdefs        *ds;
 	char			*cs;
 }
 
@@ -71,17 +75,20 @@ static void free_all_cfsections();
 %type <sc> tmpl global vm
 %type <pp> param_l
 %type <p>  param
-%type <vs> values
-%type <vl> value
+%type <vs> values targets
+%type <vl> value target
 %type <ts> tokens
 %type <tk> name macro
 %type <ex> expr
+%type <ag> arg
+%type <as> args
+%type <ad> argdef
+%type <ds> argdefs
 %%
 
 
 /*
- * A config file is a series of jails (containing parameters) and jail-less
- * parameters which really belong to a global pseudo-jail.
+ * A config file consts of 3 types of sections and .include macro;
  */
 conf	:
 	;
@@ -101,6 +108,7 @@ global	: GLOBAL '{' param_l '}'
 		free($3);
 		apply_global_vars($$);  /* for .include macro */
 	}
+	;
 tmpl	: TEMPLATE STR '{' param_l '}'
 	{
 		if (($$ = add_section(SECTION_TEMPLATE, $2)) == NULL) {
@@ -111,6 +119,60 @@ tmpl	: TEMPLATE STR '{' param_l '}'
 		TAILQ_CONCAT(&$$->params, $4, next);
 		free($4);
 	}
+	| TEMPLATE STR '(' argdefs ')' '{' param_l '}'
+	{
+		if (($$ = add_section(SECTION_TEMPLATE, $2)) == NULL) {
+			free_cfargdefs($4);
+			free_cfparams($7);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_CONCAT(&$$->argdefs, $4, next);
+		free($4);
+		TAILQ_CONCAT(&$$->params, $7, next);
+		free($7);
+	}
+	;
+argdefs : argdef
+	{
+		if (($$ = emalloc(sizeof(struct cfargdefs))) == NULL) {
+			free_cfargdef($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_INIT($$);
+		TAILQ_INSERT_TAIL($$, $1, next);
+	}
+	| argdefs ',' argdef
+	{
+		$$ = $1;
+		TAILQ_INSERT_TAIL($$, $3, next);
+	}
+	;
+argdef	: STR
+	{
+		if (($$ = emalloc(sizeof(struct cfargdef))) == NULL) {
+			free($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		$$->name = $1;
+		TAILQ_INIT(&$$->tokens);
+	}
+	| STR '=' tokens
+	{
+		if (($$ = emalloc(sizeof(struct cfargdef))) == NULL) {
+			free($1);
+			free_cftokens($3);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		$$->name = $1;
+		TAILQ_INIT(&$$->tokens);
+		TAILQ_CONCAT(&$$->tokens, $3, next);
+		free($3);
+	}
+	;
 vm	: VM STR '{' param_l '}'
 	{
 		if (($$ = add_section(SECTION_VM, $2)) == NULL) {
@@ -140,17 +202,14 @@ param_l	:
 		$$ = $1;
 		TAILQ_INSERT_TAIL($$, $2, next);
 	}
-	| param_l ';'
-	{
-		$$ = $1;
-	}
 	;
 
 /*
- * Parameters have a name and an optional list of value strings,
+ * Parameters have a name and an list of values,
  * which may have "+=" or "=" preceding them.
+ * Macros have target parameters which includes optional arguments.
  */
-param	: macro values
+param	: macro targets
 	{
 		if (($$ = emalloc(sizeof(struct cfparam))) == NULL) {
 			free_cftoken($1);
@@ -246,10 +305,8 @@ name	: STR
 		TAILQ_NEXT($$, next) = NULL;
 	}
 	;
-
 values	: value
 	{
-
 		if (($$ = emalloc(sizeof(struct cfvalues))) == NULL) {
 			free_cfvalue($1);
 			free_all_cfsections();
@@ -264,10 +321,84 @@ values	: value
 		TAILQ_INSERT_TAIL($$, $3, next);
 	}
 	;
-
 value	: tokens
 	{
 		if (($$ = emalloc(sizeof(struct cfvalue))) == NULL) {
+			free_cftokens($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_INIT(&$$->tokens);
+		TAILQ_CONCAT(&$$->tokens, $1, next);
+		free($1);
+		TAILQ_INIT(&$$->args);
+		TAILQ_NEXT($$, next) = NULL;
+	}
+	;
+targets	: target
+	{
+		if (($$ = emalloc(sizeof(struct cfvalues))) == NULL) {
+			free_cfvalue($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_INIT($$);
+		TAILQ_INSERT_TAIL($$, $1, next);
+	}
+	| targets ',' target
+	{
+		$$ = $1;
+		TAILQ_INSERT_TAIL($$, $3, next);
+	}
+	;
+target	: tokens
+	{
+		if (($$ = emalloc(sizeof(struct cfvalue))) == NULL) {
+			free_cftokens($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_INIT(&$$->tokens);
+		TAILQ_CONCAT(&$$->tokens, $1, next);
+		free($1);
+		TAILQ_INIT(&$$->args);
+		TAILQ_NEXT($$, next) = NULL;
+	}
+	| tokens '(' args ')'
+	{
+		if (($$ = emalloc(sizeof(struct cfvalue))) == NULL) {
+			free_cftokens($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_INIT(&$$->tokens);
+		TAILQ_CONCAT(&$$->tokens, $1, next);
+		free($1);
+		TAILQ_INIT(&$$->args);
+		TAILQ_CONCAT(&$$->args, $3, next);
+		free($3);
+		TAILQ_NEXT($$, next) = NULL;
+	}
+	;
+args	: arg
+	{
+		if (($$ = emalloc(sizeof(struct cfargs))) == NULL) {
+			free_cfarg($1);
+			free_all_cfsections();
+			goto yyabort;
+		}
+		TAILQ_INIT($$);
+		TAILQ_INSERT_TAIL($$, $1, next);
+	}
+	| args ',' arg
+	{
+		$$ = $1;
+		TAILQ_INSERT_TAIL($$, $3, next);
+	}
+	;
+arg	: tokens
+	{
+		if (($$ = emalloc(sizeof(struct cfarg))) == NULL) {
 			free_cftokens($1);
 			free_all_cfsections();
 			goto yyabort;
@@ -281,7 +412,8 @@ value	: tokens
 
 /*
  * Strings may be passed in pieces, because of quoting and/or variable
- * interpolation.  Reassemble them into a single string.
+ * interpolation. Make a linked list for strings and a tree for arithmetic
+ * expressions.
  */
 tokens	:
 	{
@@ -337,6 +469,9 @@ tokens	:
 		TAILQ_INSERT_TAIL($$, ct, next);
 	}
 	;
+/*
+ * Arithmetic expressions.
+ */
 expr	: NUMBER
 	{
 		if ($1 == NULL ||
@@ -545,6 +680,7 @@ add_section(enum SECTION sec, char *name)
 	v->owner = peek_fileowner();
 	v->filename = peek_filename();
 	TAILQ_INIT(&v->params);
+	TAILQ_INIT(&v->argdefs);
 	TAILQ_INSERT_TAIL(sections[sec], v, next);
 	return v;
 }

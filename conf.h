@@ -66,6 +66,7 @@ RB_HEAD(vartree, conf_var);
 struct variables {
 	struct vartree *global;
 	struct vartree *local;
+	struct vartree *args;
 };
 
 struct vm_conf {

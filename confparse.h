@@ -62,11 +62,26 @@ struct cftoken {
 	int 			lineno;
 };
 
+TAILQ_HEAD(cfargdefs, cfargdef);
+
+struct cfargdef {
+	TAILQ_ENTRY(cfargdef)   next;
+	char                     *name;
+	struct cftokens		tokens;
+};
+
 TAILQ_HEAD(cfvalues, cfvalue);
+TAILQ_HEAD(cfargs, cfarg);
+
+struct cfarg {
+	TAILQ_ENTRY(cfarg)      next;
+	struct cftokens		tokens;
+};
 
 struct cfvalue {
 	TAILQ_ENTRY(cfvalue)	next;
 	struct cftokens		tokens;
+	struct cfargs           args;
 };
 
 TAILQ_HEAD(cfparams, cfparam);
@@ -84,6 +99,7 @@ struct cfsection {
 	TAILQ_ENTRY(cfsection)	next;
 	char			*name;
 	struct cfparams		params;
+	struct cfargdefs        argdefs;
 	int			applied;
 	int			duplicate;
 	uid_t                   owner;
@@ -121,3 +137,7 @@ void free_cfparam(struct cfparam *pr);
 void free_cfparams(struct cfparams *ps);
 void free_cfsection(struct cfsection *sec);
 void free_cfsections(struct cfsections *ss);
+void free_cfarg(struct cfarg *ag);
+void free_cfargs(struct cfargs *as);
+void free_cfargdef(struct cfargdef *ad);
+void free_cfargdefs(struct cfargdefs *ds);
