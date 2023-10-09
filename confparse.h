@@ -35,8 +35,6 @@
 #include <sys/time.h>
 #include <stdio.h>
 
-STAILQ_HEAD(cfvars, cfvar);
-
 enum CF_TYPE {
 	CF_STR,
 	CF_VAR,
@@ -70,13 +68,14 @@ struct cfargdef {
 	struct cftokens		tokens;
 };
 
-TAILQ_HEAD(cfvalues, cfvalue);
 TAILQ_HEAD(cfargs, cfarg);
 
 struct cfarg {
 	TAILQ_ENTRY(cfarg)      next;
 	struct cftokens		tokens;
 };
+
+TAILQ_HEAD(cfvalues, cfvalue);
 
 struct cfvalue {
 	TAILQ_ENTRY(cfvalue)	next;
