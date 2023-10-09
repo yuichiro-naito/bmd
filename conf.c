@@ -182,6 +182,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->backend);
 	free(vc->debug_port);
 	free(vc->err_logfile);
+	free(vc->grub_run_partition);
 	free_fbuf(vc->fbuf);
 	clear_passthru_conf(vc);
 	clear_disk_conf(vc);
