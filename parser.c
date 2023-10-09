@@ -944,6 +944,7 @@ free_cfvalue(struct cfvalue *vl)
 	if (vl == NULL)
 		return;
 	free_cftokens(&vl->tokens);
+	free_cfargs(&vl->args);
 	free(vl);
 }
 
@@ -983,6 +984,7 @@ free_cfsection(struct cfsection *sec)
 	if (sec == NULL)
 		return;
 	free_cfparams(&sec->params);
+	free_cfargdefs(&sec->argdefs);
 	free(sec->name);
 	free(sec);
 }
@@ -1015,7 +1017,6 @@ free_cfargs(struct cfargs *as)
 		return;
 	TAILQ_FOREACH_SAFE (ag, as, next, an)
 		free_cfarg(ag);
-	free(as);
 }
 
 void
@@ -1036,7 +1037,6 @@ free_cfargdefs(struct cfargdefs *ds)
 		return;
 	TAILQ_FOREACH_SAFE (ad, ds, next, an)
 		free_cfargdef(ad);
-	free(ds);
 }
 
 static int
