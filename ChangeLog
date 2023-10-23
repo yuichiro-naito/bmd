@@ -1,4 +1,5 @@
 * Current
+* 2.2
 	- Introduce template arguments.
 	  (cbf44be103d76d35b7eac329bbd5209ccffcf4e0)
 	- Fix to handle arithmetic expression in double quote.
