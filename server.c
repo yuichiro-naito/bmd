@@ -41,6 +41,7 @@ create_sock_buf(int fd)
 	if  (getsockopt(fd, SOL_LOCAL, LOCAL_PEERCRED, &r->peer, &sz) < 0)
 		r->peer.cr_uid = UID_NOBODY;
 
+	r->res_fd = -1;
 	LIST_INSERT_HEAD(&sock_list, r, next);
 	return r;
 }
@@ -52,6 +53,8 @@ destroy_sock_buf(struct sock_buf *p)
 		return;
 	LIST_REMOVE(p, next);
 	close(p->fd);
+	if (p->res_fd != -1)
+		close(p->res_fd);
 	free(p->buf);
 	free(p->res_buf);
 	free(p);
@@ -96,7 +99,7 @@ clear_sock_buf(struct sock_buf *p)
 {
 	free(p->buf);
 	p->buf = NULL;
-	p->state = 0;
+	p->read_state = 0;
 	p->buf_size = 0;
 	p->read_size = 0;
 	p->read_bytes = 0;
@@ -106,6 +109,8 @@ void
 clear_send_sock_buf(struct sock_buf *p)
 {
 	free(p->res_buf);
+	p->sent_size = 0;
+	p->res_fd = -1;
 	p->res_buf = NULL;
 	p->res_size = 0;
 	p->res_bytes = 0;
@@ -121,26 +126,75 @@ clear_send_sock_buf(struct sock_buf *p)
 int
 send_sock_buf(struct sock_buf *p)
 {
-	ssize_t n = p->res_bytes;
-	size_t size = p->res_size;
-	char *buf = p->res_buf;
+	int size, rc;
+	ssize_t n;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	struct iovec iov[2];
+	char size_buf[4];
+
+	if (p->res_size == 0 || p->sent_size == p->res_size + sizeof(size_buf))
+		return 2;
+
+	memset(&msg, 0, sizeof(msg));
+	if (p->sent_size < sizeof(size_buf)) {
+		size = htonl(p->res_size);
+		memcpy(size_buf, &size, sizeof(size_buf));
+		iov[0].iov_base = size_buf + p->sent_size;
+		iov[0].iov_len = sizeof(size_buf) - p->sent_size;
+		iov[1].iov_base = p->res_buf;
+		iov[1].iov_len = p->res_size;
+		msg.msg_iov = iov;
+		msg.msg_iovlen = 2;
+	} else {
+		iov[0].iov_base = p->res_buf + p->sent_size - sizeof(size_buf);
+		iov[0].iov_len = p->res_size - p->sent_size + sizeof(size_buf);
+		msg.msg_iov = iov;
+		msg.msg_iovlen = 1;
+	}
+
+	msg.msg_flags = MSG_DONTWAIT;
+
+	if (p->res_fd != -1) {
+		msg.msg_controllen = CMSG_SPACE(sizeof(int));
+		msg.msg_control = calloc(1, msg.msg_controllen);
+		if (msg.msg_control == NULL)
+			return -1;
+
+		cmsg = msg.msg_control;
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_type = SCM_RIGHTS;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(p->res_fd));
+		memcpy(CMSG_DATA(cmsg), &p->res_fd, sizeof(p->res_fd));
+	}
 
 retry:
-	if ((n = send(p->fd, buf + n, size - n, MSG_DONTWAIT)) < 0) {
+	if ((n = sendmsg(p->fd, &msg, MSG_DONTWAIT)) < 0) {
 		switch (errno) {
 		case EINTR:
 			goto retry;
 		case EAGAIN:
-			return 1;
+			rc = 1;
+			goto ret;
 		default:
-			return -1;
+			rc = -1;
+			goto ret;
 		}
 	}
+	if (n == 0) {
+		rc = 0;
+		goto ret;
+	}
 	time(&p->event_time);
-	p->res_bytes += n;
-	if (p->res_bytes == p->res_size)
-		return 2;
-	return 1;
+	p->sent_size += n;
+	rc = (p->sent_size == p->res_bytes + sizeof(size_buf)) ? 2 : 1;
+ret:
+	if (p->res_fd != -1) {
+		free(msg.msg_control);
+		close(p->res_fd);
+		p->res_fd = -1;
+	}
+	return rc;
 }
 
 /**
@@ -158,7 +212,7 @@ recv_sock_buf(struct sock_buf *sb)
 	size_t nread, size;
 	char buf[1];
 
-	if (sb->state == 0) {
+	if (sb->read_state == 0) {
 		start = sb->size;
 		nread = sb->read_size;
 		size = sizeof(sb->size);
@@ -197,10 +251,10 @@ retry:
 
 	time(&sb->event_time);
 	nread += n;
-	if (sb->state == 0) {
+	if (sb->read_state == 0) {
 		sb->read_size = nread;
 		if (nread == size) {
-			sb->state = 1;
+			sb->read_state = 1;
 			sb->buf_size = ntohl(*((int32_t *)sb->size));
 			if (sb->buf_size > 1024 * 1024)
 				return -1;
@@ -345,7 +399,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 	return 0;
 }
 
-char *
+static char *
 get_peer_comport(const char *comport)
 {
 	int i;
@@ -399,6 +453,29 @@ chown_comport(const char *comport, struct xucred *ucred)
 }
 
 static int
+open_comport(const char *comport)
+{
+	int fd;
+	char *fn;
+
+	if ((fn = get_peer_comport(comport)) == NULL)
+		return -1;
+	while ((fd = open(fn, O_RDWR)) < 0)
+		if (errno != EINTR)
+			goto err;
+	if (flock(fd, LOCK_EX | LOCK_NB) < 0)
+		goto err2;
+
+	free(fn);
+	return fd;
+err2:
+	close(fd);
+err:
+	free(fn);
+	return -1;
+}
+
+static int
 check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
 {
 	uid_t owner = VM_CONF(vm_ent)->owner;
@@ -429,6 +506,7 @@ boot0_command(int s, const nvlist_t *nv, int style, struct xucred *ucred)
 	const char *name, *reason, *comport;
 	struct vm_entry *vm_ent = NULL;
 	nvlist_t *res;
+	int fd;
 	bool error = false;
 
 	if (style < 0) {
@@ -479,11 +557,9 @@ ret:
 	if (error)
 		nvlist_add_string(res, "reason", reason);
 	if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
-		       (comport = VM_CONF(vm_ent)->comport))) {
-		if (chown_comport(comport, ucred) < 0)
-			ERR("failed to change owner (%s)\n", comport);
-		nvlist_add_string(res, "comport", comport);
-	}
+		       (comport = VM_CONF(vm_ent)->comport)) &&
+	    (fd = open_comport(comport)) >= 0)
+		nvlist_add_number(res, FD_KEY, fd);
 	return res;
 }
 
@@ -504,6 +580,7 @@ showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
+	int fd;
 	nvlist_t *res;
 	bool error = false;
 	char *comport;
@@ -522,6 +599,9 @@ showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 
 	if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN)
 		chown_comport(comport, ucred);
+
+	if ((fd = open_comport(comport)) >= 0)
+		nvlist_add_number(res, FD_KEY, fd);
 
 	nvlist_add_string(res, "comport", comport ? comport : "(null)");
 
@@ -750,6 +830,9 @@ recv_command(struct sock_buf *sb)
 		goto err;
 
 	res = (*func)(sb->fd, nv, &sb->peer);
+
+	sb->res_fd = nvlist_exists_number(res, FD_KEY) ?
+		nvlist_take_number(res, FD_KEY) : -1;
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {

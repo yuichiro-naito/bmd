@@ -116,10 +116,62 @@ compare_by_name(const void *a, const void *b)
 #undef GETNAME
 }
 
+static int
+recv_size(int sock, uint32_t *sz, int *fd)
+{
+	int rc, n = 0;
+	bool fd_set = false;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	struct iovec iov;
+	char buf[4];
+
+	memset(&msg, 0, sizeof(msg));
+	memset(&iov, 0, sizeof(iov));
+
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_controllen = CMSG_SPACE(sizeof(int));
+	msg.msg_control = calloc(1, msg.msg_controllen);
+	if (msg.msg_control == NULL)
+		return -1;
+
+retry:
+	iov.iov_base = buf + n;
+	iov.iov_len = sizeof(buf) - n;
+	while ((rc = recvmsg(sock, &msg, MSG_CMSG_CLOEXEC)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+
+	if (rc <= 0)
+		goto ret;
+	n += rc;
+
+	if (fd && !fd_set) {
+		cmsg = CMSG_FIRSTHDR(&msg);
+		if (cmsg && cmsg->cmsg_level == SOL_SOCKET &&
+		    cmsg->cmsg_type == SCM_RIGHTS)
+			memcpy(fd, CMSG_DATA(cmsg), sizeof(int));
+		else
+			*fd = -1;
+		fd_set = true;
+	}
+
+	if (n < sizeof(buf))
+		goto retry;
+
+	if (sz)
+		*sz = ntohl(*((uint32_t*)buf));
+	rc = n;
+ret:
+	free(msg.msg_control);
+	return rc;
+}
+
 nvlist_t *
 send_recv(nvlist_t *cmd)
 {
-	int s;
+	int s, fd, rc;
 	nvlist_t *res = NULL;
 	uint32_t sz;
 
@@ -129,10 +181,10 @@ send_recv(nvlist_t *cmd)
 	}
 
 	sz = htonl(nvlist_size(cmd));
-retry:
-	if (send(s, &sz, sizeof(sz), 0) < 0) {
-		if (errno == EINTR)
-			goto retry;
+	while ((rc = send(s, &sz, sizeof(sz), 0)) < 0)
+		if (errno != EINTR)
+			break;
+	if (rc <= 0) {
 		printf("can not send to bmd\n");
 		goto end;
 	}
@@ -141,11 +193,19 @@ retry:
 		goto end;
 	}
 
-	res = nvlist_recv(s, 0);
-	if (res == NULL) {
+	if (recv_size(s, &sz, &fd) < 0) {
+		printf("server doen't return the size of message\n");
+		goto end;
+	}
+
+	if ((res = nvlist_recv(s, 0)) == NULL) {
 		printf("server returns null\n");
 		goto end;
 	}
+
+	if (fd != -1)
+		nvlist_add_number(res, FD_KEY, fd);
+
 end:
 	close(s);
 	return res;
@@ -213,7 +273,7 @@ end:
 int
 do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
 {
-	int ret = 0;
+	int fd, ret = 0;
 	nvlist_t *cmd, *res = NULL;
 	const char *comport = NULL;
 	const static char *command[] = {"showcomport", "boot", "install"};
@@ -242,8 +302,19 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 	if (show)
 		printf("%s\n", comport ? comport : "no com port");
 
-	if (console && comport)
-		ret = attach_console(name, comport);
+	if (nvlist_exists_number(res, FD_KEY)) {
+		fd = nvlist_take_number(res, FD_KEY);
+		if (console && attach_console(fd) < 0) {
+			fprintf(stderr, "failed to setup console\n");
+			ret = 1;
+		}
+		close(fd);
+	} else {
+		if (console) {
+			fprintf(stderr, "failed to open console\n");
+			ret = 1;
+		}
+	}
 
 end:
 	nvlist_destroy(cmd);

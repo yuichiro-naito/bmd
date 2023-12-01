@@ -24,7 +24,6 @@ int recv_command(struct sock_buf *sb);
 struct timespec *calc_timeout(int timeout, struct timespec *ts);
 int close_timeout_sock_buf(int timeout);
 
-char *get_peer_comport(const char *comport);
-int attach_console(const char *vmname, const char *comport);
+int attach_console(int fd);
 
 #endif

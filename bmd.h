@@ -14,6 +14,8 @@
 #define UID_NOBODY   65534
 #define GID_NOBODY   65534
 
+#define FD_KEY       "_file_descriptor_"
+
 /*
   Command timeout in second.
  */
@@ -114,12 +116,14 @@ struct event {
 struct sock_buf {
 	LIST_ENTRY(sock_buf) next;
 	int fd;
-	int state;
+	int read_state;
 	size_t buf_size;
 	char size[4];
 	size_t read_size;
 	size_t read_bytes;
 	char *buf;
+	int sent_size;
+	int res_fd;
 	size_t res_size;
 	size_t res_bytes;
 	char *res_buf;

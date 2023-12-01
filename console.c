@@ -130,8 +130,8 @@ ttysetup(int fd, int speed)
 	return (tcsetattr(fd, TCSAFLUSH, &cntrl));
 }
 
-static int
-console(int fd)
+int
+attach_console(int fd)
 {
 	int status;
 	pid_t out_pid;
@@ -166,38 +166,4 @@ console(int fd)
 	waitpid(out_pid, &status, 0);
 
 	return 0;
-}
-
-int
-attach_console(const char *vmname, const char *comport)
-{
-	int fd, rc;
-	char *port = get_peer_comport(comport);
-
-	if (port == NULL) {
-		fprintf(stderr, "invalid comport \"%s\"\n", comport);
-		return 1;
-	}
-
-	if ((fd = rc = open(port, O_RDWR)) < 0) {
-		fprintf(stderr, "failed to open %s (%s)\n", port,
-			strerror(errno));
-		goto err;
-	}
-
-	if ((rc = flock(fd, LOCK_EX | LOCK_NB)) < 0) {
-		fprintf(stderr, "%s's console is already used\n", vmname);
-		goto err2;
-	}
-
-	if ((rc = console(fd)) < 0)
-		fprintf(stderr, "failed to setup console\n");
-
-
-	flock(fd, LOCK_UN);
-err2:
-	close(fd);
-err:
-	free(port);
-	return rc < 0 ? 1 : 0;
 }
