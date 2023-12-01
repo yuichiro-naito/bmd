@@ -1,4 +1,4 @@
-.Dd Sep 20, 2023
+.Dd Dec 1, 2023
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -131,6 +131,10 @@ Specify boot loader. This parameter is mandatory.
 .It Cm loader_timeout = Ar timeout_sec;
 Loader timeout in seconds. If set to 0 or negative value, timeout is disabled.
 The default value is "15".
+.It Cm bhyveload_loader = Ar OS_loader_path;
+Specify the path to the OS loader. It is passed with "-l" to the bhyveload.
+If omitted, the default OS loader "/boot/userboot.so" is used.
+.It Cm loader_timeout = Ar timeout_sec;
 .It Xo
 .Cm memory = Ar memsize Ns Oo
 .Sm off

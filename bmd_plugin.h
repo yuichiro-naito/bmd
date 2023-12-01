@@ -94,6 +94,7 @@ char *get_loadcmd(struct vm_conf *conf);
 char *get_installcmd(struct vm_conf *conf);
 char *get_err_logfile(struct vm_conf *conf);
 char *get_loader(struct vm_conf *conf);
+char *get_bhyveload_loader(struct vm_conf *conf);
 int get_loader_timeout(struct vm_conf *conf);
 int get_stop_timeout(struct vm_conf *conf);
 char *get_grub_run_partition(struct vm_conf *conf);

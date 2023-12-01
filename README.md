@@ -170,6 +170,7 @@ Following keys are available.
 | loadcmd | boot script for grub-bhyve<br>e.g. "kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd" <br> "auto" inspects disk image. | no | (none)
 | loader | "bhyveload": use bhyveload<br>"grub": use grub-bhyve<br>"uefi": uefi boot | yes | (none) |
 | loader_timeout | loader timeout in seconds | no | 15 |
+| bhyveload_loader | path to the OS loader | no | (none) |
 | memory | memory size<br>e.g. 2G | yes | (none) |
 | name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs | yes | (none) |

@@ -105,6 +105,7 @@ struct vm_conf {
 	bool reboot_on_change;
 	bool single_user;
 	bool install;
+	char *bhyveload_loader;
 };
 
 struct vm {
@@ -149,6 +150,7 @@ int set_loadcmd(struct vm_conf *conf, const char *cmd);
 int set_installcmd(struct vm_conf *conf, const char *cmd);
 int set_err_logfile(struct vm_conf *conf, const char *name);
 int set_loader(struct vm_conf *conf, const char *loader);
+int set_bhyveload_loader(struct vm_conf *conf, const char *loader);
 int set_loader_timeout(struct vm_conf *conf, int timeout);
 int set_stop_timeout(struct vm_conf *conf, int timeout);
 int set_grub_run_partition(struct vm_conf *conf, const char *partition);

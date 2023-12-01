@@ -326,7 +326,7 @@ static int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
-	char *args[12];
+	char *args[14];
 	int i, outfd[2], errfd[2];
 	struct vm_conf *conf = vm->conf;
 	bool dopipe = (vm->assigned_comport == NULL) ||
@@ -371,6 +371,10 @@ bhyve_load(struct vm *vm)
 		if (conf->single_user) {
 			args[i++] = "-e";
 			args[i++] = "boot_single=YES";
+		}
+		if (conf->bhyveload_loader) {
+			args[i++] = "-l";
+			args[i++] = conf->bhyveload_loader;
 		}
 		args[i++] = "-c";
 		args[i++] = (vm->assigned_comport != NULL) ? vm->assigned_comport : "stdio";

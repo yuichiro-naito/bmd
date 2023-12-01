@@ -189,6 +189,7 @@ free_vm_conf(struct vm_conf *vc)
 	clear_iso_conf(vc);
 	clear_net_conf(vc);
 	free(vc->keymap);
+	free(vc->bhyveload_loader);
 	free(vc);
 }
 
@@ -498,6 +499,20 @@ char *
 get_loader(struct vm_conf *conf)
 {
 	return conf->loader;
+}
+
+int
+set_bhyveload_loader(struct vm_conf *conf, const char *loader)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->bhyveload_loader, loader);
+}
+
+char *
+get_bhyveload_loader(struct vm_conf *conf)
+{
+	return conf->bhyveload_loader;
 }
 
 int
@@ -1145,6 +1160,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, dfmt, "loader_timeout", conf->loader_timeout);
 	fprintf(fp, dfmt, "stop_timeout", conf->stop_timeout);
 	fprintf(fp, fmt, "loader", conf->loader);
+	fprintf(fp, fmt, "bhyveload_loader", conf->bhyveload_loader);
 	fprintf(fp, fmt, "loadcmd", conf->loadcmd);
 	fprintf(fp, fmt, "installcmd", conf->installcmd);
 	fprintf(fp, fmt, "err_logfile", conf->err_logfile);
@@ -1296,6 +1312,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_STR(installcmd);
 	CMP_STR(err_logfile);
 	CMP_STR(grub_run_partition);
+	CMP_STR(bhyveload_loader);
 
 	CMP_STR(keymap);
 
