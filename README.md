@@ -171,6 +171,7 @@ Following keys are available.
 | loader | "bhyveload": use bhyveload<br>"grub": use grub-bhyve<br>"uefi": uefi boot | yes | (none) |
 | loader_timeout | loader timeout in seconds | no | 15 |
 | bhyveload_loader | path to the OS loader | no | (none) |
+| bhyveload_env | The FreeBSD loader environment | no | (none) |
 | memory | memory size<br>e.g. 2G | yes | (none) |
 | name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs | yes | (none) |

@@ -1,4 +1,4 @@
-.Dd Dec 1, 2023
+.Dd Jan 2, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -134,6 +134,11 @@ The default value is "15".
 .It Cm bhyveload_loader = Ar OS_loader_path;
 Specify the path to the OS loader. It is passed with "-l" to the bhyveload.
 If omitted, the default OS loader "/boot/userboot.so" is used.
+.It Cm bhyveload_env = (+=) Ar Environment_definition;
+Specify the FreeBSD loader environment. It is passed with "-e" to the bhyveload. Note that
+.Ar Environment_definition
+must contain a equal character '='. It must be escaped by backslash or
+enclosed in double quotes. e.g. "machdep.hyperthreading_allowed=0"
 .It Cm loader_timeout = Ar timeout_sec;
 .It Xo
 .Cm memory = Ar memsize Ns Oo

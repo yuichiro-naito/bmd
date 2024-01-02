@@ -326,23 +326,28 @@ static int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
-	char *args[14];
 	int i, outfd[2], errfd[2];
+	char **args;
+	struct bhyveload_env *be;
 	struct vm_conf *conf = vm->conf;
 	bool dopipe = (vm->assigned_comport == NULL) ||
 	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
 
+	args = malloc((14 + 2 * conf->nbhyveload_envs) * sizeof(char *));
+	if (args == NULL)
+		return -1;
+
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
 			ERR("can not create pipe (%s)\n", strerror(errno));
-			return -1;
+			goto err;
 		}
 
 		if (pipe(errfd) < 0) {
 			ERR("can not create pipe (%s)\n", strerror(errno));
 			close(outfd[0]);
 			close(outfd[1]);
-			return -1;
+			goto err;
 		}
 	}
 
@@ -356,6 +361,7 @@ bhyve_load(struct vm *vm)
 		}
 		vm->pid = pid;
 		vm->state = LOAD;
+		free(args);
 		return 0;
 	} else if (pid == 0) {
 		if (dopipe) {
@@ -371,6 +377,10 @@ bhyve_load(struct vm *vm)
 		if (conf->single_user) {
 			args[i++] = "-e";
 			args[i++] = "boot_single=YES";
+		}
+		STAILQ_FOREACH (be, &conf->bhyveload_envs, next) {
+			args[i++] = "-e";
+			args[i++] = &be->env[0];
 		}
 		if (conf->bhyveload_loader) {
 			args[i++] = "-l";
@@ -391,10 +401,20 @@ bhyve_load(struct vm *vm)
 		exit(1);
 	} else {
 		ERR("can't fork (%s)\n", strerror(errno));
-		return -1;
+		if (dopipe) {
+			close(outfd[0]);
+			close(outfd[1]);
+			close(errfd[0]);
+			close(errfd[1]);
+		}
+		goto err;
 	}
 
+	free(args);
 	return pid;
+err:
+	free(args);
+	return -1;
 }
 
 int

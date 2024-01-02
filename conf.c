@@ -95,6 +95,14 @@ free_net_conf(struct net_conf *c)
 }
 
 void
+free_bhyveload_env(struct bhyveload_env *e)
+{
+	if (e == NULL)
+		return;
+	free(e);
+}
+
+void
 free_fbuf(struct fbuf *f)
 {
 	if (f == NULL)
@@ -139,6 +147,15 @@ clear_net_conf(struct vm_conf *vc)
 	STAILQ_FOREACH_SAFE (nc, &vc->nets, next, nn)
 		free_net_conf(nc);
 	STAILQ_INIT(&vc->nets);
+}
+
+void
+clear_bhyveload_env(struct vm_conf *vc)
+{
+	struct bhyveload_env *be, *bn;
+	STAILQ_FOREACH_SAFE(be, &vc->bhyveload_envs, next, bn)
+		free_bhyveload_env(be);
+	STAILQ_INIT(&vc->bhyveload_envs);
 }
 
 void
@@ -190,6 +207,7 @@ free_vm_conf(struct vm_conf *vc)
 	clear_net_conf(vc);
 	free(vc->keymap);
 	free(vc->bhyveload_loader);
+	clear_bhyveload_env(vc);
 	free(vc);
 }
 
@@ -389,6 +407,42 @@ char *
 get_net_conf_tap(struct net_conf *n_conf)
 {
 	return n_conf->tap;
+}
+
+int
+add_bhyveload_env(struct vm_conf *conf, const char *env)
+{
+	struct bhyveload_env *be;
+
+	if (conf == NULL)
+		return 0;
+
+	if (env == NULL ||
+	    (be = malloc(sizeof(struct bhyveload_env) + strlen(env) + 1)) == NULL)
+		return -1;
+	strcpy(be->env, env);
+
+	STAILQ_INSERT_TAIL(&conf->bhyveload_envs, be, next);
+	conf->nbhyveload_envs++;
+	return 0;
+}
+
+struct bhyveload_env *
+get_bhyveload_env(struct vm_conf *conf)
+{
+	return STAILQ_FIRST(&conf->bhyveload_envs);
+}
+
+struct bhyveload_env *
+next_bhyveload_env(struct bhyveload_env *be)
+{
+	return STAILQ_NEXT(be, next);
+}
+
+char *
+get_bhyveload_env_env(struct bhyveload_env *be)
+{
+	return be->env;
 }
 
 struct net_conf *
@@ -1102,6 +1156,7 @@ create_vm_conf(const char *vm_name)
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
 	STAILQ_INIT(&ret->nets);
+	STAILQ_INIT(&ret->bhyveload_envs);
 
 	return ret;
 err:
@@ -1133,6 +1188,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	struct passthru_conf *pc;
+	struct bhyveload_env *be;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
 				       "always", "reboot" };
@@ -1161,6 +1217,11 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, dfmt, "stop_timeout", conf->stop_timeout);
 	fprintf(fp, fmt, "loader", conf->loader);
 	fprintf(fp, fmt, "bhyveload_loader", conf->bhyveload_loader);
+	i = 0;
+	STAILQ_FOREACH (be, &conf->bhyveload_envs, next) {
+		snprintf(buf, sizeof(buf), "bhyveload_env%d", i++);
+		fprintf(fp, fmt, buf, be->env);
+	}
 	fprintf(fp, fmt, "loadcmd", conf->loadcmd);
 	fprintf(fp, fmt, "installcmd", conf->installcmd);
 	fprintf(fp, fmt, "err_logfile", conf->err_logfile);
@@ -1294,6 +1355,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	struct disk_conf *da, *db;
 	struct iso_conf *ia, *ib;
 	struct net_conf *na, *nb;
+	struct bhyveload_env *ba, *bb;
 
 	CMP_NUM(boot_delay);
 	CMP_NUM(loader_timeout);
@@ -1367,6 +1429,17 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	if (na != NULL)
 		return 1;
 	if (nb != NULL)
+		return -1;
+
+	for (ba = STAILQ_FIRST(&a->bhyveload_envs),
+		     bb = STAILQ_FIRST(&b->bhyveload_envs);
+	     ba != NULL && bb != NULL;
+	     ba = STAILQ_NEXT(ba, next), bb = STAILQ_NEXT(bb, next))
+		if ((rc = compare_string(ba->env, bb->env)) != 0)
+			return rc;
+	if (ba != NULL)
+		return 1;
+	if (bb != NULL)
 		return -1;
 
 	return 0;
