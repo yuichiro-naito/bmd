@@ -1,4 +1,6 @@
 * 2.3
+	- Add 'bhyveload_env' parameter.
+	  (17510ddaa7c8e4c8b0d1f35e54104066917c7bd5)
 	- Add 'bhyveload_loader' parameter.
 	  (bda66e387ac63b5ac23c476ec730e8a523bb6faf)
 * 2.2
