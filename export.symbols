@@ -29,6 +29,7 @@ next_net_conf;
 get_net_conf_type;
 get_net_conf_bridge;
 get_net_conf_tap;
+get_bhyveload_loader;
 get_bhyveload_env;
 next_bhyveload_env;
 get_bhyveload_env_env;
