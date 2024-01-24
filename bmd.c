@@ -91,6 +91,72 @@ kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 	return rc;
 }
 
+static bool
+vm_output(struct event *ev, void *data)
+{
+	struct kevent *k = &ev->kev;
+	struct vm_entry *e = data;
+
+	return  ev->data == e && k->filter == EVFILT_READ && (
+		k->ident == VM_OUTFD(e) || k->ident == VM_ERRFD(e));
+}
+
+static bool
+vm_output_and_timers(struct event *ev, void *data)
+{
+	struct kevent *k = &ev->kev;
+	struct vm_entry *e = data;
+
+	return ev->data == e && (
+		k->filter == EVFILT_TIMER ||
+		(k->filter == EVFILT_READ &&
+		 (k->ident == VM_OUTFD(e) || k->ident == VM_ERRFD(e)))
+		);
+}
+
+static bool
+sock_buf(struct event *ev, void *data)
+{
+	return (ev->data == data);
+}
+
+/*
+ * The 'vm_entry' function should be an alias for 'sock_buf'. But It's hard to
+ * be replaced by #define. Because the 'vm_entry' key word is widely used in
+ * this source.
+ */
+static bool
+vm_entry(struct event *ev, void *data)
+{
+	return (ev->data == data);
+}
+
+static void
+stop_waiting_for(bool (*fn)(struct event *, void *), void *data)
+{
+	int i = 0;
+	struct event *ev, *evn;
+	struct kevent kev[5];
+
+	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
+		if (!fn(ev, data))
+			continue;
+		kev[i] = ev->kev;
+		kev[i].flags = EV_DELETE;
+		i++;
+		if (i >= sizeof(kev)/sizeof(kev[0])) {
+			if (kevent_set(kev, i) < 0)
+				ERR("failed to remove kevent (%s)\n",
+				    strerror(errno));
+			i = 0;
+		}
+		LIST_REMOVE(ev, next);
+		free(ev);
+	}
+	if (i > 0 && kevent_set(kev, i) < 0)
+		ERR("failed to remove kevent (%s)\n", strerror(errno));
+}
+
 static int
 register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 	       void *data)
@@ -401,31 +467,6 @@ wait_for_vm_output(struct vm_entry *vm_ent)
 	return 0;
 }
 
-static int
-stop_waiting_vm_output(struct vm_entry *vm_ent)
-{
-	struct event *ev, *evn;
-	struct kevent *kev;
-
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
-		kev = &ev->kev;
-		if (ev->data != vm_ent ||
-		    (kev->ident != VM_OUTFD(vm_ent) &&
-		     kev->ident != VM_ERRFD(vm_ent)) ||
-		    kev->filter != EVFILT_READ)
-			continue;
-		kev->flags = EV_DELETE;
-		if (kevent_set(kev, 1) < 0) {
-			ERR("failed to remove vm output event (%s)\n",
-			    strerror(errno));
-		}
-		LIST_REMOVE(ev, next);
-		free(ev);
-	}
-
-	return 0;
-}
-
 static void
 free_events()
 {
@@ -480,27 +521,6 @@ set_timer(struct vm_entry *vm_ent, int second)
 	return 0;
 }
 
-/**
- * Clear all timers for VM.
- */
-static int
-clear_all_timers(struct vm_entry *vm_ent)
-{
-	struct event *ev, *evn;
-
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
-		if (ev->kev.filter != EVFILT_TIMER || ev->data != vm_ent)
-			continue;
-		ev->kev.flags = EV_DELETE;
-		if (kevent_set(&ev->kev, 1) < 0)
-			ERR("failed to remove timer event (%s)\n",
-			    strerror(errno));
-		LIST_REMOVE(ev, next);
-		free(ev);
-	}
-	return 0;
-}
-
 static char *
 reason_string(int status)
 {
@@ -531,7 +551,7 @@ on_vm_exit(int ident, void *data)
 	case LOAD:
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
 			VM_CLOSE(vm_ent, INFD);
-			stop_waiting_vm_output(vm_ent);
+			stop_waiting_for(vm_output, vm_ent);
 			start_virtual_machine(vm_ent);
 		} else {
 			ERR("failed loading vm %s (status:%d)\n",
@@ -640,27 +660,6 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 }
 
 static int
-stop_waiting_sock_buf(struct sock_buf *sb)
-{
-	struct event *ev, *evn;
-
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
-		if (ev->data != sb)
-			continue;
-		ev->kev.flags = EV_DELETE;
-		if (kevent_set(&ev->kev, 1) < 0) {
-			ERR("failed to remove socket events(%s)\n",
-			    strerror(errno));
-			return -1;
-		}
-		LIST_REMOVE(ev, next);
-		free(ev);
-	}
-
-	return 0;
-}
-
-static int
 on_recv_sock_buf(int ident, void *data)
 {
 	struct sock_buf *sb = data;
@@ -676,7 +675,7 @@ on_recv_sock_buf(int ident, void *data)
 	case 1:
 		break;
 	default:
-		stop_waiting_sock_buf(sb);
+		stop_waiting_for(sock_buf, sb);
 		destroy_sock_buf(sb);
 	}
 	return 0;
@@ -695,7 +694,7 @@ on_send_sock_buf(int ident, void *data)
 	case 1:
 		break;
 	default:
-		stop_waiting_sock_buf(sb);
+		stop_waiting_for(sock_buf, sb);
 		destroy_sock_buf(sb);
 		break;
 	}
@@ -885,24 +884,14 @@ static void
 free_vm_entry(struct vm_entry *vm_ent)
 {
 	struct net_conf *nc, *nnc;
-	struct event *ev, *evn;
 
 	STAILQ_FOREACH_SAFE (nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
-		if (ev->data != vm_ent)
-			continue;
-		/*
-		  Basically no events are left on this timing.
-		  Delete & free them for safty.
-		*/
-		ev->kev.flags = EV_DELETE;
-		if (kevent_set(&ev->kev, 1) < 0)
-			ERR("failed to remove vm event (%s)\n",
-			    strerror(errno));
-		LIST_REMOVE(ev, next);
-		free(ev);
-	}
+	/*
+	  Basically no events are left on this timing.
+	  Delete & free them for safty.
+	*/
+	stop_waiting_for(vm_entry, vm_ent);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_VARSFILE(vm_ent));
 	free(VM_ASCOMPORT(vm_ent));
@@ -1217,8 +1206,7 @@ start_virtual_machines()
 static void
 stop_virtual_machine(struct vm_entry *vm_ent)
 {
-	stop_waiting_vm_output(vm_ent);
-	clear_all_timers(vm_ent);
+	stop_waiting_for(vm_output_and_timers, vm_ent);
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
 }
