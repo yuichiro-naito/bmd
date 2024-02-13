@@ -556,7 +556,7 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
+	else if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
 		       (comport = VM_CONF(vm_ent)->comport)) &&
 	    (fd = open_comport(comport)) >= 0)
 		nvlist_add_number(res, FD_KEY, fd);
@@ -597,11 +597,12 @@ showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 
 	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
 
-	if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN)
+	if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 		chown_comport(comport, ucred);
 
-	if ((fd = open_comport(comport)) >= 0)
-		nvlist_add_number(res, FD_KEY, fd);
+		if ((fd = open_comport(comport)) >= 0)
+			nvlist_add_number(res, FD_KEY, fd);
+	}
 
 	nvlist_add_string(res, "comport", comport ? comport : "(null)");
 
