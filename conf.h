@@ -61,6 +61,11 @@ struct bhyveload_env {
 	char env[0];
 };
 
+struct bhyve_env {
+	STAILQ_ENTRY(bhyve_env) next;
+	char env[0];
+};
+
 struct conf_var {
 	RB_ENTRY(conf_var) entry;
 	char *key, *val;
@@ -113,6 +118,8 @@ struct vm_conf {
 	char *bhyveload_loader;
 	int nbhyveload_envs;
 	STAILQ_HEAD(, bhyveload_env) bhyveload_envs;
+	int nbhyve_envs;
+	STAILQ_HEAD(, bhyve_env) bhyve_envs;
 };
 
 struct vm {
@@ -140,18 +147,21 @@ void free_iso_conf(struct iso_conf *c);
 void free_net_conf(struct net_conf *c);
 void free_vm_conf(struct vm_conf *vc);
 void free_bhyveload_env(struct bhyveload_env *e);
+void free_bhyve_env(struct bhyve_env *e);
 void free_fbuf(struct fbuf *f);
 void clear_passthru_conf(struct vm_conf *vc);
 void clear_disk_conf(struct vm_conf *vc);
 void clear_iso_conf(struct vm_conf *vc);
 void clear_net_conf(struct vm_conf *vc);
 void clear_bhyveload_env(struct vm_conf *vc);
+void clear_bhyve_env(struct vm_conf *vc);
 
 int add_passthru_conf(struct vm_conf *conf, const char *devid);
 int add_disk_conf(struct vm_conf *conf, const char *type, const char *path);
 int add_iso_conf(struct vm_conf *conf, const char *type, const char *path);
 int add_net_conf(struct vm_conf *conf, const char *type, const char *bridge);
 int add_bhyveload_env(struct vm_conf *conf, const char *env);
+int add_bhyve_env(struct vm_conf *conf, const char *env);
 struct net_conf *copy_net_conf(const struct net_conf *nc);
 int set_name(struct vm_conf *conf, const char *name);
 int set_memory_size(struct vm_conf *conf, const char *memory);

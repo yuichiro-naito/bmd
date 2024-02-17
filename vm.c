@@ -509,6 +509,7 @@ exec_bhyve(struct vm *vm)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
+	struct bhyve_env *be;
 	pid_t pid;
 	int pcid;
 	int outfd[2], errfd[2];
@@ -552,6 +553,10 @@ exec_bhyve(struct vm *vm)
 			dup2(outfd[1], 1);
 			dup2(errfd[1], 2);
 		}
+
+		STAILQ_FOREACH (be, &conf->bhyve_envs, next)
+			if (putenv(be->env) < 0)
+				ERR("invalid environment: %s", be->env);
 
 		fp = open_memstream(&buf, &buf_size);
 		if (fp == NULL) {

@@ -259,6 +259,14 @@ parse_bhyveload_loader(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_bhyve_env(struct vm_conf *conf, char *val)
+{
+	if (strchr(val, '=') == NULL)
+		return -1;
+	return add_bhyve_env(conf, val);
+}
+
+static int
 parse_loader_timeout(struct vm_conf *conf, char *val)
 {
 	int timeout;
@@ -543,6 +551,7 @@ struct parser_entry {
 /* must be sorted by name */
 struct parser_entry parser_list[] = {
 	{ "backend", &parse_backend, NULL },
+	{ "bhyve_env", &parse_bhyve_env, &clear_bhyve_env },
 	{ "bhyveload_env", &parse_bhyveload_env, &clear_bhyveload_env },
 	{ "bhyveload_loader", &parse_bhyveload_loader, NULL },
 	{ "boot", &parse_boot, NULL },
