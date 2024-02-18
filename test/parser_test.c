@@ -21,11 +21,19 @@ test0()
 void
 test1()
 {
+	struct vm_conf *conf;
+	struct vm_conf_entry *e;
 	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
 	init_gl_conf();
 	free(gl_conf->config_file);
 	gl_conf->config_file = strdup("./test1.conf");
 	assert(load_config_file(&list, true) == 0);
+	LIST_FOREACH (e, &list, next) {
+		conf = &e->conf;
+		if (strcmp(conf->name, "test") == 0) {
+			assert(strcmp(conf->err_logfile, "/var/log/test.log") == 0);
+		}
+	}
 	printf("parser %s: ok\n", __func__);
 }
 
