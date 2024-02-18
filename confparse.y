@@ -104,7 +104,7 @@ global	: GLOBAL '{' param_l '}'
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_CONCAT(&$$->params, $3, next);
+		STAILQ_CONCAT(&$$->params, $3);
 		free($3);
 		apply_global_vars($$);  /* for .include macro */
 	}
@@ -116,7 +116,7 @@ tmpl	: TEMPLATE STR '{' param_l '}'
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_CONCAT(&$$->params, $4, next);
+		STAILQ_CONCAT(&$$->params, $4);
 		free($4);
 	}
 	| TEMPLATE STR '(' argdefs ')' '{' param_l '}'
@@ -127,9 +127,9 @@ tmpl	: TEMPLATE STR '{' param_l '}'
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_CONCAT(&$$->argdefs, $4, next);
+		STAILQ_CONCAT(&$$->argdefs, $4);
 		free($4);
-		TAILQ_CONCAT(&$$->params, $7, next);
+		STAILQ_CONCAT(&$$->params, $7);
 		free($7);
 	}
 	;
@@ -140,13 +140,13 @@ argdefs : argdef
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT($$);
-		TAILQ_INSERT_TAIL($$, $1, next);
+		STAILQ_INIT($$);
+		STAILQ_INSERT_TAIL($$, $1, next);
 	}
 	| argdefs ',' argdef
 	{
 		$$ = $1;
-		TAILQ_INSERT_TAIL($$, $3, next);
+		STAILQ_INSERT_TAIL($$, $3, next);
 	}
 	;
 argdef	: STR
@@ -157,7 +157,7 @@ argdef	: STR
 			goto yyabort;
 		}
 		$$->name = $1;
-		TAILQ_INIT(&$$->tokens);
+		STAILQ_INIT(&$$->tokens);
 	}
 	| STR '=' tokens
 	{
@@ -168,8 +168,8 @@ argdef	: STR
 			goto yyabort;
 		}
 		$$->name = $1;
-		TAILQ_INIT(&$$->tokens);
-		TAILQ_CONCAT(&$$->tokens, $3, next);
+		STAILQ_INIT(&$$->tokens);
+		STAILQ_CONCAT(&$$->tokens, $3);
 		free($3);
 	}
 	;
@@ -180,7 +180,7 @@ vm	: VM STR '{' param_l '}'
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_CONCAT(&$$->params, $4, next);
+		STAILQ_CONCAT(&$$->params, $4);
 		free($4);
 	}
 	;
@@ -195,12 +195,12 @@ param_l	:
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT($$);
+		STAILQ_INIT($$);
 	}
 	| param_l param ';'
 	{
 		$$ = $1;
-		TAILQ_INSERT_TAIL($$, $2, next);
+		STAILQ_INSERT_TAIL($$, $2, next);
 	}
 	;
 
@@ -219,8 +219,8 @@ param	: macro targets
 		}
 		$$->operator = 0;
 		$$->key = $1;
-		TAILQ_INIT(&$$->vals);
-		TAILQ_CONCAT(&$$->vals, $2, next);
+		STAILQ_INIT(&$$->vals);
+		STAILQ_CONCAT(&$$->vals, $2);
 		free($2);
 	}
 	| name '=' values
@@ -233,8 +233,8 @@ param	: macro targets
 		}
 		$$->operator = 0;
 		$$->key = $1;
-		TAILQ_INIT(&$$->vals);
-		TAILQ_CONCAT(&$$->vals, $3, next);
+		STAILQ_INIT(&$$->vals);
+		STAILQ_CONCAT(&$$->vals, $3);
 		free($3);
 	}
 	| name PLEQ values
@@ -247,8 +247,8 @@ param	: macro targets
 		}
 		$$->operator = 1;
 		$$->key = $1;
-		TAILQ_INIT(&$$->vals);
-		TAILQ_CONCAT(&$$->vals, $3, next);
+		STAILQ_INIT(&$$->vals);
+		STAILQ_CONCAT(&$$->vals, $3);
 		free($3);
 	}
 	| error
@@ -259,7 +259,7 @@ param	: macro targets
 		}
 		$$->operator = -1;
 		$$->key = NULL;
-		TAILQ_INIT(&$$->vals);
+		STAILQ_INIT(&$$->vals);
 	}
 	;
 
@@ -277,7 +277,7 @@ macro	: APPLY
 		$$->s = $1;
 		$$->len = strlen($1);
 		$$->expr = NULL;
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 name	: STR
@@ -290,7 +290,7 @@ name	: STR
 		$$->s = $1;
 		$$->len = strlen($1);
 		$$->expr = NULL;
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	| VAR
 	{
@@ -302,7 +302,7 @@ name	: STR
 		$$->s = $1;
 		$$->len = strlen($1);
 		$$->expr = NULL;
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 values	: value
@@ -312,13 +312,13 @@ values	: value
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT($$);
-		TAILQ_INSERT_TAIL($$, $1, next);
+		STAILQ_INIT($$);
+		STAILQ_INSERT_TAIL($$, $1, next);
 	}
 	| values ',' value
 	{
 		$$ = $1;
-		TAILQ_INSERT_TAIL($$, $3, next);
+		STAILQ_INSERT_TAIL($$, $3, next);
 	}
 	;
 value	: tokens
@@ -328,11 +328,11 @@ value	: tokens
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT(&$$->tokens);
-		TAILQ_CONCAT(&$$->tokens, $1, next);
+		STAILQ_INIT(&$$->tokens);
+		STAILQ_CONCAT(&$$->tokens, $1);
 		free($1);
-		TAILQ_INIT(&$$->args);
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_INIT(&$$->args);
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 targets	: target
@@ -342,13 +342,13 @@ targets	: target
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT($$);
-		TAILQ_INSERT_TAIL($$, $1, next);
+		STAILQ_INIT($$);
+		STAILQ_INSERT_TAIL($$, $1, next);
 	}
 	| targets ',' target
 	{
 		$$ = $1;
-		TAILQ_INSERT_TAIL($$, $3, next);
+		STAILQ_INSERT_TAIL($$, $3, next);
 	}
 	;
 target	: tokens
@@ -358,11 +358,11 @@ target	: tokens
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT(&$$->tokens);
-		TAILQ_CONCAT(&$$->tokens, $1, next);
+		STAILQ_INIT(&$$->tokens);
+		STAILQ_CONCAT(&$$->tokens, $1);
 		free($1);
-		TAILQ_INIT(&$$->args);
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_INIT(&$$->args);
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	| tokens '(' args ')'
 	{
@@ -371,13 +371,13 @@ target	: tokens
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT(&$$->tokens);
-		TAILQ_CONCAT(&$$->tokens, $1, next);
+		STAILQ_INIT(&$$->tokens);
+		STAILQ_CONCAT(&$$->tokens, $1);
 		free($1);
-		TAILQ_INIT(&$$->args);
-		TAILQ_CONCAT(&$$->args, $3, next);
+		STAILQ_INIT(&$$->args);
+		STAILQ_CONCAT(&$$->args, $3);
 		free($3);
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 args	: arg
@@ -387,13 +387,13 @@ args	: arg
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT($$);
-		TAILQ_INSERT_TAIL($$, $1, next);
+		STAILQ_INIT($$);
+		STAILQ_INSERT_TAIL($$, $1, next);
 	}
 	| args ',' arg
 	{
 		$$ = $1;
-		TAILQ_INSERT_TAIL($$, $3, next);
+		STAILQ_INSERT_TAIL($$, $3, next);
 	}
 	;
 arg	: tokens
@@ -403,10 +403,10 @@ arg	: tokens
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT(&$$->tokens);
-		TAILQ_CONCAT(&$$->tokens, $1, next);
+		STAILQ_INIT(&$$->tokens);
+		STAILQ_CONCAT(&$$->tokens, $1);
 		free($1);
-		TAILQ_NEXT($$, next) = NULL;
+		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 
@@ -421,7 +421,7 @@ tokens	:
 			free_all_cfsections();
 			goto yyabort;
 		}
-		TAILQ_INIT($$);
+		STAILQ_INIT($$);
 	}
 	| tokens BEGIN_AR expr END_AR
 	{
@@ -436,7 +436,7 @@ tokens	:
 		ct->s = NULL;
 		ct->len = 0;
 		ct->expr = $3;
-		TAILQ_INSERT_TAIL($$, ct, next);
+		STAILQ_INSERT_TAIL($$, ct, next);
 	}
 	| tokens STR
 	{
@@ -451,7 +451,7 @@ tokens	:
 		ct->s = $2;
 		ct->len = strlen($2);
 		ct->expr = NULL;
-		TAILQ_INSERT_TAIL($$, ct, next);
+		STAILQ_INSERT_TAIL($$, ct, next);
 	}
 	| tokens VAR
 	{
@@ -466,7 +466,7 @@ tokens	:
 		ct->s = $2;
 		ct->len = strlen($2);
 		ct->expr = NULL;
-		TAILQ_INSERT_TAIL($$, ct, next);
+		STAILQ_INSERT_TAIL($$, ct, next);
 	}
 	;
 /*
@@ -638,20 +638,20 @@ expr	: NUMBER
 	;
 %%
 
-struct cfsections cfglobals = TAILQ_HEAD_INITIALIZER(cfglobals);
-struct cfsections cftemplates = TAILQ_HEAD_INITIALIZER(cftemplates);
-struct cfsections cfvms = TAILQ_HEAD_INITIALIZER(cfvms);
+struct cfsections cfglobals = STAILQ_HEAD_INITIALIZER(cfglobals);
+struct cfsections cftemplates = STAILQ_HEAD_INITIALIZER(cftemplates);
+struct cfsections cfvms = STAILQ_HEAD_INITIALIZER(cfvms);
 
 static void
 free_all_cfsections()
 {
 	struct cfsection *sc, *sn;
 
-	TAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
 		free_cfsection(sc);
-	TAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
 		free_cfsection(sc);
-	TAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
 		free_cfsection(sc);
 }
 
@@ -665,7 +665,7 @@ add_section(enum SECTION sec, char *name)
 	struct cfsection *v;
 
 	if (name != NULL && sec != SECTION_GLOBAL)
-		TAILQ_FOREACH (v, sections[sec], next)
+		STAILQ_FOREACH (v, sections[sec], next)
 			if (strcmp(v->name, name) == 0) {
 				ERR("%s: %s '%s' already exists.",
 				    peek_filename(), sec_names[sec], name);
@@ -679,9 +679,9 @@ add_section(enum SECTION sec, char *name)
 	v->name = name;
 	v->owner = peek_fileowner();
 	v->filename = peek_filename();
-	TAILQ_INIT(&v->params);
-	TAILQ_INIT(&v->argdefs);
-	TAILQ_INSERT_TAIL(sections[sec], v, next);
+	STAILQ_INIT(&v->params);
+	STAILQ_INIT(&v->argdefs);
+	STAILQ_INSERT_TAIL(sections[sec], v, next);
 	return v;
 }
 

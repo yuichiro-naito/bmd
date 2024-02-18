@@ -26,11 +26,11 @@ struct input_file {
 	FILE *fp;
 	char *filename;
 	int line;
-	TAILQ_ENTRY(input_file) next;
+	STAILQ_ENTRY(input_file) next;
 };
 
-TAILQ_HEAD(input_file_head, input_file);
-static struct input_file_head input_file_list = TAILQ_HEAD_INITIALIZER(input_file_list);
+STAILQ_HEAD(input_file_head, input_file);
+static struct input_file_head input_file_list = STAILQ_HEAD_INITIALIZER(input_file_list);
 static struct input_file *cur_file;
 
 static struct cfsection *lookup_template(const char *name);
@@ -82,14 +82,14 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 		return -1;
 	RB_INIT(args);
 
-	arg = TAILQ_FIRST(&vl->args);
-	TAILQ_FOREACH (def, &tp->argdefs, next) {
+	arg = STAILQ_FIRST(&vl->args);
+	STAILQ_FOREACH (def, &tp->argdefs, next) {
 		argval = token_to_string(&conf->vars, arg ? &arg->tokens : &def->tokens);
 		if (set_var0(args, def->name, argval ? argval : "") < 0)
 			ERR("failed to set \"%s\" argument! (%s)\n",
 			    def->name, strerror(errno));
 		free(argval);
-		arg = arg ? TAILQ_NEXT(arg, next) : NULL;
+		arg = arg ? STAILQ_NEXT(arg, next) : NULL;
 	}
 
 	tp->applied++;
@@ -630,7 +630,7 @@ lookup_template(const char *name)
 {
 	struct cfsection *tp;
 
-	TAILQ_FOREACH (tp, &cftemplates, next)
+	STAILQ_FOREACH (tp, &cftemplates, next)
 		if (strcmp(tp->name, name) == 0)
 			return tp;
 	return NULL;
@@ -721,7 +721,7 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 	if ((fp = open_memstream(&str, &len)) == NULL)
 		return NULL;
 
-	TAILQ_FOREACH(tk, tokens, next) {
+	STAILQ_FOREACH(tk, tokens, next) {
 		switch (tk->type) {
 		case CF_STR:
 			fwrite(tk->s, 1, tk->len, fp);
@@ -768,9 +768,9 @@ apply_global_vars(struct cfsection *sc)
 	vars.local = NULL;
 	vars.args = NULL;
 
-	TAILQ_FOREACH(pr, &sc->params, next)
+	STAILQ_FOREACH(pr, &sc->params, next)
 		if (pr->key->type == CF_VAR) {
-			vl = TAILQ_FIRST(&pr->vals);
+			vl = STAILQ_FIRST(&pr->vals);
 			val = token_to_string(&vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -792,10 +792,10 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 	struct cfvalue *vl;
 	char *key, *val, **t, *p, *nmdm_offset_s = NULL;
 
-	TAILQ_FOREACH(pr, &sc->params, next) {
+	STAILQ_FOREACH(pr, &sc->params, next) {
 		key = pr->key->s;
 		if (pr->key->type == CF_VAR) {
-			vl = TAILQ_FIRST(&pr->vals);
+			vl = STAILQ_FIRST(&pr->vals);
 			val = token_to_string(vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -839,7 +839,7 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 			goto unknown;
 		}
 
-		TAILQ_FOREACH(vl, &pr->vals, next) {
+		STAILQ_FOREACH(vl, &pr->vals, next) {
 			val = token_to_string(vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -876,10 +876,10 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 	char *key, *val;
 	int rc;
 
-	TAILQ_FOREACH(pr, &sc->params, next) {
+	STAILQ_FOREACH(pr, &sc->params, next) {
 		key = pr->key->s;
 		if (pr->key->type == CF_VAR) {
-			vl = TAILQ_FIRST(&pr->vals);
+			vl = STAILQ_FIRST(&pr->vals);
 			val = token_to_string(&conf->vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -890,7 +890,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 			continue;
 		}
 		if (strcasecmp(key, ".apply") == 0) {
-			TAILQ_FOREACH(vl, &pr->vals, next)
+			STAILQ_FOREACH(vl, &pr->vals, next)
 				parse_apply(conf, vl);
 			continue;
 		}
@@ -899,13 +899,13 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 				 sizeof(parser_list[0]), compare_parser_entry);
 		if (parser && parser->clear != NULL && pr->operator == 0)
 			(*parser->clear)(conf);
-		TAILQ_FOREACH(vl, &pr->vals, next) {
+		STAILQ_FOREACH(vl, &pr->vals, next) {
 			val = token_to_string(&conf->vars, &vl->tokens);
 			if (val == NULL)
 				continue;
 			if (parser) {
 				if ((*parser->parse)(conf, val) < 0) {
-					tk = TAILQ_FIRST(&vl->tokens);
+					tk = STAILQ_FIRST(&vl->tokens);
 					tk = tk ? tk : pr->key;
 					ERR("%s line %d: vm %s: invalid value: %s = %s\n",
 					    tk->filename, tk->lineno,
@@ -918,7 +918,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 					    pr->key->filename, pr->key->lineno,
 					    sc->name, key);
 				} else	if (rc < 0) {
-					tk = TAILQ_FIRST(&vl->tokens);
+					tk = STAILQ_FIRST(&vl->tokens);
 					tk = tk ? tk : pr->key;
 					ERR("%s line %d: %s: invalid value: %s = %s\n",
 					    tk->filename, tk->lineno,
@@ -959,7 +959,7 @@ free_cftokens(struct cftokens *ts)
 	struct cftoken *tk, *tn;
 	if (ts == NULL)
 		return;
-	TAILQ_FOREACH_SAFE(tk, ts, next, tn)
+	STAILQ_FOREACH_SAFE(tk, ts, next, tn)
 		free_cftoken(tk);
 }
 
@@ -979,7 +979,7 @@ free_cfvalues(struct cfvalues *vs)
 	struct cfvalue	*vl, *vn;
 	if (vs == NULL)
 		return;
-	TAILQ_FOREACH_SAFE(vl, vs, next, vn)
+	STAILQ_FOREACH_SAFE(vl, vs, next, vn)
 		free_cfvalue(vl);
 }
 
@@ -999,7 +999,7 @@ free_cfparams(struct cfparams *ps)
 	struct cfparam *pr, *pn;
 	if (ps == NULL)
 		return;
-	TAILQ_FOREACH_SAFE(pr, ps, next, pn)
+	STAILQ_FOREACH_SAFE(pr, ps, next, pn)
 		free_cfparam(pr);
 }
 
@@ -1021,7 +1021,7 @@ free_cfsections(struct cfsections *ss)
 
 	if (ss == NULL)
 		return;
-	TAILQ_FOREACH_SAFE(sc, ss, next, sn)
+	STAILQ_FOREACH_SAFE(sc, ss, next, sn)
 		free_cfsection(sc);
 }
 
@@ -1040,7 +1040,7 @@ free_cfargs(struct cfargs *as)
 	struct cfarg *ag, *an;
 	if (as == NULL)
 		return;
-	TAILQ_FOREACH_SAFE (ag, as, next, an)
+	STAILQ_FOREACH_SAFE (ag, as, next, an)
 		free_cfarg(ag);
 }
 
@@ -1060,7 +1060,7 @@ free_cfargdefs(struct cfargdefs *ds)
 	struct cfargdef *ad, *an;
 	if (ds == NULL)
 		return;
-	TAILQ_FOREACH_SAFE (ad, ds, next, an)
+	STAILQ_FOREACH_SAFE (ad, ds, next, an)
 		free_cfargdef(ad);
 }
 
@@ -1080,7 +1080,7 @@ push_file(char *fn)
 		goto err;
 	}
 
-	TAILQ_FOREACH (file, &input_file_list, next)
+	STAILQ_FOREACH (file, &input_file_list, next)
 		if (strcmp(file->filename, rpath) == 0) {
 			ERR("%s is already included\n", rpath);
 			goto err;
@@ -1100,9 +1100,9 @@ push_file(char *fn)
 	file->filename = rpath;
 	file->line = 0;
 	file->fp = fp;
-	TAILQ_INSERT_TAIL(&input_file_list, file, next);
+	STAILQ_INSERT_TAIL(&input_file_list, file, next);
 	if (cur_file == NULL)
-		cur_file = TAILQ_FIRST(&input_file_list);
+		cur_file = STAILQ_FIRST(&input_file_list);
 	INFO("load config %s\n", rpath);
 	return 0;
 err3:
@@ -1117,7 +1117,7 @@ err:
 static struct input_file *
 pop_file()
 {
-	return (cur_file = cur_file ? TAILQ_NEXT(cur_file, next) : NULL);
+	return (cur_file = cur_file ? STAILQ_NEXT(cur_file, next) : NULL);
 }
 
 static struct input_file *
@@ -1131,7 +1131,7 @@ peek_fileowner()
 {
 	struct stat st;
 	char *fn = cur_file ? cur_file->filename :
-		TAILQ_LAST_FAST(&input_file_list, input_file, next)->filename;
+		STAILQ_LAST(&input_file_list, input_file, next)->filename;
 	return stat(fn, &st) < 0 ? UID_NOBODY: st.st_uid;
 }
 
@@ -1139,7 +1139,7 @@ char *
 peek_filename()
 {
 	return cur_file ? cur_file->filename :
-		TAILQ_LAST_FAST(&input_file_list, input_file, next)->filename;
+		STAILQ_LAST(&input_file_list, input_file, next)->filename;
 }
 
 static void
@@ -1156,9 +1156,9 @@ static void
 clean_file()
 {
 	struct input_file *inf, *n;
-	TAILQ_FOREACH_SAFE(inf, &input_file_list, next ,n)
+	STAILQ_FOREACH_SAFE(inf, &input_file_list, next ,n)
 		free_file(inf);
-	TAILQ_INIT(&input_file_list);
+	STAILQ_INIT(&input_file_list);
 }
 
 void
@@ -1175,7 +1175,7 @@ glob_path(struct cftokens *ts)
 	vars.local = NULL;
 	vars.args = NULL;
 
-	if ((tk = TAILQ_FIRST(ts)) == NULL)
+	if ((tk = STAILQ_FIRST(ts)) == NULL)
 		goto ret;
 
 	if (stat(tk->filename, &st) < 0 || st.st_uid != 0) {
@@ -1209,7 +1209,7 @@ glob_path(struct cftokens *ts)
 ret2:
 	free(path);
 ret:
-	TAILQ_FOREACH_SAFE (tk, ts, next, tn)
+	STAILQ_FOREACH_SAFE (tk, ts, next, tn)
 		free_cftoken(tk);
 	free(ts);
 }
@@ -1231,7 +1231,7 @@ clear_applied()
 {
 	struct cfsection *sc;
 
-	TAILQ_FOREACH (sc, &cftemplates, next)
+	STAILQ_FOREACH (sc, &cftemplates, next)
 		sc->applied = 0;
 }
 
@@ -1240,7 +1240,7 @@ check_duplicate()
 {
 	struct cfsection *sc;
 
-	TAILQ_FOREACH (sc, &cftemplates, next)
+	STAILQ_FOREACH (sc, &cftemplates, next)
 		if (sc->duplicate)
 			return -1;
 	return 0;
@@ -1300,7 +1300,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		goto cleanup;
 	}
 
-	TAILQ_FOREACH(sc, &cfglobals, next)
+	STAILQ_FOREACH(sc, &cfglobals, next)
 		if (sc->owner == 0)
 			gl_conf_set_params(global_conf, &vars, sc);
 		else
@@ -1312,7 +1312,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	load_plugins(global_conf->plugin_dir ?
 		     global_conf->plugin_dir : gl_conf->plugin_dir);
 
-	TAILQ_FOREACH(sc, &cfvms, next) {
+	STAILQ_FOREACH(sc, &cfvms, next) {
 		if (create_plugin_data(&head) < 0)
 			continue;
 		if ((conf = create_vm_conf(sc->name)) == NULL) {
@@ -1356,17 +1356,17 @@ cleanup:
 	yylex_destroy();
 	clean_file();
 
-	TAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
 		free_cfsection(sc);
-	TAILQ_INIT(&cfglobals);
+	STAILQ_INIT(&cfglobals);
 
-	TAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
 		free_cfsection(sc);
-	TAILQ_INIT(&cftemplates);
+	STAILQ_INIT(&cftemplates);
 
-	TAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
 		free_cfsection(sc);
-	TAILQ_INIT(&cfvms);
+	STAILQ_INIT(&cfvms);
 
 	if (rc != 0)
 		ERR("%s\n", "failed to parse config file");

@@ -48,10 +48,10 @@ struct cfexpr {
 	struct cfexpr		*left, *right;
 };
 
-TAILQ_HEAD(cftokens, cftoken);
+STAILQ_HEAD(cftokens, cftoken);
 
 struct cftoken {
-	TAILQ_ENTRY(cftoken)	next;
+	STAILQ_ENTRY(cftoken)	next;
 	enum CF_TYPE		type;
 	char 			*s;
 	size_t			len;
@@ -60,42 +60,42 @@ struct cftoken {
 	int 			lineno;
 };
 
-TAILQ_HEAD(cfargdefs, cfargdef);
+STAILQ_HEAD(cfargdefs, cfargdef);
 
 struct cfargdef {
-	TAILQ_ENTRY(cfargdef)   next;
+	STAILQ_ENTRY(cfargdef)   next;
 	char                     *name;
 	struct cftokens		tokens;
 };
 
-TAILQ_HEAD(cfargs, cfarg);
+STAILQ_HEAD(cfargs, cfarg);
 
 struct cfarg {
-	TAILQ_ENTRY(cfarg)      next;
+	STAILQ_ENTRY(cfarg)      next;
 	struct cftokens		tokens;
 };
 
-TAILQ_HEAD(cfvalues, cfvalue);
+STAILQ_HEAD(cfvalues, cfvalue);
 
 struct cfvalue {
-	TAILQ_ENTRY(cfvalue)	next;
+	STAILQ_ENTRY(cfvalue)	next;
 	struct cftokens		tokens;
 	struct cfargs           args;
 };
 
-TAILQ_HEAD(cfparams, cfparam);
+STAILQ_HEAD(cfparams, cfparam);
 
 struct cfparam {
-	TAILQ_ENTRY(cfparam)	next;
+	STAILQ_ENTRY(cfparam)	next;
 	struct cftoken		*key;
 	struct cfvalues		vals;
 	int			operator;
 };
 
-TAILQ_HEAD(cfsections, cfsection);
+STAILQ_HEAD(cfsections, cfsection);
 
 struct cfsection {
-	TAILQ_ENTRY(cfsection)	next;
+	STAILQ_ENTRY(cfsection)	next;
 	char			*name;
 	struct cfparams		params;
 	struct cfargdefs        argdefs;
@@ -115,6 +115,7 @@ struct cffile {
 };
 
 void *emalloc(size_t);
+
 
 int yyparse(void);
 void yyerror(const char *);
