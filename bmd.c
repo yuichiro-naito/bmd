@@ -1475,7 +1475,7 @@ parse_opt(int argc, char *argv[])
 			    "[-p plugin directory] \n"
 			    "\t[-m unix domain socket permission] \n"
 			    "\t[-P pid file]\n"
-			    "\t[-v\n",
+			    "\t[-v]\n",
 			    argv[0]);
 			return -1;
 		}
