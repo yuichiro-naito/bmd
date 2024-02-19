@@ -21,7 +21,7 @@ extern struct cfsections cfglobals;
 extern struct cfsections cftemplates;
 extern struct cfsections cfvms;
 extern struct vartree *global_vars;
-extern struct cffiles input_file_list;
+extern struct cffiles cffiles;
 extern struct cffile *cur_file;
 
 static struct cfsection *lookup_template(const char *name);
@@ -1071,7 +1071,7 @@ push_file(char *fn)
 		goto err;
 	}
 
-	STAILQ_FOREACH (file, &input_file_list, next)
+	STAILQ_FOREACH (file, &cffiles, next)
 		if (strcmp(file->filename, rpath) == 0) {
 			ERR("%s is already included\n", rpath);
 			goto err;
@@ -1091,9 +1091,9 @@ push_file(char *fn)
 	file->filename = rpath;
 	file->line = 0;
 	file->fp = fp;
-	STAILQ_INSERT_TAIL(&input_file_list, file, next);
+	STAILQ_INSERT_TAIL(&cffiles, file, next);
 	if (cur_file == NULL)
-		cur_file = STAILQ_FIRST(&input_file_list);
+		cur_file = STAILQ_FIRST(&cffiles);
 	INFO("load config %s\n", rpath);
 	return 0;
 err3:
@@ -1122,7 +1122,7 @@ peek_fileowner()
 {
 	struct stat st;
 	char *fn = cur_file ? cur_file->filename :
-		STAILQ_LAST(&input_file_list, cffile, next)->filename;
+		STAILQ_LAST(&cffiles, cffile, next)->filename;
 	return stat(fn, &st) < 0 ? UID_NOBODY: st.st_uid;
 }
 
@@ -1130,7 +1130,7 @@ char *
 peek_filename()
 {
 	return cur_file ? cur_file->filename :
-		STAILQ_LAST(&input_file_list, cffile, next)->filename;
+		STAILQ_LAST(&cffiles, cffile, next)->filename;
 }
 
 static void
@@ -1147,9 +1147,9 @@ static void
 clean_file()
 {
 	struct cffile *inf, *n;
-	STAILQ_FOREACH_SAFE(inf, &input_file_list, next ,n)
+	STAILQ_FOREACH_SAFE(inf, &cffiles, next ,n)
 		free_file(inf);
-	STAILQ_INIT(&input_file_list);
+	STAILQ_INIT(&cffiles);
 }
 
 void

@@ -641,7 +641,7 @@ expr	: NUMBER
 struct cfsections cfglobals = STAILQ_HEAD_INITIALIZER(cfglobals);
 struct cfsections cftemplates = STAILQ_HEAD_INITIALIZER(cftemplates);
 struct cfsections cfvms = STAILQ_HEAD_INITIALIZER(cfvms);
-struct cffiles input_file_list = STAILQ_HEAD_INITIALIZER(input_file_list);
+struct cffiles cffiles = STAILQ_HEAD_INITIALIZER(cffiles);
 struct cffile *cur_file;
 
 static void
