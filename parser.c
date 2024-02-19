@@ -21,17 +21,8 @@ extern struct cfsections cfglobals;
 extern struct cfsections cftemplates;
 extern struct cfsections cfvms;
 extern struct vartree *global_vars;
-
-struct input_file {
-	FILE *fp;
-	char *filename;
-	int line;
-	STAILQ_ENTRY(input_file) next;
-};
-
-STAILQ_HEAD(input_file_head, input_file);
-static struct input_file_head input_file_list = STAILQ_HEAD_INITIALIZER(input_file_list);
-static struct input_file *cur_file;
+extern struct cffiles input_file_list;
+extern struct cffile *cur_file;
 
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
@@ -1068,7 +1059,7 @@ static int
 push_file(char *fn)
 {
 	FILE *fp;
-	struct input_file *file;
+	struct cffile *file;
 	char *rpath;
 	struct stat st;
 
@@ -1114,13 +1105,13 @@ err:
 	return -1;
 }
 
-static struct input_file *
+static struct cffile *
 pop_file()
 {
 	return (cur_file = cur_file ? STAILQ_NEXT(cur_file, next) : NULL);
 }
 
-static struct input_file *
+static struct cffile *
 peek_file()
 {
 	return cur_file;
@@ -1131,7 +1122,7 @@ peek_fileowner()
 {
 	struct stat st;
 	char *fn = cur_file ? cur_file->filename :
-		STAILQ_LAST(&input_file_list, input_file, next)->filename;
+		STAILQ_LAST(&input_file_list, cffile, next)->filename;
 	return stat(fn, &st) < 0 ? UID_NOBODY: st.st_uid;
 }
 
@@ -1139,11 +1130,11 @@ char *
 peek_filename()
 {
 	return cur_file ? cur_file->filename :
-		STAILQ_LAST(&input_file_list, input_file, next)->filename;
+		STAILQ_LAST(&input_file_list, cffile, next)->filename;
 }
 
 static void
-free_file(struct input_file *file)
+free_file(struct cffile *file)
 {
 	if (file == NULL)
 		return;
@@ -1155,7 +1146,7 @@ free_file(struct input_file *file)
 static void
 clean_file()
 {
-	struct input_file *inf, *n;
+	struct cffile *inf, *n;
 	STAILQ_FOREACH_SAFE(inf, &input_file_list, next ,n)
 		free_file(inf);
 	STAILQ_INIT(&input_file_list);
@@ -1216,7 +1207,7 @@ ret:
 
 int
 yywrap(void) {
-	struct input_file *ifp;
+	struct cffile *ifp;
 
 	if ((ifp = pop_file()) == NULL)
 		return 1;
@@ -1252,7 +1243,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	struct cfsection *sc, *sn;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
-	struct input_file *inf;
+	struct cffile *inf;
 	struct global_conf *global_conf;
 	struct vartree *gv;
 	struct variables vars;
