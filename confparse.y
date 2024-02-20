@@ -638,36 +638,42 @@ expr	: NUMBER
 	;
 %%
 
-struct cfsections cfglobals = STAILQ_HEAD_INITIALIZER(cfglobals);
-struct cfsections cftemplates = STAILQ_HEAD_INITIALIZER(cftemplates);
-struct cfsections cfvms = STAILQ_HEAD_INITIALIZER(cfvms);
-struct cffiles cffiles = STAILQ_HEAD_INITIALIZER(cffiles);
-struct cffile *cur_file;
+struct parser_context *pctxt;
 
 static void
 free_all_cfsections()
 {
 	struct cfsection *sc, *sn;
 
-	STAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &pctxt->cfglobals, next, sn)
 		free_cfsection(sc);
-	STAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &pctxt->cftemplates, next, sn)
 		free_cfsection(sc);
-	STAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &pctxt->cfvms, next, sn)
 		free_cfsection(sc);
 }
 
 struct cfsection *
 add_section(enum SECTION sec, char *name)
 {
-	static struct cfsections *sections[] = {
-		&cfglobals, &cftemplates, &cfvms
-	};
+	static struct cfsections *section;
 	static char *sec_names[] = {"global", "template", "vm"};
 	struct cfsection *v;
 
+	switch (sec) {
+	case SECTION_GLOBAL:
+		section = &pctxt->cfglobals;
+		break;
+	case SECTION_TEMPLATE:
+		section = &pctxt->cftemplates;
+		break;
+	case SECTION_VM:
+		section = &pctxt->cfvms;
+		break;
+	}
+
 	if (name != NULL && sec != SECTION_GLOBAL)
-		STAILQ_FOREACH (v, sections[sec], next)
+		STAILQ_FOREACH (v, section, next)
 			if (strcmp(v->name, name) == 0) {
 				ERR("%s: %s '%s' already exists.",
 				    peek_filename(), sec_names[sec], name);
@@ -683,7 +689,7 @@ add_section(enum SECTION sec, char *name)
 	v->filename = peek_filename();
 	STAILQ_INIT(&v->params);
 	STAILQ_INIT(&v->argdefs);
-	STAILQ_INSERT_TAIL(sections[sec], v, next);
+	STAILQ_INSERT_TAIL(section, v, next);
 	return v;
 }
 

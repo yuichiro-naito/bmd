@@ -114,8 +114,25 @@ struct cffile {
 	STAILQ_ENTRY(cffile) next;
 };
 
-void *emalloc(size_t);
+STAILQ_HEAD(mpools, mpool);
 
+struct mpool {
+	STAILQ_ENTRY(mpool) next;
+	void *end;
+	void *used;
+	void *last_used;
+	char data[0];
+};
+
+struct parser_context {
+	struct cfsections cfglobals;
+	struct cfsections cftemplates;
+	struct cfsections cfvms;
+	struct cffiles    cffiles;
+	struct cffile    *cur_file;
+};
+
+void *emalloc(size_t);
 
 int yyparse(void);
 void yyerror(const char *);

@@ -1,3 +1,4 @@
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -17,15 +18,91 @@
 extern FILE *yyin;
 extern int yynerrs;
 extern int lineno;
-extern struct cfsections cfglobals;
-extern struct cfsections cftemplates;
-extern struct cfsections cfvms;
 extern struct vartree *global_vars;
-extern struct cffiles cffiles;
-extern struct cffile *cur_file;
+extern struct parser_context *pctxt;
 
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
+
+struct mpools mpools;
+#define DEFAULT_MMAP_SIZE  4096
+
+int
+mpool_expand()
+{
+	struct mpool *m;
+
+	m = mmap(NULL, DEFAULT_MMAP_SIZE, PROT_READ | PROT_WRITE,
+		   MAP_SHARED | MAP_ANON, -1, 0);
+	if (m == NULL)
+		return -1;
+	m->end = (void *)m + DEFAULT_MMAP_SIZE;
+	m->used = m->last_used = m->data;
+
+	STAILQ_INSERT_TAIL(&mpools, m, next);
+	return 0;
+}
+
+int
+mpool_init()
+{
+	STAILQ_INIT(&mpools);
+	return mpool_expand();
+}
+
+void
+mpool_destroy()
+{
+	struct mpool *m, *mn;
+	STAILQ_FOREACH_SAFE (m, &mpools, next, mn)
+		munmap(m, m->end - (void*)m);
+	STAILQ_INIT(&mpools);
+}
+
+void
+mpool_commit()
+{
+	struct mpool *m;
+	STAILQ_FOREACH (m, &mpools, next)
+		m->last_used = m->used;
+}
+
+void
+mpool_rollback()
+{
+	struct mpool *m;
+
+	STAILQ_FOREACH (m, &mpools, next)
+		m->used = m->last_used;
+}
+
+
+void *
+mpool_alloc(size_t sz)
+{
+	void *ret;
+	struct mpool *m;
+
+	sz = roundup2(sz, 8);
+
+	/* There is no way to allocate memory over this size. */
+	if (sz > DEFAULT_MMAP_SIZE - sizeof(struct mpool))
+		return NULL;
+
+	STAILQ_FOREACH (m, &mpools, next)
+		if (m->used + sz <= m->end)
+			break;
+
+	if (m == NULL) {
+		if (mpool_expand() < 0)
+			return NULL;
+		m = STAILQ_LAST(&mpools, mpool, next);
+	}
+
+	ret = m->used;
+	m->used += sz;
+	return ret;
+}
 
 static int
 parse_int(int *val, char *value)
@@ -621,7 +698,7 @@ lookup_template(const char *name)
 {
 	struct cfsection *tp;
 
-	STAILQ_FOREACH (tp, &cftemplates, next)
+	STAILQ_FOREACH (tp, &pctxt->cftemplates, next)
 		if (strcmp(tp->name, name) == 0)
 			return tp;
 	return NULL;
@@ -1071,7 +1148,7 @@ push_file(char *fn)
 		goto err;
 	}
 
-	STAILQ_FOREACH (file, &cffiles, next)
+	STAILQ_FOREACH (file, &pctxt->cffiles, next)
 		if (strcmp(file->filename, rpath) == 0) {
 			ERR("%s is already included\n", rpath);
 			goto err;
@@ -1091,9 +1168,9 @@ push_file(char *fn)
 	file->filename = rpath;
 	file->line = 0;
 	file->fp = fp;
-	STAILQ_INSERT_TAIL(&cffiles, file, next);
-	if (cur_file == NULL)
-		cur_file = STAILQ_FIRST(&cffiles);
+	STAILQ_INSERT_TAIL(&pctxt->cffiles, file, next);
+	if (pctxt->cur_file == NULL)
+		pctxt->cur_file = STAILQ_FIRST(&pctxt->cffiles);
 	INFO("load config %s\n", rpath);
 	return 0;
 err3:
@@ -1108,29 +1185,29 @@ err:
 static struct cffile *
 pop_file()
 {
-	return (cur_file = cur_file ? STAILQ_NEXT(cur_file, next) : NULL);
+	return (pctxt->cur_file = pctxt->cur_file ? STAILQ_NEXT(pctxt->cur_file, next) : NULL);
 }
 
 static struct cffile *
 peek_file()
 {
-	return cur_file;
+	return pctxt->cur_file;
 }
 
 uid_t
 peek_fileowner()
 {
 	struct stat st;
-	char *fn = cur_file ? cur_file->filename :
-		STAILQ_LAST(&cffiles, cffile, next)->filename;
+	char *fn = pctxt->cur_file ? pctxt->cur_file->filename :
+		STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
 	return stat(fn, &st) < 0 ? UID_NOBODY: st.st_uid;
 }
 
 char *
 peek_filename()
 {
-	return cur_file ? cur_file->filename :
-		STAILQ_LAST(&cffiles, cffile, next)->filename;
+	return pctxt->cur_file ? pctxt->cur_file->filename :
+		STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
 }
 
 static void
@@ -1147,9 +1224,9 @@ static void
 clean_file()
 {
 	struct cffile *inf, *n;
-	STAILQ_FOREACH_SAFE(inf, &cffiles, next ,n)
+	STAILQ_FOREACH_SAFE(inf, &pctxt->cffiles, next ,n)
 		free_file(inf);
-	STAILQ_INIT(&cffiles);
+	STAILQ_INIT(&pctxt->cffiles);
 }
 
 void
@@ -1222,7 +1299,7 @@ clear_applied()
 {
 	struct cfsection *sc;
 
-	STAILQ_FOREACH (sc, &cftemplates, next)
+	STAILQ_FOREACH (sc, &pctxt->cftemplates, next)
 		sc->applied = 0;
 }
 
@@ -1231,7 +1308,7 @@ check_duplicate()
 {
 	struct cfsection *sc;
 
-	STAILQ_FOREACH (sc, &cftemplates, next)
+	STAILQ_FOREACH (sc, &pctxt->cftemplates, next)
 		if (sc->duplicate)
 			return -1;
 	return 0;
@@ -1251,9 +1328,27 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	struct plugin_data_head head;
 	struct passwd *pw;
 
+	if (mpool_init() < 0) {
+		ERR("%s\n", "failed to initialize memory pool.");
+		return -1;
+	}
+
+	if ((pctxt = mpool_alloc(sizeof(*pctxt))) == NULL) {
+		mpool_destroy();
+		ERR("%s\n", "failed to allocate parser context.");
+		return -1;
+	}
+
+	STAILQ_INIT(&pctxt->cfglobals);
+	STAILQ_INIT(&pctxt->cftemplates);
+	STAILQ_INIT(&pctxt->cfvms);
+	STAILQ_INIT(&pctxt->cffiles);
+	pctxt->cur_file = NULL;
+
 	gv = malloc(sizeof(*gv));
 	global_conf = calloc(1, sizeof(*global_conf));
 	if (global_conf == NULL || gv == NULL) {
+		mpool_destroy();
 		free(global_conf);
 		free(gv);
 		ERR("%s\n", "failed to allocate global config memory.");
@@ -1263,12 +1358,13 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	vars.local = NULL;
 	vars.global = gv;
 	vars.args = NULL;
-	cur_file = NULL;
+	pctxt->cur_file = NULL;
 
 	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)
 		ERR("%s\n", "failed to set \"LOCALBASE\" variable!");
 
 	if (push_file(gl_conf->config_file) < 0) {
+		mpool_destroy();
 		free_vartree(gv);
 		free(global_conf);
 		return -1;
@@ -1291,7 +1387,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		goto cleanup;
 	}
 
-	STAILQ_FOREACH(sc, &cfglobals, next)
+	STAILQ_FOREACH(sc, &pctxt->cfglobals, next)
 		if (sc->owner == 0)
 			gl_conf_set_params(global_conf, &vars, sc);
 		else
@@ -1303,7 +1399,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	load_plugins(global_conf->plugin_dir ?
 		     global_conf->plugin_dir : gl_conf->plugin_dir);
 
-	STAILQ_FOREACH(sc, &cfvms, next) {
+	STAILQ_FOREACH(sc, &pctxt->cfvms, next) {
 		if (create_plugin_data(&head) < 0)
 			continue;
 		if ((conf = create_vm_conf(sc->name)) == NULL) {
@@ -1347,17 +1443,19 @@ cleanup:
 	yylex_destroy();
 	clean_file();
 
-	STAILQ_FOREACH_SAFE(sc, &cfglobals, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &pctxt->cfglobals, next, sn)
 		free_cfsection(sc);
-	STAILQ_INIT(&cfglobals);
+	STAILQ_INIT(&pctxt->cfglobals);
 
-	STAILQ_FOREACH_SAFE(sc, &cftemplates, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &pctxt->cftemplates, next, sn)
 		free_cfsection(sc);
-	STAILQ_INIT(&cftemplates);
+	STAILQ_INIT(&pctxt->cftemplates);
 
-	STAILQ_FOREACH_SAFE(sc, &cfvms, next, sn)
+	STAILQ_FOREACH_SAFE(sc, &pctxt->cfvms, next, sn)
 		free_cfsection(sc);
-	STAILQ_INIT(&cfvms);
+	STAILQ_INIT(&pctxt->cfvms);
+
+	mpool_destroy();
 
 	if (rc != 0)
 		ERR("%s\n", "failed to parse config file");
