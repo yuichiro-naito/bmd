@@ -124,6 +124,8 @@ struct mpool {
 	char data[0];
 };
 
+#define DEFAULT_MMAP_SIZE  (PAGE_SIZE * 16)
+
 struct parser_context {
 	struct cfsections cfglobals;
 	struct cfsections cftemplates;
@@ -144,6 +146,8 @@ void glob_path(struct cftokens *ts);
 int apply_global_vars(struct cfsection *sc);
 char *peek_filename();
 uid_t peek_fileowner();
+
+void *mpool_alloc(size_t sz);
 
 void free_cfexpr(struct cfexpr *ex);
 void free_cftoken(struct cftoken *tk);

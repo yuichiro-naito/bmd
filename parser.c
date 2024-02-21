@@ -25,7 +25,6 @@ static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
 
 struct mpools mpools;
-#define DEFAULT_MMAP_SIZE  4096
 
 int
 mpool_expand()
@@ -76,7 +75,6 @@ mpool_rollback()
 		m->used = m->last_used;
 }
 
-
 void *
 mpool_alloc(size_t sz)
 {
@@ -101,6 +99,17 @@ mpool_alloc(size_t sz)
 
 	ret = m->used;
 	m->used += sz;
+	return ret;
+}
+
+char *
+mpool_strdup(const char *p)
+{
+	size_t len = strlen(p) + 1;
+	char *ret = mpool_alloc(len);
+	if (ret == NULL)
+		return NULL;
+	memcpy(ret, p, len);
 	return ret;
 }
 
@@ -1137,10 +1146,14 @@ push_file(char *fn)
 {
 	FILE *fp;
 	struct cffile *file;
-	char *rpath;
+	char *rpath, *path;
 	struct stat st;
 
-	if (fn == NULL || (rpath = realpath(fn, NULL)) == NULL)
+	if (fn == NULL || (path = realpath(fn, NULL)) == NULL)
+		return 0;
+	rpath = mpool_strdup(path);
+	free(path);
+	if (rpath == NULL)
 		return 0;
 
 	if (strncmp(rpath, "/dev", 4) == 0) {
@@ -1154,7 +1167,7 @@ push_file(char *fn)
 			goto err;
 		}
 
-	if ((file = malloc(sizeof(*file))) == NULL)
+	if ((file = mpool_alloc(sizeof(*file))) == NULL)
 		goto err;
 
 	if ((fp = fopen(rpath, "r")) == NULL) {
@@ -1178,7 +1191,6 @@ err3:
 err2:
 	free(file);
 err:
-	free(rpath);
 	return -1;
 }
 
@@ -1211,28 +1223,18 @@ peek_filename()
 }
 
 static void
-free_file(struct cffile *file)
-{
-	if (file == NULL)
-		return;
-	fclose(file->fp);
-	free(file->filename);
-	free(file);
-}
-
-static void
 clean_file()
 {
-	struct cffile *inf, *n;
-	STAILQ_FOREACH_SAFE(inf, &pctxt->cffiles, next ,n)
-		free_file(inf);
-	STAILQ_INIT(&pctxt->cffiles);
+	struct cffile *inf;
+	STAILQ_FOREACH(inf, &pctxt->cffiles, next)
+		if (inf != NULL)
+			fclose(inf->fp);
 }
 
 void
 glob_path(struct cftokens *ts)
 {
-	struct cftoken *tk, *tn;
+	struct cftoken *tk;
 	char *path, *conf, *dir, *npath;
 	struct variables vars;
 	struct stat st;
@@ -1244,16 +1246,16 @@ glob_path(struct cftokens *ts)
 	vars.args = NULL;
 
 	if ((tk = STAILQ_FIRST(ts)) == NULL)
-		goto ret;
+		return;
 
 	if (stat(tk->filename, &st) < 0 || st.st_uid != 0) {
 		ERR("%s: .include macro is not allowed.\n",
 		    tk->filename);
-		goto ret;
+		return;
 	}
 
 	if ((path = token_to_string(&vars, ts)) == NULL)
-		goto ret;
+		return;
 
 	if (path[0] != '/' &&
 	    (conf = strdup(tk->filename)) != NULL) {
@@ -1267,19 +1269,15 @@ glob_path(struct cftokens *ts)
 
 	if (glob(path, 0, NULL, &g) < 0) {
 		ERR("failed to glob %s\n", path);
-		goto ret2;
+		goto ret;
 	}
 
 	for (i = 0; i < g.gl_pathc; i++)
 		push_file(g.gl_pathv[i]);
 
 	globfree(&g);
-ret2:
-	free(path);
 ret:
-	STAILQ_FOREACH_SAFE (tk, ts, next, tn)
-		free_cftoken(tk);
-	free(ts);
+	free(path);
 }
 
 int
@@ -1317,7 +1315,7 @@ check_duplicate()
 int
 load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 {
-	struct cfsection *sc, *sn;
+	struct cfsection *sc;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct cffile *inf;
@@ -1442,19 +1440,6 @@ set_global:
 cleanup:
 	yylex_destroy();
 	clean_file();
-
-	STAILQ_FOREACH_SAFE(sc, &pctxt->cfglobals, next, sn)
-		free_cfsection(sc);
-	STAILQ_INIT(&pctxt->cfglobals);
-
-	STAILQ_FOREACH_SAFE(sc, &pctxt->cftemplates, next, sn)
-		free_cfsection(sc);
-	STAILQ_INIT(&pctxt->cftemplates);
-
-	STAILQ_FOREACH_SAFE(sc, &pctxt->cfvms, next, sn)
-		free_cfsection(sc);
-	STAILQ_INIT(&pctxt->cfvms);
-
 	mpool_destroy();
 
 	if (rc != 0)

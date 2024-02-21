@@ -223,7 +223,7 @@ text2lval(size_t triml, size_t trimr, int tovar)
 	char *d;
 	const char *s, *se;
 
-	yylval.cs = d = emalloc(yyleng - trimr - triml + 1);
+	yylval.cs = d = mpool_alloc(yyleng - trimr - triml + 1);
 	if (d == NULL)
 		return 0;
 	se = yytext + (yyleng - trimr);

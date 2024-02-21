@@ -50,7 +50,8 @@ enum SECTION {
 
 extern int lineno;
 
-static void free_all_cfsections();
+#define objalloc(t)    mpool_alloc(sizeof(struct t))
+
 %}
 
 %union {
@@ -99,47 +100,30 @@ conf	:
 	;
 global	: GLOBAL '{' param_l '}'
 	{
-		if (($$ = add_section(SECTION_GLOBAL, NULL)) == NULL) {
-			free_cfparams($3);
-			free_all_cfsections();
+		if (($$ = add_section(SECTION_GLOBAL, NULL)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_CONCAT(&$$->params, $3);
-		free($3);
 		apply_global_vars($$);  /* for .include macro */
 	}
 	;
 tmpl	: TEMPLATE STR '{' param_l '}'
 	{
-		if (($$ = add_section(SECTION_TEMPLATE, $2)) == NULL) {
-			free_cfparams($4);
-			free_all_cfsections();
+		if (($$ = add_section(SECTION_TEMPLATE, $2)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_CONCAT(&$$->params, $4);
-		free($4);
 	}
 	| TEMPLATE STR '(' argdefs ')' '{' param_l '}'
 	{
-		if (($$ = add_section(SECTION_TEMPLATE, $2)) == NULL) {
-			free_cfargdefs($4);
-			free_cfparams($7);
-			free_all_cfsections();
+		if (($$ = add_section(SECTION_TEMPLATE, $2)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_CONCAT(&$$->argdefs, $4);
-		free($4);
 		STAILQ_CONCAT(&$$->params, $7);
-		free($7);
 	}
 	;
 argdefs : argdef
 	{
-		if (($$ = emalloc(sizeof(struct cfargdefs))) == NULL) {
-			free_cfargdef($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfargdefs)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT($$);
 		STAILQ_INSERT_TAIL($$, $1, next);
 	}
@@ -151,37 +135,25 @@ argdefs : argdef
 	;
 argdef	: STR
 	{
-		if (($$ = emalloc(sizeof(struct cfargdef))) == NULL) {
-			free($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfargdef)) == NULL)
 			goto yyabort;
-		}
 		$$->name = $1;
 		STAILQ_INIT(&$$->tokens);
 	}
 	| STR '=' tokens
 	{
-		if (($$ = emalloc(sizeof(struct cfargdef))) == NULL) {
-			free($1);
-			free_cftokens($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfargdef)) == NULL)
 			goto yyabort;
-		}
 		$$->name = $1;
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $3);
-		free($3);
 	}
 	;
 vm	: VM STR '{' param_l '}'
 	{
-		if (($$ = add_section(SECTION_VM, $2)) == NULL) {
-			free_cfparams($4);
-			free_all_cfsections();
+		if (($$ = add_section(SECTION_VM, $2)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_CONCAT(&$$->params, $4);
-		free($4);
 	}
 	;
 include	: INCLUDE tokens ';'
@@ -191,10 +163,8 @@ include	: INCLUDE tokens ';'
 	;
 param_l	:
 	{
-		if (($$ = emalloc(sizeof(struct cfparams))) == NULL) {
-			free_all_cfsections();
+		if (($$ = objalloc(cfparams)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT($$);
 	}
 	| param_l param ';'
@@ -211,52 +181,35 @@ param_l	:
  */
 param	: macro targets
 	{
-		if (($$ = emalloc(sizeof(struct cfparam))) == NULL) {
-			free_cftoken($1);
-			free_cfvalues($2);
-			free_all_cfsections();
+		if (($$ = objalloc(cfparam)) == NULL)
 			goto yyabort;
-		}
 		$$->operator = 0;
 		$$->key = $1;
 		STAILQ_INIT(&$$->vals);
 		STAILQ_CONCAT(&$$->vals, $2);
-		free($2);
 	}
 	| name '=' values
 	{
-		if (($$ = emalloc(sizeof(struct cfparam))) == NULL) {
-			free_cftoken($1);
-			free_cfvalues($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfparam)) == NULL)
 			goto yyabort;
-		}
 		$$->operator = 0;
 		$$->key = $1;
 		STAILQ_INIT(&$$->vals);
 		STAILQ_CONCAT(&$$->vals, $3);
-		free($3);
 	}
 	| name PLEQ values
 	{
-		if (($$ = emalloc(sizeof(struct cfparam))) == NULL) {
-			free_cftoken($1);
-			free_cfvalues($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfparam)) == NULL)
 			goto yyabort;
-		}
 		$$->operator = 1;
 		$$->key = $1;
 		STAILQ_INIT(&$$->vals);
 		STAILQ_CONCAT(&$$->vals, $3);
-		free($3);
 	}
 	| error
 	{
-		if (($$ = emalloc(sizeof(struct cfparam))) == NULL) {
-			free_all_cfsections();
+		if (($$ = objalloc(cfparam)) == NULL)
 			goto yyabort;
-		}
 		$$->operator = -1;
 		$$->key = NULL;
 		STAILQ_INIT(&$$->vals);
@@ -269,11 +222,8 @@ param	: macro targets
  */
 macro	: APPLY
 	{
-		if ($1 == NULL || ($$ = create_token(CF_STR)) == NULL) {
-			free($1);
-			free_all_cfsections();
+		if ($1 == NULL || ($$ = create_token(CF_STR)) == NULL)
 			goto yyabort;
-		}
 		$$->s = $1;
 		$$->len = strlen($1);
 		$$->expr = NULL;
@@ -282,11 +232,8 @@ macro	: APPLY
 	;
 name	: STR
 	{
-		if ($1 == NULL || ($$ = create_token(CF_STR)) == NULL) {
-			free($1);
-			free_all_cfsections();
+		if ($1 == NULL || ($$ = create_token(CF_STR)) == NULL)
 			goto yyabort;
-		}
 		$$->s = $1;
 		$$->len = strlen($1);
 		$$->expr = NULL;
@@ -294,11 +241,8 @@ name	: STR
 	}
 	| VAR
 	{
-		if ($1 == NULL || ($$ = create_token(CF_VAR)) == NULL) {
-			free($1);
-			free_all_cfsections();
+		if ($1 == NULL || ($$ = create_token(CF_VAR)) == NULL)
 			goto yyabort;
-		}
 		$$->s = $1;
 		$$->len = strlen($1);
 		$$->expr = NULL;
@@ -307,11 +251,8 @@ name	: STR
 	;
 values	: value
 	{
-		if (($$ = emalloc(sizeof(struct cfvalues))) == NULL) {
-			free_cfvalue($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfvalues)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT($$);
 		STAILQ_INSERT_TAIL($$, $1, next);
 	}
@@ -323,25 +264,18 @@ values	: value
 	;
 value	: tokens
 	{
-		if (($$ = emalloc(sizeof(struct cfvalue))) == NULL) {
-			free_cftokens($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfvalue)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);
-		free($1);
 		STAILQ_INIT(&$$->args);
 		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 targets	: target
 	{
-		if (($$ = emalloc(sizeof(struct cfvalues))) == NULL) {
-			free_cfvalue($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfvalues)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT($$);
 		STAILQ_INSERT_TAIL($$, $1, next);
 	}
@@ -353,40 +287,28 @@ targets	: target
 	;
 target	: tokens
 	{
-		if (($$ = emalloc(sizeof(struct cfvalue))) == NULL) {
-			free_cftokens($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfvalue)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);
-		free($1);
 		STAILQ_INIT(&$$->args);
 		STAILQ_NEXT($$, next) = NULL;
 	}
 	| tokens '(' args ')'
 	{
-		if (($$ = emalloc(sizeof(struct cfvalue))) == NULL) {
-			free_cftokens($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfvalue)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);
-		free($1);
 		STAILQ_INIT(&$$->args);
 		STAILQ_CONCAT(&$$->args, $3);
-		free($3);
 		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 args	: arg
 	{
-		if (($$ = emalloc(sizeof(struct cfargs))) == NULL) {
-			free_cfarg($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfargs)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT($$);
 		STAILQ_INSERT_TAIL($$, $1, next);
 	}
@@ -398,14 +320,10 @@ args	: arg
 	;
 arg	: tokens
 	{
-		if (($$ = emalloc(sizeof(struct cfarg))) == NULL) {
-			free_cftokens($1);
-			free_all_cfsections();
+		if (($$ = objalloc(cfarg)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);
-		free($1);
 		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
@@ -417,22 +335,16 @@ arg	: tokens
  */
 tokens	:
 	{
-		if (($$ = emalloc(sizeof(struct cftokens))) == NULL) {
-			free_all_cfsections();
+		if (($$ = objalloc(cftokens)) == NULL)
 			goto yyabort;
-		}
 		STAILQ_INIT($$);
 	}
 	| tokens BEGIN_AR expr END_AR
 	{
 		struct cftoken *ct;
 		$$ = $1;
-		if ((ct = create_token(CF_EXPR)) == NULL) {
-			free_cftokens($1);
-			free_cfexpr($3);
-			free_all_cfsections();
+		if ((ct = create_token(CF_EXPR)) == NULL)
 			goto yyabort;
-		}
 		ct->s = NULL;
 		ct->len = 0;
 		ct->expr = $3;
@@ -442,12 +354,8 @@ tokens	:
 	{
 		struct cftoken *ct;
 		$$ = $1;
-		if ($2 == NULL || (ct = create_token(CF_STR)) == NULL) {
-			free_cftokens($1);
-			free($2);
-			free_all_cfsections();
+		if ($2 == NULL || (ct = create_token(CF_STR)) == NULL)
 			goto yyabort;
-		}
 		ct->s = $2;
 		ct->len = strlen($2);
 		ct->expr = NULL;
@@ -457,12 +365,8 @@ tokens	:
 	{
 		struct cftoken *ct;
 		$$ = $1;
-		if ($2 == NULL | (ct = create_token(CF_VAR)) == NULL) {
-			free_cftokens($1);
-			free($2);
-			free_all_cfsections();
+		if ($2 == NULL | (ct = create_token(CF_VAR)) == NULL)
 			goto yyabort;
-		}
 		ct->s = $2;
 		ct->len = strlen($2);
 		ct->expr = NULL;
@@ -475,11 +379,8 @@ tokens	:
 expr	: NUMBER
 	{
 		if ($1 == NULL ||
-		    ($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free($1);
-			free_all_cfsections();
+		    ($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_NUM;
 		$$->op = '\0';
 		$$->left = NULL;
@@ -488,12 +389,8 @@ expr	: NUMBER
 	}
 	| VAR
 	{
-		if ($1 == NULL ||
-		    ($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free($1);
-			free_all_cfsections();
+		if ($1 == NULL || ($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_VAR;
 		$$->op = '\0';
 		$$->left = NULL;
@@ -502,12 +399,8 @@ expr	: NUMBER
 	}
 	| expr '+' expr
 	{
-		if (($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free_cfexpr($1);
-			free_cfexpr($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_EXPR;
 		$$->op = '+';
 		$$->left = $1;
@@ -516,12 +409,8 @@ expr	: NUMBER
 	}
 	| expr '-' expr
 	{
-		if (($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free_cfexpr($1);
-			free_cfexpr($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_EXPR;
 		$$->op = '-';
 		$$->left = $1;
@@ -530,12 +419,8 @@ expr	: NUMBER
 	}
 	| expr '*' expr
 	{
-		if (($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free_cfexpr($1);
-			free_cfexpr($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_EXPR;
 		$$->op = '*';
 		$$->left = $1;
@@ -544,12 +429,8 @@ expr	: NUMBER
 	}
 	| expr '/' expr
 	{
-		if (($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free_cfexpr($1);
-			free_cfexpr($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_EXPR;
 		$$->op = '/';
 		$$->left = $1;
@@ -558,12 +439,8 @@ expr	: NUMBER
 	}
 	| expr '%' expr
 	{
-		if (($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free_cfexpr($1);
-			free_cfexpr($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_EXPR;
 		$$->op = '%';
 		$$->left = $1;
@@ -572,11 +449,8 @@ expr	: NUMBER
 	}
 	| '-' '(' expr ')'
 	{
-		if (($$ = emalloc(sizeof(struct cfexpr))) == NULL) {
-			free_cfexpr($3);
-			free_all_cfsections();
+		if (($$ = objalloc(cfexpr)) == NULL)
 			goto yyabort;
-		}
 		$$->type = CF_EXPR;
 		$$->op = '~';
 		$$->left = $3;
@@ -586,15 +460,10 @@ expr	: NUMBER
 	| '-' NUMBER
 	{
 		struct cfexpr *n;
-		$$ = emalloc(sizeof(struct cfexpr));
-		n = emalloc(sizeof(struct cfexpr));
-		if ($2 == NULL || $$ == NULL || n == NULL) {
-			free($2);
-			free_cfexpr($$);
-			free_cfexpr(n);
-			free_all_cfsections();
+		$$ = objalloc(cfexpr);
+		n = objalloc(cfexpr);
+		if ($2 == NULL || $$ == NULL || n == NULL)
 			goto yyabort;
-		}
 		n->type = CF_NUM;
 		n->op = '\0';
 		n->left = NULL;
@@ -610,15 +479,10 @@ expr	: NUMBER
 	| '-' VAR
 	{
 		struct cfexpr *v;
-		$$ = emalloc(sizeof(struct cfexpr));
-		v = emalloc(sizeof(struct cfexpr));
-		if ($2 == NULL || $$ == NULL || v == NULL) {
-			free($2);
-			free_cfexpr($$);
-			free_cfexpr(v);
-			free_all_cfsections();
+		$$ = objalloc(cfexpr);
+		v = objalloc(cfexpr);
+		if ($2 == NULL || $$ == NULL || v == NULL)
 			goto yyabort;
-		}
 		v->type = CF_VAR;
 		v->op = '\0';
 		v->left = NULL;
@@ -639,19 +503,6 @@ expr	: NUMBER
 %%
 
 struct parser_context *pctxt;
-
-static void
-free_all_cfsections()
-{
-	struct cfsection *sc, *sn;
-
-	STAILQ_FOREACH_SAFE(sc, &pctxt->cfglobals, next, sn)
-		free_cfsection(sc);
-	STAILQ_FOREACH_SAFE(sc, &pctxt->cftemplates, next, sn)
-		free_cfsection(sc);
-	STAILQ_FOREACH_SAFE(sc, &pctxt->cfvms, next, sn)
-		free_cfsection(sc);
-}
 
 struct cfsection *
 add_section(enum SECTION sec, char *name)
@@ -681,7 +532,7 @@ add_section(enum SECTION sec, char *name)
 				break;
 			}
 
-	if ((v = emalloc(sizeof(*v))) == NULL)
+	if ((v = objalloc(cfsection)) == NULL)
 		return NULL;
 	memset(v, 0, sizeof(*v));
 	v->name = name;
@@ -693,22 +544,12 @@ add_section(enum SECTION sec, char *name)
 	return v;
 }
 
-void *
-emalloc(size_t size)
-{
-	void *p;
-
-	if ((p = malloc(size)) == NULL)
-		ERR("%s\n", "fail to allocate memory for parser");
-	return p;
-}
-
 struct cftoken*
 create_token(enum CF_TYPE t)
 {
 	struct cftoken *tk;
 
-	if ((tk = emalloc(sizeof(struct cftoken))) == NULL)
+	if ((tk = objalloc(cftoken)) == NULL)
 		return NULL;
 
 	tk->type = t;
