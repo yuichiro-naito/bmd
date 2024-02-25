@@ -502,7 +502,7 @@ expr	: NUMBER
 	;
 %%
 
-struct parser_context *pctxt;
+struct parser_context *pctxt, *pctxt_snapshot;
 
 struct cfsection *
 add_section(enum SECTION sec, char *name)

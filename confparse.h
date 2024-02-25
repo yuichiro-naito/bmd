@@ -113,6 +113,12 @@ struct cffile {
 	STAILQ_ENTRY(cffile) next;
 };
 
+enum mpool_error {
+	MPERR_NONE,
+	MPERR_ALLOC,
+	MPERR_FATAL
+};
+
 STAILQ_HEAD(mpools, mpool);
 
 struct mpool {
@@ -120,6 +126,8 @@ struct mpool {
 	void *end;
 	void *used;
 	void *last_used;
+	enum mpool_error   error_number;
+	int   dummy;
 	char data[0];
 };
 

@@ -20,7 +20,7 @@ extern FILE *yyin;
 extern int yynerrs;
 extern int lineno;
 extern struct vartree *global_vars;
-extern struct parser_context *pctxt;
+extern struct parser_context *pctxt, *pctxt_snapshot;
 
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
@@ -38,6 +38,7 @@ mpool_expand()
 		return -1;
 	m->end = (void *)m + DEFAULT_MMAP_SIZE;
 	m->used = m->last_used = m->data;
+	m->error_number = MPERR_NONE;
 
 	STAILQ_INSERT_TAIL(&mpools, m, next);
 	return 0;
@@ -60,11 +61,13 @@ mpool_destroy()
 }
 
 void
-mpool_commit()
+mpool_snapshot()
 {
 	struct mpool *m;
-	STAILQ_FOREACH (m, &mpools, next)
+	STAILQ_FOREACH (m, &mpools, next) {
 		m->last_used = m->used;
+		m->error_number = MPERR_NONE;
+	}
 }
 
 void
@@ -76,6 +79,18 @@ mpool_rollback()
 		m->used = m->last_used;
 }
 
+enum mpool_error
+mpool_get_error()
+{
+	enum mpool_error e = MPERR_NONE;
+	struct mpool *m;
+
+	STAILQ_FOREACH (m, &mpools, next)
+		if (e < m->error_number)
+			e = m->error_number;
+	return e;
+}
+
 void *
 mpool_alloc(size_t sz)
 {
@@ -85,17 +100,18 @@ mpool_alloc(size_t sz)
 	sz = roundup2(sz, 8);
 
 	/* There is no way to allocate memory over this size. */
-	if (sz > DEFAULT_MMAP_SIZE - sizeof(struct mpool))
+	if (sz > DEFAULT_MMAP_SIZE - sizeof(struct mpool)) {
+		STAILQ_FIRST(&mpools)->error_number = MPERR_FATAL;
 		return NULL;
+	}
 
 	STAILQ_FOREACH (m, &mpools, next)
 		if (m->used + sz <= m->end)
 			break;
 
 	if (m == NULL) {
-		if (mpool_expand() < 0)
-			return NULL;
-		m = STAILQ_LAST(&mpools, mpool, next);
+		STAILQ_FIRST(&mpools)->error_number = MPERR_ALLOC;
+		return NULL;
 	}
 
 	ret = m->used;
@@ -1284,7 +1300,10 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		return -1;
 	}
 
-	if ((pctxt = mpool_alloc(sizeof(*pctxt))) == NULL) {
+	pctxt = mpool_alloc(sizeof(*pctxt));
+	pctxt_snapshot = mpool_alloc(sizeof(*pctxt));
+
+	if (pctxt == NULL || pctxt_snapshot == NULL) {
 		mpool_destroy();
 		ERR("%s\n", "failed to allocate parser context.");
 		return -1;
@@ -1321,6 +1340,9 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	}
 
 	STAILQ_FOREACH (inf,  &pctxt->cffiles, next) {
+	parse_retry:
+		mpool_snapshot();
+		*pctxt_snapshot = *pctxt;
 		pctxt->cur_file = inf;
 		if ((pid = fork()) < 0) {
 			free_vartree(gv);
@@ -1354,11 +1376,31 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		} else
 			waitpid(pid, &status, 0);
 
-		if (! WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		if (! WIFEXITED(status)) {
 			free_vartree(gv);
 			free(global_conf);
 			rc = -1;
 			goto cleanup;
+		}
+		if ( WEXITSTATUS(status) != 0) {
+			switch (mpool_get_error()) {
+			case MPERR_NONE:
+			case MPERR_FATAL:
+				free_vartree(gv);
+				free(global_conf);
+				rc = -1;
+				goto cleanup;
+			case MPERR_ALLOC:
+				mpool_rollback();
+				*pctxt = *pctxt_snapshot;
+				if (mpool_expand() < 0) {
+					free_vartree(gv);
+					free(global_conf);
+					rc = -1;
+					goto cleanup;
+				}
+				goto parse_retry;
+			}
 		}
 	}
 	if (check_duplicate() != 0) {
