@@ -1,5 +1,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -1322,9 +1323,10 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	struct global_conf *global_conf;
 	struct vartree *gv;
 	struct variables vars;
-	int rc = 0;
+	int status, rc = 0;
 	struct plugin_data_head head;
 	struct passwd *pw;
+	pid_t pid;
 
 	if (mpool_init() < 0) {
 		ERR("%s\n", "failed to initialize memory pool.");
@@ -1371,12 +1373,25 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	inf = peek_file();
 	yyin = inf->fp;
 
-	if (yyparse() || yynerrs) {
+	if ((pid = fork()) < 0) {
 		fclose(yyin);
 		free_vartree(gv);
 		free(global_conf);
 		rc = -1;
 		goto cleanup;
+
+	}
+	if (pid == 0)
+		exit( (yyparse() || yynerrs) ? 1 : 0);
+	else
+		waitpid(pid, &status, 0);
+
+	if (! WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			fclose(yyin);
+			free_vartree(gv);
+			free(global_conf);
+			rc = -1;
+			goto cleanup;
 	}
 
 	if (check_duplicate() != 0) {
