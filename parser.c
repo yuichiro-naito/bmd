@@ -1145,13 +1145,12 @@ free_cfargdefs(struct cfargdefs *ds)
 static int
 push_file(char *fn)
 {
-	FILE *fp;
 	struct cffile *file;
 	char *rpath, *path;
-	struct stat st;
 
 	if (fn == NULL || (path = realpath(fn, NULL)) == NULL)
 		return 0;
+	/* No need to free 'rpath', because it's allocated from mpool.  */
 	rpath = mpool_strdup(path);
 	free(path);
 	if (rpath == NULL)
@@ -1159,52 +1158,23 @@ push_file(char *fn)
 
 	if (strncmp(rpath, "/dev", 4) == 0) {
 		ERR("%s: include denied\n", rpath);
-		goto err;
+		return -1;
 	}
 
 	STAILQ_FOREACH (file, &pctxt->cffiles, next)
 		if (strcmp(file->filename, rpath) == 0) {
 			ERR("%s is already included\n", rpath);
-			goto err;
+			return -1;
 		}
 
 	if ((file = mpool_alloc(sizeof(*file))) == NULL)
-		goto err;
+		return -1;
 
-	if ((fp = fopen(rpath, "r")) == NULL) {
-		ERR("failed to open %s\n", rpath);
-		goto err2;
-	}
-	if (fstat(fileno(fp), &st) < 0 || (! S_ISREG(st.st_mode))) {
-		ERR("%s is not a file\n", rpath);
-		goto err3;
-	}
 	file->filename = rpath;
 	file->line = 0;
-	file->fp = fp;
 	STAILQ_INSERT_TAIL(&pctxt->cffiles, file, next);
-	if (pctxt->cur_file == NULL)
-		pctxt->cur_file = STAILQ_FIRST(&pctxt->cffiles);
 	INFO("load config %s\n", rpath);
 	return 0;
-err3:
-	fclose(fp);
-err2:
-	free(file);
-err:
-	return -1;
-}
-
-static struct cffile *
-pop_file()
-{
-	return (pctxt->cur_file = pctxt->cur_file ? STAILQ_NEXT(pctxt->cur_file, next) : NULL);
-}
-
-static struct cffile *
-peek_file()
-{
-	return pctxt->cur_file;
 }
 
 uid_t
@@ -1221,15 +1191,6 @@ peek_filename()
 {
 	return pctxt->cur_file ? pctxt->cur_file->filename :
 		STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
-}
-
-static void
-clean_file()
-{
-	struct cffile *inf;
-	STAILQ_FOREACH(inf, &pctxt->cffiles, next)
-		if (inf != NULL)
-			fclose(inf->fp);
 }
 
 void
@@ -1281,18 +1242,6 @@ ret:
 	free(path);
 }
 
-int
-yywrap(void) {
-	struct cffile *ifp;
-
-	if ((ifp = pop_file()) == NULL)
-		return 1;
-
-	yyin = ifp->fp;
-	lineno = 1;
-	return 0;
-}
-
 static void
 clear_applied()
 {
@@ -1316,10 +1265,12 @@ check_duplicate()
 int
 load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 {
+	struct stat st;
 	struct cfsection *sc;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct cffile *inf;
+	FILE *fp;
 	struct global_conf *global_conf;
 	struct vartree *gv;
 	struct variables vars;
@@ -1358,7 +1309,6 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	vars.local = NULL;
 	vars.global = gv;
 	vars.args = NULL;
-	pctxt->cur_file = NULL;
 
 	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)
 		ERR("%s\n", "failed to set \"LOCALBASE\" variable!");
@@ -1370,30 +1320,47 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		return -1;
 	}
 
-	inf = peek_file();
-	yyin = inf->fp;
-
-	if ((pid = fork()) < 0) {
-		fclose(yyin);
-		free_vartree(gv);
-		free(global_conf);
-		rc = -1;
-		goto cleanup;
-
-	}
-	if (pid == 0)
-		exit( (yyparse() || yynerrs) ? 1 : 0);
-	else
-		waitpid(pid, &status, 0);
-
-	if (! WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-			fclose(yyin);
+	STAILQ_FOREACH (inf,  &pctxt->cffiles, next) {
+		pctxt->cur_file = inf;
+		if ((pid = fork()) < 0) {
 			free_vartree(gv);
 			free(global_conf);
 			rc = -1;
 			goto cleanup;
-	}
 
+		}
+		if (pid == 0) {
+			if (stat(inf->filename, &st) < 0 ||
+			    (! S_ISREG(st.st_mode))) {
+				ERR("%s is not a file\n", inf->filename);
+				exit(0);
+			}
+			/*
+			  Give up the root privilege to parse the configuration.
+			  If this process doesn't have root privilege,
+			  setgid(2) and setuid(2) will fail. Keep the user
+			  privilege.
+			*/
+			setgid(st.st_gid);
+			setuid(st.st_uid);
+			if ((fp = fopen(inf->filename, "r")) == NULL) {
+				ERR("failed to open %s\n", inf->filename);
+				exit(0);
+			}
+			yyin = fp;
+			lineno = 1;
+			exit( (yyparse() || yynerrs) ? 1 : 0);
+
+		} else
+			waitpid(pid, &status, 0);
+
+		if (! WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			free_vartree(gv);
+			free(global_conf);
+			rc = -1;
+			goto cleanup;
+		}
+	}
 	if (check_duplicate() != 0) {
 		free_vartree(gv);
 		rc = -1;
@@ -1454,7 +1421,6 @@ set_global:
 
 cleanup:
 	yylex_destroy();
-	clean_file();
 	mpool_destroy();
 
 	if (rc != 0)

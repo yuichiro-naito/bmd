@@ -108,7 +108,6 @@ struct cfsection {
 STAILQ_HEAD(cffiles, cffile);
 
 struct cffile {
-	FILE *fp;
 	char *filename;
 	int line;
 	STAILQ_ENTRY(cffile) next;
