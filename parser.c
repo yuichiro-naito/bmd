@@ -25,7 +25,7 @@ extern struct parser_context *pctxt, *pctxt_snapshot;
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
 
-struct mpools mpools;
+static struct mpools mpools;
 
 static int
 mpool_expand()
@@ -1169,15 +1169,13 @@ push_file(char *fn)
 
 	if (strncmp(path, "/dev", 4) == 0 || access(path, R_OK) < 0) {
 		ERR("%s: access denied\n", path);
-		free(path);
-		return -1;
+		goto err;
 	}
 
 	STAILQ_FOREACH (file, &pctxt->cffiles, next)
 		if (strcmp(file->filename, path) == 0) {
 			ERR("%s is already included\n", path);
-			free(path);
-			return -1;
+			goto err;
 		}
 
 	/* No need to free 'rpath', because it's allocated from mpool.  */
@@ -1192,6 +1190,9 @@ push_file(char *fn)
 	STAILQ_INSERT_TAIL(&pctxt->cffiles, file, next);
 	INFO("load config %s\n", rpath);
 	return 0;
+err:
+	free(path);
+	return -1;
 }
 
 uid_t
@@ -1336,7 +1337,6 @@ retry:
 	return 0;
 }
 #undef END_UP
-
 
 int
 load_config_file(struct vm_conf_head *list, bool update_gl_conf)
