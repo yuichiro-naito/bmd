@@ -27,7 +27,7 @@ static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
 
 struct mpools mpools;
 
-int
+static int
 mpool_expand()
 {
 	struct mpool *m;
@@ -44,14 +44,14 @@ mpool_expand()
 	return 0;
 }
 
-int
+static int
 mpool_init()
 {
 	STAILQ_INIT(&mpools);
 	return mpool_expand();
 }
 
-void
+static void
 mpool_destroy()
 {
 	struct mpool *m, *mn;
@@ -60,7 +60,7 @@ mpool_destroy()
 	STAILQ_INIT(&mpools);
 }
 
-void
+static void
 mpool_snapshot()
 {
 	struct mpool *m;
@@ -70,7 +70,7 @@ mpool_snapshot()
 	}
 }
 
-void
+static void
 mpool_rollback()
 {
 	struct mpool *m;
@@ -79,7 +79,7 @@ mpool_rollback()
 		m->used = m->last_used;
 }
 
-enum mpool_error
+static enum mpool_error
 mpool_get_error()
 {
 	enum mpool_error e = MPERR_NONE;
@@ -119,7 +119,7 @@ mpool_alloc(size_t sz)
 	return ret;
 }
 
-char *
+static char *
 mpool_strdup(const char *p)
 {
 	size_t len = strlen(p) + 1;
@@ -1173,19 +1173,18 @@ push_file(char *fn)
 		return -1;
 	}
 
-	/* No need to free 'rpath', because it's allocated from mpool.  */
-	rpath = mpool_strdup(path);
-	free(path);
-	if (rpath == NULL)
-		return 0;
-
 	STAILQ_FOREACH (file, &pctxt->cffiles, next)
-		if (strcmp(file->filename, rpath) == 0) {
-			ERR("%s is already included\n", rpath);
+		if (strcmp(file->filename, path) == 0) {
+			ERR("%s is already included\n", path);
+			free(path);
 			return -1;
 		}
 
-	if ((file = mpool_alloc(sizeof(*file))) == NULL)
+	/* No need to free 'rpath', because it's allocated from mpool.  */
+	rpath = mpool_strdup(path);
+	free(path);
+	file = mpool_alloc(sizeof(*file));
+	if (rpath == NULL || file == NULL)
 		return -1;
 
 	file->filename = rpath;
@@ -1273,22 +1272,84 @@ check_duplicate()
 	return 0;
 }
 
+#define END_UP(var, type) \
+	STAILQ_NEXT(STAILQ_LAST(var, type, next), next) = NULL
+
+static int
+parse(struct cffile *file)
+{
+	FILE *fp;
+	struct stat st;
+	int rc, status;
+	pid_t pid;
+
+retry:
+	mpool_snapshot();
+	*pctxt_snapshot = *pctxt;
+	pctxt->cur_file = file;
+	if ((pid = fork()) < 0)
+		return -1;
+	if (pid == 0) {
+		if (stat(file->filename, &st) < 0 || (! S_ISREG(st.st_mode))) {
+			ERR("%s is not a file\n", file->filename);
+			exit(0);
+		}
+		/*
+		  Give up the root privilege to parse the configuration.
+		  If this process doesn't have root privilege,
+		  setgid(2) and setuid(2) will fail. Keep the user privilege.
+		*/
+		setgid(st.st_gid);
+		setuid(st.st_uid);
+		if ((fp = fopen(file->filename, "r")) == NULL) {
+			ERR("failed to open %s\n", file->filename);
+			exit(0);
+		}
+		yyin = fp;
+		lineno = 1;
+		rc = (yyparse() || yynerrs) ? 1 : 0;
+		fclose(fp);
+		yylex_destroy();
+		exit(rc);
+	} else
+		waitpid(pid, &status, 0);
+
+	if (! WIFEXITED(status))
+		return -1;
+	if ( WEXITSTATUS(status) != 0) {
+		switch (mpool_get_error()) {
+		case MPERR_NONE:
+		case MPERR_FATAL:
+			return -1;
+		case MPERR_ALLOC:
+			mpool_rollback();
+			*pctxt = *pctxt_snapshot;
+			END_UP(&pctxt->cfglobals, cfsection);
+			END_UP(&pctxt->cftemplates, cfsection);
+			END_UP(&pctxt->cfvms, cfsection);
+			END_UP(&pctxt->cffiles, cffile);
+			if (mpool_expand() < 0)
+				return -1;
+			goto retry;
+		}
+	}
+	return 0;
+}
+#undef END_UP
+
+
 int
 load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 {
-	struct stat st;
 	struct cfsection *sc;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct cffile *inf;
-	FILE *fp;
 	struct global_conf *global_conf;
 	struct vartree *gv;
 	struct variables vars;
-	int status, rc = 0;
 	struct plugin_data_head head;
 	struct passwd *pw;
-	pid_t pid;
 
 	if (mpool_init() < 0) {
 		ERR("%s\n", "failed to initialize memory pool.");
@@ -1312,13 +1373,8 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 
 	gv = malloc(sizeof(*gv));
 	global_conf = calloc(1, sizeof(*global_conf));
-	if (global_conf == NULL || gv == NULL) {
-		mpool_destroy();
-		free(global_conf);
-		free(gv);
-		ERR("%s\n", "failed to allocate global config memory.");
-		return -1;
-	}
+	if (global_conf == NULL || gv == NULL)
+		goto err;
 	RB_INIT(gv);
 	vars.local = NULL;
 	vars.global = gv;
@@ -1327,82 +1383,15 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	if (set_var0(gv, "LOCALBASE", LOCALBASE) < 0)
 		ERR("%s\n", "failed to set \"LOCALBASE\" variable!");
 
-	if (push_file(gl_conf->config_file) < 0) {
-		mpool_destroy();
-		free_vartree(gv);
-		free(global_conf);
-		return -1;
-	}
+	if (push_file(gl_conf->config_file) < 0)
+		goto err;
 
-	STAILQ_FOREACH (inf,  &pctxt->cffiles, next) {
-	parse_retry:
-		mpool_snapshot();
-		*pctxt_snapshot = *pctxt;
-		pctxt->cur_file = inf;
-		if ((pid = fork()) < 0) {
-			free_vartree(gv);
-			free(global_conf);
-			rc = -1;
-			goto cleanup;
+	STAILQ_FOREACH (inf, &pctxt->cffiles, next)
+		if (parse(inf) < 0)
+			goto err;
 
-		}
-		if (pid == 0) {
-			if (stat(inf->filename, &st) < 0 ||
-			    (! S_ISREG(st.st_mode))) {
-				ERR("%s is not a file\n", inf->filename);
-				exit(0);
-			}
-			/*
-			  Give up the root privilege to parse the configuration.
-			  If this process doesn't have root privilege,
-			  setgid(2) and setuid(2) will fail. Keep the user
-			  privilege.
-			*/
-			setgid(st.st_gid);
-			setuid(st.st_uid);
-			if ((fp = fopen(inf->filename, "r")) == NULL) {
-				ERR("failed to open %s\n", inf->filename);
-				exit(0);
-			}
-			yyin = fp;
-			lineno = 1;
-			exit( (yyparse() || yynerrs) ? 1 : 0);
-
-		} else
-			waitpid(pid, &status, 0);
-
-		if (! WIFEXITED(status)) {
-			free_vartree(gv);
-			free(global_conf);
-			rc = -1;
-			goto cleanup;
-		}
-		if ( WEXITSTATUS(status) != 0) {
-			switch (mpool_get_error()) {
-			case MPERR_NONE:
-			case MPERR_FATAL:
-				free_vartree(gv);
-				free(global_conf);
-				rc = -1;
-				goto cleanup;
-			case MPERR_ALLOC:
-				mpool_rollback();
-				*pctxt = *pctxt_snapshot;
-				if (mpool_expand() < 0) {
-					free_vartree(gv);
-					free(global_conf);
-					rc = -1;
-					goto cleanup;
-				}
-				goto parse_retry;
-			}
-		}
-	}
-	if (check_duplicate() != 0) {
-		free_vartree(gv);
-		rc = -1;
-		goto cleanup;
-	}
+	if (check_duplicate() != 0)
+		goto err;
 
 	STAILQ_FOREACH(sc, &pctxt->cfglobals, next)
 		if (sc->owner == 0)
@@ -1456,11 +1445,13 @@ set_global:
 	else
 		free_global_conf(global_conf);
 
-cleanup:
-	yylex_destroy();
 	mpool_destroy();
 
-	if (rc != 0)
-		ERR("%s\n", "failed to parse config file");
-	return rc;
+	return 0;
+err:
+	ERR("%s\n", "failed to parse config file");
+	mpool_destroy();
+	free(global_conf);
+	free(gv);
+	return -1;
 }
