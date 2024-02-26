@@ -1166,16 +1166,18 @@ push_file(char *fn)
 
 	if (fn == NULL || (path = realpath(fn, NULL)) == NULL)
 		return 0;
+
+	if (strncmp(path, "/dev", 4) == 0 || access(path, R_OK) < 0) {
+		ERR("%s: access denied\n", path);
+		free(path);
+		return -1;
+	}
+
 	/* No need to free 'rpath', because it's allocated from mpool.  */
 	rpath = mpool_strdup(path);
 	free(path);
 	if (rpath == NULL)
 		return 0;
-
-	if (strncmp(rpath, "/dev", 4) == 0) {
-		ERR("%s: include denied\n", rpath);
-		return -1;
-	}
 
 	STAILQ_FOREACH (file, &pctxt->cffiles, next)
 		if (strcmp(file->filename, rpath) == 0) {
@@ -1215,7 +1217,6 @@ glob_path(struct cftokens *ts)
 	struct cftoken *tk;
 	char *path, *conf, *dir, *npath;
 	struct variables vars;
-	struct stat st;
 	glob_t g;
 	int i;
 
@@ -1225,12 +1226,6 @@ glob_path(struct cftokens *ts)
 
 	if ((tk = STAILQ_FIRST(ts)) == NULL)
 		return;
-
-	if (stat(tk->filename, &st) < 0 || st.st_uid != 0) {
-		ERR("%s: .include macro is not allowed.\n",
-		    tk->filename);
-		return;
-	}
 
 	if ((path = token_to_string(&vars, ts)) == NULL)
 		return;
