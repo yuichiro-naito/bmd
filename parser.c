@@ -1183,7 +1183,7 @@ push_file(char *fn)
 	/* No need to free 'rpath', because it's allocated from mpool.  */
 	rpath = mpool_strdup(path);
 	free(path);
-	file = mpool_alloc(sizeof(*file));
+	file = objalloc(cffile);
 	if (rpath == NULL || file == NULL)
 		return -1;
 
@@ -1356,8 +1356,8 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 		return -1;
 	}
 
-	pctxt = mpool_alloc(sizeof(*pctxt));
-	pctxt_snapshot = mpool_alloc(sizeof(*pctxt));
+	pctxt = objalloc(parser_context);
+	pctxt_snapshot = objalloc(parser_context);
 
 	if (pctxt == NULL || pctxt_snapshot == NULL) {
 		mpool_destroy();

@@ -50,8 +50,6 @@ enum SECTION {
 
 extern int lineno;
 
-#define objalloc(t)    mpool_alloc(sizeof(struct t))
-
 %}
 
 %union {

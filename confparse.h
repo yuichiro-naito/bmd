@@ -155,6 +155,7 @@ char *peek_filename();
 uid_t peek_fileowner();
 
 void *mpool_alloc(size_t sz);
+#define objalloc(t)    mpool_alloc(sizeof(struct t))
 
 void free_cfexpr(struct cfexpr *ex);
 void free_cftoken(struct cftoken *tk);
