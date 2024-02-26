@@ -141,8 +141,6 @@ struct parser_context {
 	struct cffile    *cur_file;
 };
 
-void *emalloc(size_t);
-
 int yyparse(void);
 void yyerror(const char *);
 int yylex(void);
