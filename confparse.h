@@ -131,7 +131,7 @@ struct mpool {
 	char data[0];
 };
 
-#define DEFAULT_MMAP_SIZE  (PAGE_SIZE * 16)
+#define DEFAULT_MMAP_SIZE  (PAGE_SIZE * 64)
 
 struct parser_context {
 	struct cfsections cfglobals;
