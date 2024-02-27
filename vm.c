@@ -167,7 +167,7 @@ copy_uefi_vars(struct vm *vm)
 		if (errno != EINTR)
 			break;
 	if (in < 0) {
-		ERR("can not open %s\n", origin);
+		ERR("cannot open %s\n", origin);
 		return -1;
 	}
 
@@ -263,7 +263,7 @@ grub_load(struct vm *vm)
 	cmd = create_load_command(conf, &len);
 
 	if (cmd != NULL && pipe(ifd) < 0) {
-		ERR("can not create pipe (%s)\n", strerror(errno));
+		ERR("cannot create pipe (%s)\n", strerror(errno));
 		free(cmd);
 		return -1;
 	}
@@ -312,7 +312,7 @@ grub_load(struct vm *vm)
 		args[i++] = NULL;
 
 		execv(args[0], args);
-		ERR("can not exec %s\n", args[0]);
+		ERR("cannot exec %s\n", args[0]);
 		exit(1);
 	} else {
 		ERR("can't fork (%s)\n", strerror(errno));
@@ -339,12 +339,12 @@ bhyve_load(struct vm *vm)
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
-			ERR("can not create pipe (%s)\n", strerror(errno));
+			ERR("cannot create pipe (%s)\n", strerror(errno));
 			goto err;
 		}
 
 		if (pipe(errfd) < 0) {
-			ERR("can not create pipe (%s)\n", strerror(errno));
+			ERR("cannot create pipe (%s)\n", strerror(errno));
 			close(outfd[0]);
 			close(outfd[1]);
 			goto err;
@@ -522,12 +522,12 @@ exec_bhyve(struct vm *vm)
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
-			ERR("can not create pipe (%s)\n", strerror(errno));
+			ERR("cannot create pipe (%s)\n", strerror(errno));
 			return -1;
 		}
 
 		if (pipe(errfd) < 0) {
-			ERR("can not create pipe (%s)\n", strerror(errno));
+			ERR("cannot create pipe (%s)\n", strerror(errno));
 			close(outfd[0]);
 			close(outfd[1]);
 			return -1;
@@ -560,7 +560,7 @@ exec_bhyve(struct vm *vm)
 
 		fp = open_memstream(&buf, &buf_size);
 		if (fp == NULL) {
-			ERR("can not open memstrem (%s)\n", strerror(errno));
+			ERR("cannot open memstrem (%s)\n", strerror(errno));
 			exit(1);
 		}
 		flockfile(fp);
@@ -654,10 +654,10 @@ exec_bhyve(struct vm *vm)
 		}
 		args = (char **)buf;
 		execv(args[0], args);
-		ERR("can not exec %s\n", args[0]);
+		ERR("cannot exec %s\n", args[0]);
 		exit(1);
 	} else {
-		ERR("can not fork (%s)\n", strerror(errno));
+		ERR("cannot fork (%s)\n", strerror(errno));
 		exit(1);
 	}
 

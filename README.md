@@ -108,7 +108,7 @@ Following 2 macros are available.
 
 	This macro takes one file path to include another configurations. A file
 	path can contain '*' and '?' literals for pattern matting. '.include'
-	macro can not be written in sections, must be written outside of section.
+	macro cannot be written in sections, must be written outside of section.
 
 ### Variables
 

@@ -823,7 +823,7 @@ load_plugins(const char *plugin_dir)
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 
 	if ((d = opendir(plugin_dir)) == NULL) {
-		ERR("can not open %s\n", plugin_dir);
+		ERR("cannot open %s\n", plugin_dir);
 		return -1;
 	}
 
@@ -1536,7 +1536,7 @@ main(int argc, char *argv[])
 
 	if (procctl(P_PID, getpid(), PROC_SPROTECT, &(int[]) { PPROT_SET }[0]) <
 	    0)
-		WARN("%s\n", "can not protect from OOM killer");
+		WARN("%s\n", "cannot protect from OOM killer");
 
 	if (load_config_file(&vm_conf_list, true) < 0)
 		return 1;
@@ -1547,12 +1547,12 @@ main(int argc, char *argv[])
 #else
 	if ((eventq = kqueue()) < 0) {
 #endif
-		ERR("%s\n", "can not open kqueue");
+		ERR("%s\n", "cannot open kqueue");
 		return 1;
 	}
 
 	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
-		ERR("can not bind %s\n", gl_conf->cmd_sock_path);
+		ERR("cannot bind %s\n", gl_conf->cmd_sock_path);
 		return 1;
 	}
 
@@ -1623,7 +1623,7 @@ direct_run(const char *name, bool install, bool single)
 	LOG_OPEN_PERROR();
 
 	if ((eventq = kqueue()) < 0) {
-		ERR("%s\n", "can not open kqueue");
+		ERR("%s\n", "cannot open kqueue");
 		return 1;
 	}
 

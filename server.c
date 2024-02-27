@@ -673,7 +673,7 @@ list_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 
 	if ((list = malloc(count * sizeof(nvlist_t *))) == NULL) {
 		error = true;
-		reason = "can not allocate memory";
+		reason = "cannot allocate memory";
 		goto ret;
 	}
 

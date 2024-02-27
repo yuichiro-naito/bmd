@@ -176,7 +176,7 @@ send_recv(nvlist_t *cmd)
 	uint32_t sz;
 
 	if ((s = connect_to_server(gl_conf)) < 0) {
-		printf("can not connect to %s\n", gl_conf->cmd_sock_path);
+		printf("cannot connect to %s\n", gl_conf->cmd_sock_path);
 		return NULL;
 	}
 
@@ -185,11 +185,11 @@ send_recv(nvlist_t *cmd)
 		if (errno != EINTR)
 			break;
 	if (rc <= 0) {
-		printf("can not send to bmd\n");
+		printf("cannot send to bmd\n");
 		goto end;
 	}
 	if (nvlist_send(s, cmd) < 0) {
-		printf("can not send to bmd\n");
+		printf("cannot send to bmd\n");
 		goto end;
 	}
 
