@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1487,17 +1488,12 @@ parse_opt(int argc, char *argv[])
 	return 0;
 }
 
-static int
+static bool
 strendswith(const char *t, const char *s)
 {
-	const char *p = &t[strlen(t)];
-	const char *q = &s[strlen(s)];
+	const char *p;
 
-	while (p > t && q > s)
-		if (*--p != *--q)
-			return (*p) - (*q);
-
-	return (*p) - (*q);
+	return ((p = strstr(t, s)) != NULL) && (strlen(p) == strlen(s));
 }
 
 int
@@ -1519,7 +1515,7 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (strendswith(argv[0], "ctl") == 0)
+	if (strendswith(argv[0], "ctl"))
 		return control(argc, argv);
 
 	if (parse_opt(argc, argv) < 0)
