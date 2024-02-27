@@ -21,7 +21,7 @@ struct inspection {
 	char *grub_run_partition;
 };
 
-int inspect_with_grub(struct inspection *ins);
-char *inspect(struct vm_conf *conf);
+int inspect_with_grub(struct inspection *);
+char *inspect(struct vm_conf *);
 
 #endif

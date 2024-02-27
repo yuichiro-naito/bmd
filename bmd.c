@@ -64,13 +64,13 @@ static int sigterm = 0;
 
 extern struct vm_method bhyve_method;
 
-static int reload_virtual_machines();
-static void stop_virtual_machine(struct vm_entry *vm_ent);
-static void free_vm_entry(struct vm_entry *vm_ent);
+static int reload_virtual_machines(void);
+static void stop_virtual_machine(struct vm_entry *);
+static void free_vm_entry(struct vm_entry *);
 
 // implemented in control.c
-int control(int argc, char *argv[]);
-struct vm_conf_entry *lookup_vm_conf(const char *name);
+extern int control(int, char *[]);
+extern struct vm_conf_entry *lookup_vm_conf(const char *);
 
 static int
 kevent_set(struct kevent *kev, int n)

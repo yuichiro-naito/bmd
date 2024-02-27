@@ -10,20 +10,20 @@
 struct sock_buf;
 struct global_conf;
 
-struct sock_buf *create_sock_buf(int fd);
-void destroy_sock_buf(struct sock_buf *p);
-void clear_sock_buf(struct sock_buf *p);
-int recv_sock_buf(struct sock_buf *sb);
-void clear_send_sock_buf(struct sock_buf *p);
-int send_sock_buf(struct sock_buf *p);
+struct sock_buf *create_sock_buf(int);
+void destroy_sock_buf(struct sock_buf *);
+void clear_sock_buf(struct sock_buf *);
+int recv_sock_buf(struct sock_buf *);
+void clear_send_sock_buf(struct sock_buf *);
+int send_sock_buf(struct sock_buf *);
 
-int connect_to_server(const struct global_conf *gc);
-int create_command_server(const struct global_conf *gc);
+int connect_to_server(const struct global_conf *);
+int create_command_server(const struct global_conf *);
 int accept_command_socket(int s0);
-int recv_command(struct sock_buf *sb);
-struct timespec *calc_timeout(int timeout, struct timespec *ts);
-int close_timeout_sock_buf(int timeout);
+int recv_command(struct sock_buf *);
+struct timespec *calc_timeout(int , struct timespec *);
+int close_timeout_sock_buf(int);
 
-int attach_console(int fd);
+int attach_console(int);
 
 #endif
