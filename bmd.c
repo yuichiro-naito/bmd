@@ -1530,7 +1530,6 @@ main(int argc, char *argv[])
 	else
 		LOG_OPEN();
 
-
 	sigemptyset(&nmask);
 	sigaddset(&nmask, SIGTERM);
 	if (gl_conf->foreground)
@@ -1546,7 +1545,8 @@ main(int argc, char *argv[])
 	if (load_config_file(&vm_conf_list, true) < 0)
 		return 1;
 
-#if __FreeBSD_version >= 1400088 || (__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+#if __FreeBSD_version >= 1400088 || \
+	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
 	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
 #else
 	if ((eventq = kqueue()) < 0) {
@@ -1657,8 +1657,8 @@ direct_run(const char *name, bool install, bool single)
 	if (VM_START(vm_ent) < 0)
 		goto err;
 	i = 0;
-	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
-	       0, vm_ent);
+	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
+	       NOTE_EXIT, 0, vm_ent);
 	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0)
 		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
 		       NOTE_SECONDS, VM_CONF(vm_ent)->loader_timeout, vm_ent);
@@ -1728,9 +1728,9 @@ compare_vm_conf_entry(struct vm_conf_entry *a, struct vm_conf_entry *b)
 	if ((rc = compare_vm_conf(&a->conf, &b->conf)) != 0)
 		return rc;
 
-	for(pa = SLIST_FIRST(&a->pl_data), pb = SLIST_FIRST(&b->pl_data);
-	    pa != NULL && pb != NULL;
-	    pa = SLIST_NEXT(pa, next), pb = SLIST_NEXT(pb, next))
+	for (pa = SLIST_FIRST(&a->pl_data), pb = SLIST_FIRST(&b->pl_data);
+	     pa != NULL && pb != NULL;
+	     pa = SLIST_NEXT(pa, next), pb = SLIST_NEXT(pb, next))
 		if ((rc = compare_nvlist(pa->pl_conf, pb->pl_conf)) != 0)
 			return rc;
 

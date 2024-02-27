@@ -1,19 +1,20 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+
 #include <ctype.h>
+#include <errno.h>
 #include <glob.h>
+#include <grp.h>
 #include <libgen.h>
 #include <pwd.h>
-#include <grp.h>
-#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "log.h"
-#include "confparse.h"
 #include "bmd.h"
+#include "confparse.h"
+#include "log.h"
 #include "server.h"
 
 extern FILE *yyin;
@@ -33,7 +34,7 @@ mpool_expand()
 	struct mpool *m;
 
 	m = mmap(NULL, DEFAULT_MMAP_SIZE, PROT_READ | PROT_WRITE,
-		   MAP_SHARED | MAP_ANON, -1, 0);
+	    MAP_SHARED | MAP_ANON, -1, 0);
 	if (m == NULL)
 		return -1;
 	m->end = (void *)m + DEFAULT_MMAP_SIZE;
@@ -56,7 +57,7 @@ mpool_destroy()
 {
 	struct mpool *m, *mn;
 	STAILQ_FOREACH_SAFE (m, &mpools, next, mn)
-		munmap(m, m->end - (void*)m);
+		munmap(m, m->end - (void *)m);
 	STAILQ_INIT(&mpools);
 }
 
@@ -153,7 +154,7 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 	char *val, *argval;
 	struct vartree *args, *old_args;
 	struct cfargdef *def;
-	struct cfarg    *arg;
+	struct cfarg *arg;
 
 	val = token_to_string(&conf->vars, &vl->tokens);
 	if (val == NULL)
@@ -178,10 +179,11 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 
 	arg = STAILQ_FIRST(&vl->args);
 	STAILQ_FOREACH (def, &tp->argdefs, next) {
-		argval = token_to_string(&conf->vars, arg ? &arg->tokens : &def->tokens);
+		argval = token_to_string(&conf->vars,
+		    arg ? &arg->tokens : &def->tokens);
 		if (set_var0(args, def->name, argval ? argval : "") < 0)
-			ERR("failed to set \"%s\" argument! (%s)\n",
-			    def->name, strerror(errno));
+			ERR("failed to set \"%s\" argument! (%s)\n", def->name,
+			    strerror(errno));
 		free(argval);
 		arg = arg ? STAILQ_NEXT(arg, next) : NULL;
 	}
@@ -199,8 +201,7 @@ static int
 parse_name(struct vm_conf *conf, char *val)
 {
 	if (set_var(&conf->vars, "NAME", val) < 0)
-		ERR("failed to set \"NAME\" variable! (%s)\n",
-		    strerror(errno));
+		ERR("failed to set \"NAME\" variable! (%s)\n", strerror(errno));
 	set_name(conf, val);
 	return 0;
 }
@@ -260,14 +261,13 @@ static int
 parse_disk(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	char * const *p;
-	static char * const types[] = {
-		"ahci-hd", "virtio-blk", "nvme" };
+	char *const *p;
+	static char *const types[] = { "ahci-hd", "virtio-blk", "nvme" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0 && val[n] == ':')
-			return add_disk_conf(conf, *p, &val[n+1]);
+			return add_disk_conf(conf, *p, &val[n + 1]);
 	}
 
 	return add_disk_conf(conf, "virtio-blk", val);
@@ -277,13 +277,13 @@ static int
 parse_iso(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	char * const *p;
-	static char * const types[] = { "ahci-cd" };
+	char *const *p;
+	static char *const types[] = { "ahci-cd" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0 && val[n] == ':')
-			return add_iso_conf(conf, *p, &val[n+1]);
+			return add_iso_conf(conf, *p, &val[n + 1]);
 	}
 
 	return add_iso_conf(conf, "ahci-cd", val);
@@ -293,13 +293,13 @@ static int
 parse_net(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	char * const *p;
-	static char * const types[] = { "virtio-net", "e1000" };
+	char *const *p;
+	static char *const types[] = { "virtio-net", "e1000" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0 && val[n] == ':')
-			return add_net_conf(conf, *p, &val[n+1]);
+			return add_net_conf(conf, *p, &val[n + 1]);
 	}
 
 	return add_net_conf(conf, "virtio-net", val);
@@ -329,8 +329,8 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	char * const *p;
-	static char * const values[] = { "uefi", "csm", "bhyveload", "grub" };
+	char *const *p;
+	static char *const values[] = { "uefi", "csm", "bhyveload", "grub" };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
@@ -423,7 +423,7 @@ parse_owner(struct vm_conf *conf, char *val)
 {
 	char *user, *group, *val2 = NULL;
 	struct passwd *pwd;
-	struct group  *grp;
+	struct group *grp;
 
 	if (strchr(val, ':') != NULL) {
 		if ((val2 = strdup(val)) == NULL)
@@ -476,8 +476,8 @@ err:
 static int
 parse_boot(struct vm_conf *conf, char *val)
 {
-	char * const *p;
-	static char * const values[] = { "yes", "true", "oneshot", "always" };
+	char *const *p;
+	static char *const values[] = { "yes", "true", "oneshot", "always" };
 	static enum BOOT const r[] = { YES, YES, ONESHOT, ALWAYS, NO };
 
 	ARRAY_FOREACH (p, values)
@@ -490,11 +490,9 @@ parse_boot(struct vm_conf *conf, char *val)
 static int
 parse_hostbridge(struct vm_conf *conf, char *val)
 {
-	char * const *p;
-	static char * const values[] = {
-		"none", "standard", "intel", "amd" };
-	static enum HOSTBRIDGE_TYPE const t[] = {
-		NONE, INTEL, INTEL, AMD };
+	char *const *p;
+	static char *const values[] = { "none", "standard", "intel", "amd" };
+	static enum HOSTBRIDGE_TYPE const t[] = { NONE, INTEL, INTEL, AMD };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
@@ -512,7 +510,7 @@ parse_backend(struct vm_conf *conf, char *val)
 	if (vm_method_exists(val) < 0)
 		return -1;
 
-	return set_backend(conf,val);
+	return set_backend(conf, val);
 }
 
 static int
@@ -740,8 +738,8 @@ calc_expr(struct variables *vars, struct cfexpr *ex, long *v, char *fn, int ln)
 	case CF_NUM:
 		n = strtol(ex->val, &p, 0);
 		if (*p != '\0') {
-			ERR("%s line %d: %s is not a number\n",
-			    fn, ln, ex->val);
+			ERR("%s line %d: %s is not a number\n", fn, ln,
+			    ex->val);
 			return -1;
 		}
 		*v = n;
@@ -752,14 +750,14 @@ calc_expr(struct variables *vars, struct cfexpr *ex, long *v, char *fn, int ln)
 			return 0;
 		}
 		if ((val = get_var(vars, ex->val)) == NULL) {
-			ERR("%s line %d: ${%s} is undefined\n",
-			    fn, ln, ex->val);
+			ERR("%s line %d: ${%s} is undefined\n", fn, ln,
+			    ex->val);
 			return -1;
 		}
 		n = strtol(val, &p, 0);
 		if (*p != '\0') {
-			ERR("%s line %d: ${%s} is not a number\n",
-			    fn, ln, ex->val);
+			ERR("%s line %d: ${%s} is not a number\n", fn, ln,
+			    ex->val);
 			return -1;
 		}
 		*v = n;
@@ -815,7 +813,7 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 	if ((fp = open_memstream(&str, &len)) == NULL)
 		return NULL;
 
-	STAILQ_FOREACH(tk, tokens, next) {
+	STAILQ_FOREACH (tk, tokens, next) {
 		switch (tk->type) {
 		case CF_STR:
 			fwrite(tk->s, 1, tk->len, fp);
@@ -831,7 +829,8 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 			fwrite(val, 1, strlen(val), fp);
 			break;
 		case CF_EXPR:
-			if (calc_expr(vars, tk->expr, &num, tk->filename, tk->lineno) < 0)
+			if (calc_expr(vars, tk->expr, &num, tk->filename,
+				tk->lineno) < 0)
 				goto err;
 			fprintf(fp, "%ld", num);
 			break;
@@ -840,7 +839,6 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 			break;
 		}
 	}
-
 
 	fclose(fp);
 	return str;
@@ -862,7 +860,7 @@ apply_global_vars(struct cfsection *sc)
 	vars.local = NULL;
 	vars.args = NULL;
 
-	STAILQ_FOREACH(pr, &sc->params, next)
+	STAILQ_FOREACH (pr, &sc->params, next)
 		if (pr->key->type == CF_VAR) {
 			vl = STAILQ_FIRST(&pr->vals);
 			val = token_to_string(&vars, &vl->tokens);
@@ -880,13 +878,13 @@ apply_global_vars(struct cfsection *sc)
 
 static int
 gl_conf_set_params(struct global_conf *gc, struct variables *vars,
-		   struct cfsection *sc)
+    struct cfsection *sc)
 {
 	struct cfparam *pr;
 	struct cfvalue *vl;
 	char *key, *val, **t, *p, *nmdm_offset_s = NULL;
 
-	STAILQ_FOREACH(pr, &sc->params, next) {
+	STAILQ_FOREACH (pr, &sc->params, next) {
 		key = pr->key->s;
 		if (pr->key->type == CF_VAR) {
 			vl = STAILQ_FIRST(&pr->vals);
@@ -933,7 +931,7 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 			goto unknown;
 		}
 
-		STAILQ_FOREACH(vl, &pr->vals, next) {
+		STAILQ_FOREACH (vl, &pr->vals, next) {
 			val = token_to_string(vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -946,7 +944,6 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 
 	unknown:
 		ERR("%s: unknown key %s\n", "global", key);
-
 	}
 
 	if (nmdm_offset_s) {
@@ -970,7 +967,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 	char *key, *val;
 	int rc;
 
-	STAILQ_FOREACH(pr, &sc->params, next) {
+	STAILQ_FOREACH (pr, &sc->params, next) {
 		key = pr->key->s;
 		if (pr->key->type == CF_VAR) {
 			vl = STAILQ_FIRST(&pr->vals);
@@ -984,16 +981,16 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 			continue;
 		}
 		if (strcasecmp(key, ".apply") == 0) {
-			STAILQ_FOREACH(vl, &pr->vals, next)
+			STAILQ_FOREACH (vl, &pr->vals, next)
 				parse_apply(conf, vl);
 			continue;
 		}
 		parser = bsearch(key, parser_list,
-				 sizeof(parser_list) / sizeof(parser_list[0]),
-				 sizeof(parser_list[0]), compare_parser_entry);
-		if (parser && parser->clear != NULL && pr->operator == 0)
+		    sizeof(parser_list) / sizeof(parser_list[0]),
+		    sizeof(parser_list[0]), compare_parser_entry);
+		if (parser && parser->clear != NULL && pr->operator== 0)
 			(*parser->clear)(conf);
-		STAILQ_FOREACH(vl, &pr->vals, next) {
+		STAILQ_FOREACH (vl, &pr->vals, next) {
 			val = token_to_string(&conf->vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -1002,21 +999,22 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 					tk = STAILQ_FIRST(&vl->tokens);
 					tk = tk ? tk : pr->key;
 					ERR("%s line %d: vm %s: invalid value: %s = %s\n",
-					    tk->filename, tk->lineno,
-					    sc->name, key, val);
+					    tk->filename, tk->lineno, sc->name,
+					    key, val);
 				}
 			} else {
-				rc = call_plugin_parser(&conf_ent->pl_data, key, val);
+				rc = call_plugin_parser(&conf_ent->pl_data, key,
+				    val);
 				if (rc > 0) {
 					ERR("%s line %d: %s: unknown key %s\n",
 					    pr->key->filename, pr->key->lineno,
 					    sc->name, key);
-				} else	if (rc < 0) {
+				} else if (rc < 0) {
 					tk = STAILQ_FIRST(&vl->tokens);
 					tk = tk ? tk : pr->key;
 					ERR("%s line %d: %s: invalid value: %s = %s\n",
-					    tk->filename, tk->lineno,
-					    sc->name, key, val);
+					    tk->filename, tk->lineno, sc->name,
+					    key, val);
 				}
 			}
 			free(val);
@@ -1053,7 +1051,7 @@ free_cftokens(struct cftokens *ts)
 	struct cftoken *tk, *tn;
 	if (ts == NULL)
 		return;
-	STAILQ_FOREACH_SAFE(tk, ts, next, tn)
+	STAILQ_FOREACH_SAFE (tk, ts, next, tn)
 		free_cftoken(tk);
 }
 
@@ -1070,10 +1068,10 @@ free_cfvalue(struct cfvalue *vl)
 void
 free_cfvalues(struct cfvalues *vs)
 {
-	struct cfvalue	*vl, *vn;
+	struct cfvalue *vl, *vn;
 	if (vs == NULL)
 		return;
-	STAILQ_FOREACH_SAFE(vl, vs, next, vn)
+	STAILQ_FOREACH_SAFE (vl, vs, next, vn)
 		free_cfvalue(vl);
 }
 
@@ -1093,7 +1091,7 @@ free_cfparams(struct cfparams *ps)
 	struct cfparam *pr, *pn;
 	if (ps == NULL)
 		return;
-	STAILQ_FOREACH_SAFE(pr, ps, next, pn)
+	STAILQ_FOREACH_SAFE (pr, ps, next, pn)
 		free_cfparam(pr);
 }
 
@@ -1115,7 +1113,7 @@ free_cfsections(struct cfsections *ss)
 
 	if (ss == NULL)
 		return;
-	STAILQ_FOREACH_SAFE(sc, ss, next, sn)
+	STAILQ_FOREACH_SAFE (sc, ss, next, sn)
 		free_cfsection(sc);
 }
 
@@ -1199,16 +1197,18 @@ uid_t
 peek_fileowner()
 {
 	struct stat st;
-	char *fn = pctxt->cur_file ? pctxt->cur_file->filename :
-		STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
-	return stat(fn, &st) < 0 ? UID_NOBODY: st.st_uid;
+	char *fn = pctxt->cur_file ?
+	    pctxt->cur_file->filename :
+	    STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
+	return stat(fn, &st) < 0 ? UID_NOBODY : st.st_uid;
 }
 
 char *
 peek_filename()
 {
-	return pctxt->cur_file ? pctxt->cur_file->filename :
-		STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
+	return pctxt->cur_file ?
+	    pctxt->cur_file->filename :
+	    STAILQ_LAST(&pctxt->cffiles, cffile, next)->filename;
 }
 
 void
@@ -1230,8 +1230,7 @@ glob_path(struct cftokens *ts)
 	if ((path = token_to_string(&vars, ts)) == NULL)
 		return;
 
-	if (path[0] != '/' &&
-	    (conf = strdup(tk->filename)) != NULL) {
+	if (path[0] != '/' && (conf = strdup(tk->filename)) != NULL) {
 		dir = dirname(conf);
 		if (asprintf(&npath, "%s/%s", dir, path) >= 0) {
 			free(path);
@@ -1273,8 +1272,7 @@ check_duplicate()
 	return 0;
 }
 
-#define END_UP(var, type) \
-	STAILQ_NEXT(STAILQ_LAST(var, type, next), next) = NULL
+#define END_UP(var, type) STAILQ_NEXT(STAILQ_LAST(var, type, next), next) = NULL
 
 static int
 parse(struct cffile *file)
@@ -1291,7 +1289,7 @@ retry:
 	if ((pid = fork()) < 0)
 		return -1;
 	if (pid == 0) {
-		if (stat(file->filename, &st) < 0 || (! S_ISREG(st.st_mode))) {
+		if (stat(file->filename, &st) < 0 || (!S_ISREG(st.st_mode))) {
 			ERR("%s is not a file\n", file->filename);
 			exit(0);
 		}
@@ -1315,9 +1313,9 @@ retry:
 	} else
 		waitpid(pid, &status, 0);
 
-	if (! WIFEXITED(status))
+	if (!WIFEXITED(status))
 		return -1;
-	if ( WEXITSTATUS(status) != 0) {
+	if (WEXITSTATUS(status) != 0) {
 		switch (mpool_get_error()) {
 		case MPERR_NONE:
 		case MPERR_FATAL:
@@ -1393,19 +1391,20 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	if (check_duplicate() != 0)
 		goto err;
 
-	STAILQ_FOREACH(sc, &pctxt->cfglobals, next)
+	STAILQ_FOREACH (sc, &pctxt->cfglobals, next)
 		if (sc->owner == 0)
 			gl_conf_set_params(global_conf, &vars, sc);
 		else
-			ERR("%s: global section is not allowed.\n", sc->filename);
+			ERR("%s: global section is not allowed.\n",
+			    sc->filename);
 
 	if (list == NULL)
 		goto set_global;
 
-	load_plugins(global_conf->plugin_dir ?
-		     global_conf->plugin_dir : gl_conf->plugin_dir);
+	load_plugins(global_conf->plugin_dir ? global_conf->plugin_dir :
+					       gl_conf->plugin_dir);
 
-	STAILQ_FOREACH(sc, &pctxt->cfvms, next) {
+	STAILQ_FOREACH (sc, &pctxt->cfvms, next) {
 		if (create_plugin_data(&head) < 0)
 			continue;
 		if ((conf = create_vm_conf(sc->name)) == NULL) {
