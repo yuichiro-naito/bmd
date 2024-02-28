@@ -138,7 +138,7 @@ struct vm {
 };
 
 #define ARRAY_FOREACH(p, a) \
-	for (p = &a[0]; p < &a[sizeof(a) / sizeof(a[0])]; p++)
+	for (p = &a[0]; p < &a[nitems(a)]; p++)
 
 void free_vartree(struct vartree *);
 void free_passthru_conf(struct passthru_conf *);

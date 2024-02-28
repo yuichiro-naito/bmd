@@ -145,7 +145,7 @@ stop_waiting_for(bool (*fn)(struct event *, void *), void *data)
 		kev[i] = ev->kev;
 		kev[i].flags = EV_DELETE;
 		i++;
-		if (i >= sizeof(kev)/sizeof(kev[0])) {
+		if (i >= (int)nitems(kev)) {
 			if (kevent_set(kev, i) < 0)
 				ERR("failed to remove kevent (%s)\n",
 				    strerror(errno));

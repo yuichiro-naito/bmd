@@ -1833,7 +1833,7 @@ compare_nvlist(const nvlist_t *a, const nvlist_t *b)
 	while ((k = nvlist_next(a, &t, &cookie)) != NULL) {
 		if (! nvlist_exists_type(b, k, t))
 			return 1;
-		if (t < 0 || t > sizeof(cfuncs)/sizeof(cfuncs[0]))
+		if (t < 0 || t > (int)nitems(cfuncs))
 			continue;
 		if ((rc = (*cfuncs[t])(a, k, b)) != 0)
 			return rc;
