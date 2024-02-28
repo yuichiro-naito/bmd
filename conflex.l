@@ -52,6 +52,7 @@ int lineno = 1;
 %option noinput
 %option nounput
 %option stack
+%option noyy_top_state
 
 %start _ DQ AR PR
 
