@@ -62,8 +62,6 @@ static int timer_id = 0;
  */
 static int sigterm = 0;
 
-extern struct vm_method bhyve_method;
-
 static int reload_virtual_machines(void);
 static void stop_virtual_machine(struct vm_entry *);
 static void free_vm_entry(struct vm_entry *);

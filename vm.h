@@ -3,6 +3,7 @@
 
 struct vm;
 struct vm_conf;
+extern struct vm_method bhyve_method;
 
 /* Implemented in vm.c */
 int remove_taps(struct vm *);
