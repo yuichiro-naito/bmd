@@ -99,7 +99,7 @@ vm_output(struct event *ev, void *data)
 	struct vm_entry *e = data;
 
 	return  ev->data == e && k->filter == EVFILT_READ && (
-		k->ident == VM_OUTFD(e) || k->ident == VM_ERRFD(e));
+		(int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e));
 }
 
 static bool
@@ -111,7 +111,7 @@ vm_output_and_timers(struct event *ev, void *data)
 	return ev->data == e && (
 		k->filter == EVFILT_TIMER ||
 		(k->filter == EVFILT_READ &&
-		 (k->ident == VM_OUTFD(e) || k->ident == VM_ERRFD(e)))
+		 ((int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e)))
 		);
 }
 
@@ -425,7 +425,7 @@ on_read_vm_output(int fd, void *data)
 	if (write_err_log(fd, VM_PTR(vm_ent)) == 0) {
 		LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
 			kev = &ev->kev;
-			if (ev->data != vm_ent || kev->ident != fd ||
+			if (ev->data != vm_ent || (int)kev->ident != fd ||
 			    kev->filter != EVFILT_READ)
 				continue;
 			/*
@@ -1681,7 +1681,7 @@ wait:
 	case EVFILT_PROC:
 		if (waitpid(ev.ident, &status, 0) < 0)
 			goto err;
-		if (ev.ident != VM_PID(vm_ent))
+		if ((pid_t)ev.ident != VM_PID(vm_ent))
 			goto wait;
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 			break;
