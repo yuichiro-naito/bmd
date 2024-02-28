@@ -360,7 +360,7 @@ open_err_logfile(struct vm_conf *conf)
 	pid_t pid;
 	int socks[2];
 	struct stat st;
-	gid_t group;
+	int64_t group;
 	struct passwd *pwd;
 
 	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0)
@@ -376,11 +376,11 @@ open_err_logfile(struct vm_conf *conf)
 		close(socks[0]);
 		if (conf->owner > 0) {
 			if ((group = conf->group) == -1)
-				group = (pwd = getpwuid(conf->owner)) ?
+				group = (pwd = getpwuid((uid_t)conf->owner)) ?
 					pwd->pw_gid : GID_NOBODY;
 
-			setgid(group);
-			setuid(conf->owner);
+			setgid((gid_t)group);
+			setuid((uid_t)conf->owner);
 		}
 
 		while ((fd = open(conf->err_logfile,

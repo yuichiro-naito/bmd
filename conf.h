@@ -79,6 +79,11 @@ struct variables {
 	struct vartree *args;
 };
 
+/* owner and group can be negative to represent nobody. */
+_Static_assert(sizeof(int64_t) > sizeof(uid_t),
+    "uid_t must be shorter than int64_t");
+_Static_assert(sizeof(int64_t) > sizeof(gid_t),
+    "gid_t must be shorter than int64_t");
 struct vm_conf {
 	struct variables vars;
 	struct fbuf *fbuf;
@@ -98,8 +103,8 @@ struct vm_conf {
 	char *installcmd;
 	char *err_logfile;
 	char *grub_run_partition;
-	uid_t owner;
-	gid_t group;
+	int64_t owner;
+	int64_t group;
 	enum BOOT boot;
 	enum HOSTBRIDGE_TYPE hostbridge;
 	int ndisks;

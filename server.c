@@ -478,18 +478,18 @@ err:
 static int
 check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
 {
-	uid_t owner = VM_CONF(vm_ent)->owner;
-	gid_t group = VM_CONF(vm_ent)->group;
+	int64_t owner = VM_CONF(vm_ent)->owner;
+	int64_t group = VM_CONF(vm_ent)->group;
 	int i;
 
-	if (ucred->cr_uid == 0 || ucred->cr_uid == owner)
+	if (ucred->cr_uid == 0 || ucred->cr_uid == (uid_t)owner)
 		return 0;
 
 	if (group == -1)
 		return -1;
 
 	for (i = 0; i < ucred->cr_ngroups; i++)
-		if (ucred->cr_groups[i] == group)
+		if (ucred->cr_groups[i] == (gid_t)group)
 			return 0;
 
 	return -1;
