@@ -311,10 +311,10 @@ err:
 
 #if __FreeBSD_version < 1400071
 static int
-compare_disk_info(void *thunk, const void *l, const void *r)
+compare_disk_info(void *thunk __unused, const void *l, const void *r)
 #else
 static int
-compare_disk_info(const void *l, const void *r, void *thunk)
+compare_disk_info(const void *l, const void *r, void *thunk __unused)
 #endif
 {
 	const struct disk_info *a, *b;

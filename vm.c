@@ -204,7 +204,7 @@ err:
 }
 #else
 static int
-copy_uefi_vars(struct vm *vm)
+copy_uefi_vars(struct vm *vm __unused)
 {
 	return 0;
 }
@@ -699,13 +699,13 @@ suspend_bhyve(struct vm *vm, enum vm_suspend_how how)
 }
 
 static int
-reset_bhyve(struct vm *vm, nvlist_t *pl_conf)
+reset_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	return suspend_bhyve(vm, VM_SUSPEND_RESET);
 }
 
 static int
-poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf)
+poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	if (vm->state == LOAD)
 		return kill(vm->pid, SIGKILL);
@@ -713,13 +713,13 @@ poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf)
 }
 
 static int
-acpi_poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf)
+acpi_poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	return kill(vm->pid, SIGTERM);
 }
 
 static int
-start_bhyve(struct vm *vm, nvlist_t *pl_conf)
+start_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	struct vm_conf *conf = vm->conf;
 

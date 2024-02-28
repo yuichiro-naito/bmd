@@ -1650,7 +1650,8 @@ get_var(struct variables *vars, char *k)
 }
 
 static int
-compare_nvlist_null(const nvlist_t *a, const char *k, const nvlist_t *b)
+compare_nvlist_null(const nvlist_t *a __unused, const char *k __unused,
+    const nvlist_t *b __unused)
 {
 	return 0;
 }

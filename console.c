@@ -15,13 +15,13 @@ static int stop = 0;
 static struct termios defterm, term;
 
 static void
-sighandler_stop(int sig)
+sighandler_stop(int sig __unused)
 {
 	stop++;
 }
 
 static void
-sighandler_exit(int sig)
+sighandler_exit(int sig __unused)
 {
 	exit(0);
 }

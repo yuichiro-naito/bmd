@@ -479,7 +479,7 @@ free_events()
 }
 
 static int
-on_timer(int ident, void *data)
+on_timer(int ident __unused, void *data)
 {
 	struct vm_entry *vm_ent = data;
 
@@ -540,7 +540,7 @@ reason_string(int status)
 }
 
 static int
-on_vm_exit(int ident, void *data)
+on_vm_exit(int ident __unused, void *data)
 {
 	int status;
 	struct vm_entry *vm_ent = data;
@@ -661,7 +661,7 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 }
 
 static int
-on_recv_sock_buf(int ident, void *data)
+on_recv_sock_buf(int ident __unused, void *data)
 {
 	struct sock_buf *sb = data;
 
@@ -683,7 +683,7 @@ on_recv_sock_buf(int ident, void *data)
 }
 
 static int
-on_send_sock_buf(int ident, void *data)
+on_send_sock_buf(int ident __unused, void *data)
 {
 	struct sock_buf *sb = data;
 
@@ -721,7 +721,7 @@ wait_for_sock_buf(struct sock_buf *sb)
 }
 
 static int
-on_accept_cmd_sock(int ident, void *data)
+on_accept_cmd_sock(int ident __unused, void *data)
 {
 	struct sock_buf *sb;
 	int n, sock = cmd_sock;
@@ -1156,7 +1156,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 }
 
 static int
-on_sigterm(int ident, void *data)
+on_sigterm(int ident __unused, void *data __unused)
 {
 	INFO("%s\n", "stopping daemon");
 	sigterm++;
@@ -1164,7 +1164,7 @@ on_sigterm(int ident, void *data)
 }
 
 static int
-on_sighup(int ident, void *data)
+on_sighup(int ident __unused, void *data __unused)
 {
 	INFO("%s\n", "reload config file");
 	reload_virtual_machines();

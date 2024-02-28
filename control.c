@@ -18,7 +18,7 @@
 #include "inspect.h"
 
 int
-usage(int argc, char *argv[])
+usage(int argc __unused, char *argv[])
 {
 	printf(
 	    "usage: %s [-f config_file] <subcommand>\n"

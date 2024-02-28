@@ -501,7 +501,8 @@ check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
  *  -  1 = install
  */
 static nvlist_t *
-boot0_command(int s, const nvlist_t *nv, int style, struct xucred *ucred)
+boot0_command(int s __unused, const nvlist_t *nv, int style,
+    struct xucred *ucred)
 {
 	const char *name, *reason, *comport;
 	struct vm_entry *vm_ent = NULL;
@@ -576,7 +577,7 @@ install_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 }
 
 static nvlist_t *
-showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+showcomport_command(int s __unused, const nvlist_t *nv,  struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -648,7 +649,7 @@ ret:
 }
 
 static nvlist_t *
-list_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+list_command(int s __unused, const nvlist_t *nv,  struct xucred *ucred)
 {
 	size_t i, count = 0;
 	const char *reason;
@@ -706,7 +707,8 @@ ret:
 }
 
 static nvlist_t *
-vm_down_command(int s, const nvlist_t *nv, int how,  struct xucred *ucred)
+vm_down_command(int s __unused, const nvlist_t *nv __unused, int how,
+    struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
