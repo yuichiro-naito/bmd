@@ -615,7 +615,8 @@ ret:
 }
 
 static nvlist_t *
-showvgaport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+showvgaport_command(int s __unused, const nvlist_t *nv __unused,
+    struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -649,7 +650,7 @@ ret:
 }
 
 static nvlist_t *
-list_command(int s __unused, const nvlist_t *nv,  struct xucred *ucred)
+list_command(int s __unused, const nvlist_t *nv __unused, struct xucred *ucred)
 {
 	size_t i, count = 0;
 	const char *reason;

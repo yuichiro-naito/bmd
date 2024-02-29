@@ -750,7 +750,7 @@ err:
 }
 
 static void
-cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf)
+cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 #define VM_CLOSE_FD(fd)                \
 	do {                           \
