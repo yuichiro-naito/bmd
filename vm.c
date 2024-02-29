@@ -248,12 +248,44 @@ end:
 	return cmd;
 }
 
+/*
+ * split_args() separates an buffer that contains '\n' as the delimiter.
+ * The results will be an array of pointers to portions of the buffer,
+ * and the '\n' characters will be replaced with '\0'.  The array itself
+ * will be allocated by malloc().
+ */
+char **
+split_args(char *buf)
+{
+	char **ap0, **ap;
+	char *p;
+	int n;
+
+	/* Scan '\n' in the buffer. */
+	n = 0;
+	p = buf;
+	while ((p = strchr(p, '\n')) != NULL) {
+		n++;
+		p++;
+	}
+
+	/* The last component is always NULL. */
+	ap0 = calloc(n + 1, sizeof(*ap0));
+	if (ap0 == NULL)
+		return (NULL);
+	p = buf;
+	for (ap = ap0; (*ap = strsep(&p, "\n")) != NULL; )
+		if (**ap != '\0' && ++ap >= &ap0[n])
+			break;
+
+	return (ap0);
+}
+
 static int
 grub_load(struct vm *vm)
 {
-	int i, ifd[2];
+	int ifd[2];
 	pid_t pid;
-	char *args[10];
 	struct vm_conf *conf = vm->conf;
 	size_t len;
 	char *cmd;
@@ -284,6 +316,9 @@ grub_load(struct vm *vm)
 			free(cmd);
 		}
 	} else if (pid == 0) {
+		FILE *fp;
+		char **argv, *bp;
+
 		if (cmd != NULL) {
 			close(ifd[0]);
 			dup2(ifd[1], 0);
@@ -291,31 +326,42 @@ grub_load(struct vm *vm)
 		if (doredirect)
 			redirect_to_com(vm, (cmd == NULL));
 
-		setenv("TERM", "vt100", 1);
-		i = 0;
-		args[i++] = LOCALBASE"/sbin/grub-bhyve";
-		if (conf->wired_memory == true)
-			args[i++] = "-S";
-		args[i++] = "-r";
-		if (conf->install)
-			args[i++] = "cd0";
-		else if (conf->grub_run_partition)
-			asprintf(&args[i++], "hd0,%s",
-				 conf->grub_run_partition);
-		else
-			args[i++] = "hd0,1";
-		args[i++] = "-M";
-		args[i++] = conf->memory;
-		args[i++] = "-m";
-		args[i++] = vm->mapfile;
-		args[i++] = conf->name;
-		args[i++] = NULL;
+		fp = open_memstream(&bp, &len);
+		if (fp == NULL) {
+			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			exit(1);
+		}
+		flockfile(fp);
 
-		execv(args[0], args);
-		ERR("cannot exec %s\n", args[0]);
+		setenv("TERM", "vt100", 1);
+		fprintf(fp, LOCALBASE"/sbin/grub-bhyve\n");
+		if (conf->wired_memory == true)
+			fprintf(fp, "-S\n");
+		fprintf(fp, "-r\n");
+		if (conf->install)
+			fprintf(fp, "cd0\n");
+		else if (conf->grub_run_partition)
+			fprintf(fp, "hd0,%s\n", conf->grub_run_partition);
+		else
+			fprintf(fp, "hd0,1\n");
+		fprintf(fp, "-M\n");
+		fprintf(fp, "%s\n", conf->memory);
+		fprintf(fp, "-m\n");
+		fprintf(fp, "%s\n", vm->mapfile);
+		fprintf(fp, "%s\n", conf->name);
+		funlockfile(fp);
+		fclose(fp);
+
+		argv = split_args(bp);
+		if (argv == NULL) {
+			ERR("malloc: %s\n", strerror(errno));
+			exit(1);
+		}
+		execv(argv[0], argv);
+		ERR("cannot exec %s\n", argv[0]);
 		exit(1);
 	} else {
-		ERR("can't fork (%s)\n", strerror(errno));
+		ERR("cannot fork (%s)\n", strerror(errno));
 		return -1;
 	}
 
@@ -326,28 +372,23 @@ static int
 bhyve_load(struct vm *vm)
 {
 	pid_t pid;
-	int i, outfd[2], errfd[2];
-	char **args;
+	int outfd[2], errfd[2];
 	struct bhyveload_env *be;
 	struct vm_conf *conf = vm->conf;
 	bool dopipe = (vm->assigned_comport == NULL) ||
 	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
 
-	args = malloc((14 + 2 * conf->nbhyveload_envs) * sizeof(char *));
-	if (args == NULL)
-		return -1;
-
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
 			ERR("cannot create pipe (%s)\n", strerror(errno));
-			goto err;
+			return (-1);
 		}
 
 		if (pipe(errfd) < 0) {
 			ERR("cannot create pipe (%s)\n", strerror(errno));
 			close(outfd[0]);
 			close(outfd[1]);
-			goto err;
+			return (-1);
 		}
 	}
 
@@ -361,60 +402,73 @@ bhyve_load(struct vm *vm)
 		}
 		vm->pid = pid;
 		vm->state = LOAD;
-		free(args);
 		return 0;
 	} else if (pid == 0) {
+		char **argv;
+		FILE *fp;
+		char *bp;
+		size_t len;
+
 		if (dopipe) {
 			close(outfd[0]);
 			close(errfd[0]);
 			dup2(outfd[1], 1);
 			dup2(errfd[1], 2);
 		}
-		i = 0;
-		args[i++] = "/usr/sbin/bhyveload";
+		fp = open_memstream(&bp, &len);
+		if (fp == NULL) {
+			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			exit(1);
+		}
+		flockfile(fp);
+
+		fprintf(fp, "/usr/sbin/bhyveload\n");
 		if (conf->wired_memory == true)
-			args[i++] = "-S";
+			fprintf(fp, "-S\n");
 		if (conf->single_user) {
-			args[i++] = "-e";
-			args[i++] = "boot_single=YES";
+			fprintf(fp, "-e\n");
+			fprintf(fp, "boot_single=YES\n");
 		}
 		STAILQ_FOREACH (be, &conf->bhyveload_envs, next) {
-			args[i++] = "-e";
-			args[i++] = &be->env[0];
+			fprintf(fp, "-e\n");
+			fprintf(fp, "%s\n", &be->env[0]);
 		}
 		if (conf->bhyveload_loader) {
-			args[i++] = "-l";
-			args[i++] = conf->bhyveload_loader;
+			fprintf(fp, "-l\n");
+			fprintf(fp, "%s\n", conf->bhyveload_loader);
 		}
-		args[i++] = "-c";
-		args[i++] = (vm->assigned_comport != NULL) ? vm->assigned_comport : "stdio";
-		args[i++] = "-m";
-		args[i++] = conf->memory;
-		args[i++] = "-d";
-		args[i++] = (conf->install) ? STAILQ_FIRST(&conf->isoes)->path :
-						    STAILQ_FIRST(&conf->disks)->path;
-		args[i++] = conf->name;
-		args[i++] = NULL;
+		fprintf(fp, "-c\n");
+		fprintf(fp, "%s\n", (vm->assigned_comport != NULL)
+		    ? vm->assigned_comport
+		    : "stdio");
+		fprintf(fp, "-m\n");
+		fprintf(fp, "%s\n", conf->memory);
+		fprintf(fp, "-d\n");
+		fprintf(fp, "%s\n", (conf->install)
+		    ? STAILQ_FIRST(&conf->isoes)->path
+		    : STAILQ_FIRST(&conf->disks)->path);
+		fprintf(fp, "%s\n", conf->name);
+		funlockfile(fp);
+		fclose(fp);
 
-		execv(args[0], args);
-		ERR("can't exec %s\n", args[0]);
+		argv = split_args(bp);
+		if (argv == NULL) {
+			ERR("malloc %s\n", strerror(errno));
+			exit(1);
+		}
+		execv(argv[0], argv);
+		ERR("cannot exec %s\n", argv[0]);
 		exit(1);
 	} else {
-		ERR("can't fork (%s)\n", strerror(errno));
+		ERR("cannot fork (%s)\n", strerror(errno));
 		if (dopipe) {
 			close(outfd[0]);
 			close(outfd[1]);
 			close(errfd[0]);
 			close(errfd[1]);
 		}
-		goto err;
+		return (-1);
 	}
-
-	free(args);
-	return pid;
-err:
-	free(args);
-	return -1;
 }
 
 int

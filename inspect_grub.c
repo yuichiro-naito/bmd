@@ -18,7 +18,10 @@
 
 #include "conf.h"
 #include "inspect.h"
+#include "log.h"
 #include "vm.h"
+
+extern char **split_args(char *);
 
 struct proc_pipe {
 	pid_t pid;
@@ -274,8 +277,7 @@ static int
 spawn_grub(struct proc_pipe *pp)
 {
 	pid_t pid;
-	int i, pfd[2];
-	char *argv[8];
+	int pfd[2];
 
 	if (pipe2(pfd, O_CLOEXEC | O_NONBLOCK) < 0)
 		return -1;
@@ -283,17 +285,34 @@ spawn_grub(struct proc_pipe *pp)
 	if ((pid = fork()) < 0)
 		goto err;
 	if (pid == 0) {
+		char **argv;
+		FILE *fp;
+		char *bp;
+		size_t len;
+
 		close(pfd[0]);
 		setenv("TERM", "xterm", 1);
-		i = 0;
-		argv[i++] = "grub-bhyve";
-		argv[i++] = "-n";
-		argv[i++] = "-e";
-		argv[i++] = "-m";
-		argv[i++] = pp->mapfile;
-		argv[i++] = pp->vm_name;
-		argv[i++] = NULL;
 
+		fp = open_memstream(&bp, &len);
+		if (fp == NULL) {
+			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			exit(1);
+		}
+		flockfile(fp);
+		fprintf(fp,
+		    "grub-bhyve\n"
+		    "-n\n"
+		    "-e\n"
+		    "-m\n"
+		    "%s\n"
+		    "%s\n", pp->mapfile, pp->vm_name);
+		funlockfile(fp);
+		fclose(fp);
+		argv = split_args(bp);
+		if (argv == NULL) {
+			ERR("malloc: %s\n", strerror(errno));
+			exit(1);
+		}
 		dup2(pfd[1], 0);
 		dup2(pfd[1], 1);
 		dup2(pfd[1], 2);
