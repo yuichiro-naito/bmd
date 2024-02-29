@@ -470,7 +470,7 @@ wait_for_vm_output(struct vm_entry *vm_ent)
 }
 
 static void
-free_events()
+free_events(void)
 {
 	struct event *ev, *evn;
 
@@ -842,7 +842,7 @@ load_plugins(const char *plugin_dir)
 }
 
 int
-remove_plugins()
+remove_plugins(void)
 {
 	struct plugin_entry *pl_ent, *pln;
 
@@ -902,7 +902,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 }
 
 static void
-free_vm_list()
+free_vm_list(void)
 {
 	struct vm_entry *vm_ent, *vmn;
 
@@ -1173,7 +1173,7 @@ on_sighup(int ident __unused, void *data __unused)
 }
 
 static int
-start_virtual_machines()
+start_virtual_machines(void)
 {
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
@@ -1238,7 +1238,7 @@ copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 }
 
 static int
-reload_virtual_machines()
+reload_virtual_machines(void)
 {
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent, *cen;
@@ -1363,7 +1363,7 @@ reload_virtual_machines()
 }
 
 static int
-event_loop()
+event_loop(void)
 {
 	struct kevent ev;
 	struct event *event;
@@ -1401,7 +1401,7 @@ event_loop()
 }
 
 static int
-stop_virtual_machines()
+stop_virtual_machines(void)
 {
 	struct kevent ev;
 	struct event *event;

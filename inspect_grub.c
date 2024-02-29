@@ -49,7 +49,7 @@ SLIST_HEAD(disk_info_head, disk_info);
 #define PROMPT   "grub> "
 
 static struct disk_info *
-create_disk_info()
+create_disk_info(void)
 {
 	return calloc(1, sizeof(struct disk_info));
 }
@@ -404,7 +404,7 @@ sort_disk_info_list(struct disk_info_head *list, int nlist)
 #endif
 
 static int
-parse_disks(char *line, struct disk_info_head *list, int nlist)
+parse_disks(char *line, struct disk_info_head *list, int nlist __unused)
 {
 	struct disk_info *di;
 	char *s, *e, *n, t;

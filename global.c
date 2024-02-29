@@ -39,14 +39,14 @@ free_global_conf(struct global_conf *gc)
 }
 
 void
-free_gl_conf()
+free_gl_conf(void)
 {
 	free_global_conf(gl_conf);
 	gl_conf = &gl_conf0;
 }
 
 int
-init_gl_conf()
+init_gl_conf(void)
 {
 	struct global_conf *t;
 	if ((t = calloc(1, sizeof(*t))) == NULL)

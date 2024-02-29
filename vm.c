@@ -142,7 +142,6 @@ err2:
 }
 
 #if __FreeBSD_version > 1400000
-bool is_file(char *path);
 static int
 copy_uefi_vars(struct vm *vm)
 {

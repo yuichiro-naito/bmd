@@ -216,7 +216,7 @@ end:
 }
 
 static int
-do_list()
+do_list(void)
 {
 	int ret = 0;
 	nvlist_t **l, *cmd, *res = NULL;

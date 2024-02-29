@@ -26,7 +26,7 @@ static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
 static struct mpools mpools;
 
 static int
-mpool_expand()
+mpool_expand(void)
 {
 	struct mpool *m;
 
@@ -43,14 +43,14 @@ mpool_expand()
 }
 
 static int
-mpool_init()
+mpool_init(void)
 {
 	STAILQ_INIT(&mpools);
 	return mpool_expand();
 }
 
 static void
-mpool_destroy()
+mpool_destroy(void)
 {
 	struct mpool *m, *mn;
 	STAILQ_FOREACH_SAFE (m, &mpools, next, mn)
@@ -59,7 +59,7 @@ mpool_destroy()
 }
 
 static void
-mpool_snapshot()
+mpool_snapshot(void)
 {
 	struct mpool *m;
 	STAILQ_FOREACH (m, &mpools, next) {
@@ -69,7 +69,7 @@ mpool_snapshot()
 }
 
 static void
-mpool_rollback()
+mpool_rollback(void)
 {
 	struct mpool *m;
 
@@ -78,7 +78,7 @@ mpool_rollback()
 }
 
 static enum mpool_error
-mpool_get_error()
+mpool_get_error(void)
 {
 	enum mpool_error e = MPERR_NONE;
 	struct mpool *m;
@@ -1194,7 +1194,7 @@ err:
 }
 
 uid_t
-peek_fileowner()
+peek_fileowner(void)
 {
 	struct stat st;
 	char *fn = pctxt->cur_file ?
@@ -1204,7 +1204,7 @@ peek_fileowner()
 }
 
 char *
-peek_filename()
+peek_filename(void)
 {
 	return pctxt->cur_file ?
 	    pctxt->cur_file->filename :
@@ -1253,7 +1253,7 @@ ret:
 }
 
 static void
-clear_applied()
+clear_applied(void)
 {
 	struct cfsection *sc;
 
@@ -1262,7 +1262,7 @@ clear_applied()
 }
 
 static int
-check_duplicate()
+check_duplicate(void)
 {
 	struct cfsection *sc;
 

@@ -26,7 +26,7 @@ RB_GENERATE_STATIC(vartree, conf_var, entry, compare_variable_key);
 struct vartree *global_vars = NULL;
 
 void
-free_id_list()
+free_id_list(void)
 {
 	struct id_entry *e, *t;
 
@@ -1144,7 +1144,7 @@ get_taps(struct vm *vm)
 
 
 struct fbuf *
-create_fbuf()
+create_fbuf(void)
 {
 	struct fbuf *ret;
 	char *addr, *vga;
@@ -1595,7 +1595,7 @@ set_var(struct variables *vars, const char *k, const char *v)
 }
 
 int
-init_global_vars()
+init_global_vars(void)
 {
 	struct vartree *gv;
 
@@ -1617,7 +1617,7 @@ set_global_vars(struct vartree *gv)
 }
 
 void
-free_global_vars()
+free_global_vars(void)
 {
 	if (global_vars == NULL)
 		return;
