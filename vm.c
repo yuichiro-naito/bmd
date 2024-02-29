@@ -30,7 +30,7 @@
 #define UEFI_FIRMWARE_VARS  LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
 
 #define WRITE_STR(fp, str) \
-	fwrite_unlocked(&(char *[]) { (str) }[0], sizeof(char *), 1, (fp))
+	fwrite_unlocked(&(const char *[]) { (str) }[0], sizeof(const char *), 1, (fp))
 
 #define WRITE_FMT(fp, fmt, ...)                               \
 	do {                                                  \
@@ -43,7 +43,7 @@ static int
 redirect_to_com(struct vm *vm, bool redirect_stdin)
 {
 	int fd, flag;
-	char *com;
+	const char *com;
 
 	if ((com = vm->assigned_comport) == NULL)
 		com = "/dev/null";

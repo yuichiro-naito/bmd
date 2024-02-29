@@ -19,10 +19,10 @@ struct id_entry {
 /*
   List of identfiers.
  */
-SLIST_HEAD(, id_entry) id_list = SLIST_HEAD_INITIALIZER();
+static SLIST_HEAD(, id_entry) id_list = SLIST_HEAD_INITIALIZER();
 
 static int compare_variable_key(struct conf_var *, struct conf_var *);
-RB_GENERATE(vartree, conf_var, entry, compare_variable_key);
+RB_GENERATE_STATIC(vartree, conf_var, entry, compare_variable_key);
 struct vartree *global_vars = NULL;
 
 void
@@ -175,7 +175,7 @@ clear_bhyve_env(struct vm_conf *vc)
 	STAILQ_INIT(&vc->bhyve_envs);
 }
 
-void
+static void
 free_var(struct conf_var *c)
 {
 	if (c == NULL)
@@ -481,23 +481,25 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-struct bhyve_env *
+#if 0
+static struct bhyve_env *
 get_bhyve_env(struct vm_conf *conf)
 {
 	return STAILQ_FIRST(&conf->bhyve_envs);
 }
 
-struct bhyve_env *
+static struct bhyve_env *
 next_bhyve_env(struct bhyve_env *be)
 {
 	return STAILQ_NEXT(be, next);
 }
 
-char *
+static char *
 get_bhyve_env_env(struct bhyve_env *be)
 {
 	return be->env;
 }
+#endif
 
 struct net_conf *
 copy_net_conf(const struct net_conf *nc)
@@ -526,7 +528,7 @@ err:
 	return NULL;
 }
 
-static int
+int
 set_string(char **var, const char *value)
 {
 	char *new;
@@ -1530,51 +1532,58 @@ compare_variable_key(struct conf_var *a, struct conf_var *b)
 	return compare_string(a->key, b->key);
 }
 
-int
-del_var(struct vartree *vars, char *k)
+static int
+del_var(struct vartree *vars, const char *k)
 {
-	struct conf_var key = {.key = k, .val = NULL};
+	struct conf_var key;
 
 	if (k == NULL)
 		return -1;
+ 	key = (struct conf_var){.key = strdup(k), .val = NULL};
+	if (key.key == NULL)
+		return -1;
 
 	RB_REMOVE(vartree, vars, &key);
+	free(key.key);
 	return 0;
 }
 
 int
-set_var0(struct vartree *vars, char *k, const char *v)
+set_var0(struct vartree *vars, const char *k, const char *v)
 {
-	struct conf_var *n, key = {.key = k, .val = NULL};
-	char *nk, *nv;
+	struct conf_var *n, key;
+	char *nv;
 
 	if (k == NULL || v == NULL)
+		return -1;
+
+ 	key = (struct conf_var){.key = strdup(k), .val = NULL};
+	if (key.key == NULL)
 		return -1;
 
 	if ((n = RB_FIND(vartree, vars, &key))) {
 		if ((nv = strdup(v)) == NULL)
 			return -1;
+		free(key.key);
 		free(n->val);
 		n->val = nv;
 	} else {
 		n = malloc(sizeof(*n));
-		nk = strdup(k);
-		nv = strdup(v);
-		if (n == NULL || nk == NULL || nv == NULL) {
-			free(nv);
-			free(nk);
+		key.val = strdup(v);
+		if (n == NULL || key.val == NULL) {
+			free(key.key);
+			free(key.val);
 			free(n);
 			return -1;
 		}
-		n->key = nk;
-		n->val = nv;
+		memcpy(n, &key, sizeof(*n));
 		RB_INSERT(vartree, vars, n);
 	}
 	return 0;
 }
 
 int
-set_var(struct variables *vars, char *k, const char *v)
+set_var(struct variables *vars, const char *k, const char *v)
 {
 	if (vars->args)
 		del_var(vars->args, k);

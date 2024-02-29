@@ -17,7 +17,10 @@
 #include "bmd.h"
 #include "inspect.h"
 
-int
+int control(int, char *[]);
+struct vm_conf_entry *lookup_vm_conf(const char *);
+
+static int
 usage(int argc __unused, char *argv[])
 {
 	printf(
@@ -59,7 +62,7 @@ lookup_vm_conf(const char *name)
 	return ret;
 }
 
-int
+static int
 do_inspect(char *name)
 {
 	int i;
@@ -111,7 +114,7 @@ do_inspect(char *name)
 static int
 compare_by_name(const void *a, const void *b)
 {
-#define GETNAME(v) nvlist_get_string(*((nvlist_t **)v), "name")
+#define GETNAME(v) nvlist_get_string(*((nvlist_t *const *)v), "name")
 	return strcmp(GETNAME(a), GETNAME(b));
 #undef GETNAME
 }
@@ -119,7 +122,8 @@ compare_by_name(const void *a, const void *b)
 static int
 recv_size(int sock, uint32_t *sz, int *fd)
 {
-	int rc, n = 0;
+	int rc;
+	size_t n = 0;
 	bool fd_set = false;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
@@ -168,7 +172,7 @@ ret:
 	return rc;
 }
 
-nvlist_t *
+static nvlist_t *
 send_recv(nvlist_t *cmd)
 {
 	int s, fd, rc;
@@ -211,7 +215,7 @@ end:
 	return res;
 }
 
-int
+static int
 do_list()
 {
 	int ret = 0;
@@ -270,7 +274,7 @@ end:
 /*
  * boot_style= 0: showcomport, 1: boot, 2: install
  */
-int
+static int
 do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
 {
 	int fd, ret = 0;
@@ -324,7 +328,7 @@ end:
 	return ret;
 }
 
-int
+static int
 do_show_vgaport(const char *name)
 {
 	int ret = 0;
@@ -359,7 +363,7 @@ end:
 	return ret;
 }
 
-int
+static int
 do_showconfig(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen;
@@ -411,12 +415,6 @@ control(int argc, char *argv[])
 		fprintf(stderr, "failed to load %s. use default value\n",
 			gl_conf->config_file);
 
-	/* command name alias */
-	if (strcmp(argv[1], "start") == 0)
-		argv[1] = "boot";
-	else if (strcmp(argv[1], "stop") == 0)
-		argv[1] = "shutdown";
-
 	if (strcmp(argv[1], "list") == 0)
 		return do_list();
 
@@ -435,7 +433,7 @@ control(int argc, char *argv[])
 			return do_boot_console(argv[2], 0, false, true);
 	}
 
-	if (strcmp(argv[1], "boot") == 0)
+	if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "start") == 0)
 		boot_style = 1;
 	else if (strcmp(argv[1], "install") == 0)
 		boot_style = 2;
@@ -482,6 +480,7 @@ control(int argc, char *argv[])
 
 	if (argc == 3 && (strcmp(argv[1], "reset") == 0 ||
 			  strcmp(argv[1], "poweroff") == 0 ||
+			  strcmp(argv[1], "stop") == 0 ||
 			  strcmp(argv[1], "shutdown") == 0)) {
 		cmd = nvlist_create(0);
 		nvlist_add_string(cmd, "command", argv[1]);

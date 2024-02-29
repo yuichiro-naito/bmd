@@ -72,6 +72,7 @@ struct conf_var {
 };
 
 RB_HEAD(vartree, conf_var);
+extern struct vartree *global_vars;
 
 struct variables {
 	struct vartree *global;
@@ -215,8 +216,8 @@ int compare_net_conf(const struct net_conf *, const struct net_conf *);
 int compare_vm_conf(const struct vm_conf *, const struct vm_conf *);
 int compare_nvlist(const nvlist_t *, const nvlist_t *);
 
-int set_var0(struct vartree *, char *, const char *);
-int set_var(struct variables *, char *, const char *);
+int set_var0(struct vartree *, const char *, const char *);
+int set_var(struct variables *, const char *, const char *);
 char *get_var0(struct vartree *, char *);
 char *get_var(struct variables *, char *);
 int init_global_vars(void);
@@ -224,5 +225,7 @@ void set_global_vars(struct vartree *);
 void free_global_vars(void);
 
 void free_id_list(void);
+
+int set_string(char **, const char *);
 
 #endif

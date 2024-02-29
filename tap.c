@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "vm.h"
 
 static int
 getifflags(int s, const char *ifname)

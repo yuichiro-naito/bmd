@@ -122,7 +122,7 @@ struct sock_buf {
 	size_t read_size;
 	size_t read_bytes;
 	char *buf;
-	int sent_size;
+	size_t sent_size;
 	int res_fd;
 	size_t res_size;
 	size_t res_bytes;

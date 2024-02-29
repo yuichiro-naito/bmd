@@ -26,6 +26,9 @@
 #include "vm.h"
 #include "bmd_plugin.h"
 
+extern SLIST_HEAD(vm_list_t, vm_entry) vm_list;
+extern struct vm_conf_head vm_conf_list;
+
 /*
   List of VM configurations.
  */
@@ -34,13 +37,13 @@ struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
 /*
   List of virtual machines.
  */
-SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
-SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
+struct vm_list_t vm_list = SLIST_HEAD_INITIALIZER();
+static SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
 /*
   All Events
 */
-LIST_HEAD(, event) event_list = LIST_HEAD_INITIALIZER();
+static LIST_HEAD(, event) event_list = LIST_HEAD_INITIALIZER();
 
 /*
   Global event queue
@@ -329,7 +332,7 @@ static int
 send_ack(int sock)
 {
 	int rc;
-	static char *buf = "ack";
+	static const char *buf = "ack";
 
 	while ((rc = send(sock, buf, strlen(buf) + 1, 0)) < 0)
 		if (errno != EINTR && errno != EAGAIN)
@@ -594,7 +597,7 @@ on_vm_exit(int ident __unused, void *data)
 	return 0;
 }
 
-int
+static int
 wait_for_vm(struct vm_entry *vm_ent)
 {
 	struct kevent kev;
@@ -1087,7 +1090,7 @@ assign_comport(struct vm_entry *vm_ent)
 	return 0;
 }
 
-void
+static void
 cleanup_virtual_machine(struct vm_entry *vm_ent)
 {
 	remove_taps(VM_PTR(vm_ent));

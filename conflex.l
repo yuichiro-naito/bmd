@@ -39,8 +39,6 @@ __FBSDID("$FreeBSD$");
 #include "confparse.h"
 #include "y.tab.h"
 
-extern int yynerrs;
-
 static ssize_t text2lval(size_t triml, size_t trimr, int tovar);
 
 int lineno = 1;

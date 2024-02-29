@@ -9,7 +9,7 @@
 
 struct inspection {
 	int single_user;
-	unsigned md_unit;
+	int md_unit;
 	struct vm_conf *conf;
 	char *mount_point;       /* needs to be freed */
 	char *iso_path;

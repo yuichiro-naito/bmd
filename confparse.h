@@ -35,6 +35,8 @@
 #include <sys/time.h>
 #include <stdio.h>
 
+#include "y.tab.h"
+
 enum CF_TYPE {
 	CF_STR,
 	CF_VAR,
@@ -140,6 +142,15 @@ struct parser_context {
 	struct cffiles    cffiles;
 	struct cffile    *cur_file;
 };
+
+extern int yydebug;
+extern int yyerrflag;
+extern int yychar;
+extern int yynerrs;
+extern YYSTYPE yyval;
+extern FILE *yyin;
+extern int lineno;
+extern struct parser_context *pctxt, *pctxt_snapshot;
 
 int yyparse(void);
 void yyerror(const char *);

@@ -13,15 +13,12 @@
 #include <unistd.h>
 
 #include "bmd.h"
+#include "conf.h"
 #include "confparse.h"
 #include "log.h"
 #include "server.h"
 
-extern FILE *yyin;
-extern int yynerrs;
-extern int lineno;
-extern struct vartree *global_vars;
-extern struct parser_context *pctxt, *pctxt_snapshot;
+struct parser_context *pctxt, *pctxt_snapshot;
 
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
@@ -261,8 +258,8 @@ static int
 parse_disk(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	char *const *p;
-	static char *const types[] = { "ahci-hd", "virtio-blk", "nvme" };
+	const char *const *p;
+	static const char *const types[] = { "ahci-hd", "virtio-blk", "nvme" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
@@ -277,8 +274,8 @@ static int
 parse_iso(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	char *const *p;
-	static char *const types[] = { "ahci-cd" };
+	const char *const *p;
+	static const char *const types[] = { "ahci-cd" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
@@ -293,8 +290,8 @@ static int
 parse_net(struct vm_conf *conf, char *val)
 {
 	size_t n;
-	char *const *p;
-	static char *const types[] = { "virtio-net", "e1000" };
+	const char *const *p;
+	static const char *const types[] = { "virtio-net", "e1000" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
@@ -329,8 +326,9 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	char *const *p;
-	static char *const values[] = { "uefi", "csm", "bhyveload", "grub" };
+	const char *const *p;
+	static const char *const values[] = { "uefi", "csm", "bhyveload",
+	    "grub" };
 
 	ARRAY_FOREACH (p, values)
 		if (strcasecmp(val, *p) == 0)
@@ -476,8 +474,9 @@ err:
 static int
 parse_boot(struct vm_conf *conf, char *val)
 {
-	char *const *p;
-	static char *const values[] = { "yes", "true", "oneshot", "always" };
+	const char *const *p;
+	static const char *const values[] = { "yes", "true", "oneshot",
+	    "always" };
 	static enum BOOT const r[] = { YES, YES, ONESHOT, ALWAYS, NO };
 
 	ARRAY_FOREACH (p, values)
@@ -490,8 +489,9 @@ parse_boot(struct vm_conf *conf, char *val)
 static int
 parse_hostbridge(struct vm_conf *conf, char *val)
 {
-	char *const *p;
-	static char *const values[] = { "none", "standard", "intel", "amd" };
+	const char *const *p;
+	static const char *const values[] = { "none", "standard", "intel",
+	    "amd" };
 	static enum HOSTBRIDGE_TYPE const t[] = { NONE, INTEL, INTEL, AMD };
 
 	ARRAY_FOREACH (p, values)
@@ -635,13 +635,13 @@ typedef int (*pfunc)(struct vm_conf *conf, char *val);
 typedef void (*cfunc)(struct vm_conf *conf);
 
 struct parser_entry {
-	char *name;
+	const char *name;
 	pfunc parse;
 	cfunc clear;
 };
 
 /* must be sorted by name */
-struct parser_entry parser_list[] = {
+static struct parser_entry parser_list[] = {
 	{ "backend", &parse_backend, NULL },
 	{ "bhyve_env", &parse_bhyve_env, &clear_bhyve_env },
 	{ "bhyveload_env", &parse_bhyveload_env, &clear_bhyveload_env },
@@ -1218,7 +1218,7 @@ glob_path(struct cftokens *ts)
 	char *path, *conf, *dir, *npath;
 	struct variables vars;
 	glob_t g;
-	int i;
+	size_t i;
 
 	vars.global = global_vars;
 	vars.local = NULL;

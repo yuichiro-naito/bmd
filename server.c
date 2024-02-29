@@ -19,12 +19,13 @@
 
 #include "bmd.h"
 #include "log.h"
+#include "server.h"
 #include "vm.h"
 
 extern struct vm_conf_head vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
 
-LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
+static LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
 
 struct sock_buf *
 create_sock_buf(int fd)
@@ -779,12 +780,12 @@ poweroff_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv, struct xucred *ucred);
 
 struct command_entry {
-	char *name;
+	const char *name;
 	cfunc func;
 };
 
 /* must be sorted by name */
-struct command_entry command_list[] = {
+static struct command_entry command_list[] = {
 	{ "boot", &boot_command },
 	{ "install", &install_command },
 	{ "list", &list_command },
@@ -820,7 +821,7 @@ int
 recv_command(struct sock_buf *sb)
 {
 	const char *cmd;
-	char *reason = "unknown command";
+	const char *reason = "unknown command";
 	nvlist_t *nv, *res = NULL;
 	cfunc func;
 

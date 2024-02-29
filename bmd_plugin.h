@@ -133,7 +133,7 @@ int plugin_wait_for_process(pid_t, plugin_call_back, void *);
 int plugin_set_timer(int, plugin_call_back, void *);
 
 struct vm_method {
-	char *name;
+	const char *name;
 	int (*vm_start)(struct vm *, nvlist_t *);
 	int (*vm_reset)(struct vm *, nvlist_t *);
 	int (*vm_poweroff)(struct vm *, nvlist_t *);
@@ -165,7 +165,7 @@ struct vm_method {
  */
 typedef struct plugin_desc {
 	int version;
-	char *name;
+	const char *name;
 	int (*initialize)(void);
 	void (*finalize)(void);
 	void (*on_status_change)(struct vm *, nvlist_t *);

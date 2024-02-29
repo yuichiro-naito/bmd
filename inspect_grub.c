@@ -181,7 +181,8 @@ strip_newline(char *str)
 static int
 pp_expect(struct proc_pipe *pp, const char *expect, char *buf, size_t size)
 {
-	int rc, n;
+	int rc;
+	size_t n;
 	char *p;
 retry:
 	if ((rc = pp_read(pp)) < 0)
@@ -322,8 +323,8 @@ compare_disk_info(const void *l, const void *r, void *thunk __unused)
 	const struct disk_info *a, *b;
 	int c;
 
-	a = *(const struct disk_info **)l;
-	b = *(const struct disk_info **)r;
+	a = *(const struct disk_info *const *)l;
+	b = *(const struct disk_info *const *)r;
 
 	if (a->disk_name == NULL && b->disk_name == NULL)
 		return 0;

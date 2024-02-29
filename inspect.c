@@ -54,11 +54,12 @@ free_inspection(struct inspection *ins)
 	free(ins->load_cmd);
 	free(ins->block_dev);
 	free(ins->ufs_dev);
+	free(ins->grub_run_partition);
 	free(ins);
 }
 
 static int
-mdattach(char *path, unsigned *unit)
+mdattach(char *path, int *unit)
 {
 	int fd;
 	struct stat sb;
@@ -208,7 +209,7 @@ is_directory(int df, struct dirent *e)
 	return rc;
 }
 
-bool
+static bool
 is_file(char *path)
 {
 	struct stat s;
@@ -219,7 +220,8 @@ static int
 inspect_netbsd_iso(struct inspection *ins)
 {
 	int rc;
-	char *path, *cmd;
+	char *path;
+	const char *cmd;
 
 	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		return -1;
@@ -408,7 +410,7 @@ inspect_openbsd_partition(struct inspection *ins)
 	char *p;
 
 	/* set default partition number */
-	ins->grub_run_partition = "1";
+	set_string(&ins->grub_run_partition, "1");
 
 	if (ins->ufs_dev == NULL)
 		return;
@@ -421,7 +423,7 @@ inspect_openbsd_partition(struct inspection *ins)
 		return;
 
 	if (*p == 'p')
-		ins->grub_run_partition = p + 1;
+		set_string(&ins->grub_run_partition, p + 1);
 }
 
 static int
@@ -465,7 +467,8 @@ ret:
 static int
 inspect_netbsd_disk(struct inspection *ins)
 {
-	char *path, *cmd;
+	char *path;
+	const char *cmd;
 
 	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
