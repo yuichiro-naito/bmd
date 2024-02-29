@@ -719,7 +719,7 @@ wait_for_sock_buf(struct sock_buf *sb)
 }
 
 static int
-on_accept_cmd_sock(int ident __unused, void *data)
+on_accept_cmd_sock(int ident __unused, void *data __unused)
 {
 	struct sock_buf *sb;
 	int n, sock = cmd_sock;
