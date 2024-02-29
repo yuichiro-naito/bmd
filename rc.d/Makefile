@@ -1,12 +1,10 @@
-LOCALBASE?=	/usr/local
 SCRIPTS=	bmd
 SCRIPTSNAME_bmd=bmd
 SCRIPTSDIR=	$(LOCALBASE)/etc/rc.d
 
 bmd:	bmd.in
-	sed 's|%%LOCALBASE%%|$(LOCALBASE)|' < bmd.in > bmd
+	sed 's|%%LOCALBASE%%|$(LOCALBASE)|' < ${.ALLSRC} > ${.TARGET}
 
-clean:
-	rm -f $(SCRIPTS)
+CLEANFILES=	${SCRIPTS}
 
 .include <bsd.prog.mk>

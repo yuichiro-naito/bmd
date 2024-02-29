@@ -1,4 +1,3 @@
-LOCALBASE?=		/usr/local
 CFLAGS+=	-g -Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LIB=		-lnv
 OBJS= bmd.o ../console.o ../inspect_grub.o ../vm.o ../conf.o ../control.o \

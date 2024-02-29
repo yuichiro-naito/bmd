@@ -1,0 +1,1 @@
+LOCALBASE?=	/usr/local
