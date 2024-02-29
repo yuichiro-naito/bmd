@@ -1535,7 +1535,7 @@ compare_variable_key(struct conf_var *a, struct conf_var *b)
 static int
 del_var(struct vartree *vars, const char *k)
 {
-	struct conf_var key;
+	struct conf_var key, *n;
 
 	if (k == NULL)
 		return -1;
@@ -1543,8 +1543,12 @@ del_var(struct vartree *vars, const char *k)
 	if (key.key == NULL)
 		return -1;
 
-	RB_REMOVE(vartree, vars, &key);
-	free(key.key);
+	n = RB_REMOVE(vartree, vars, &key);
+	if (n == NULL)
+		return -1;
+	free(n->key);
+	free(n->val);
+	free(n);
 	return 0;
 }
 
