@@ -165,7 +165,7 @@ retry:
 		goto retry;
 
 	if (sz)
-		*sz = ntohl(*((uint32_t*)buf));
+		*sz = ntohl(*((uint32_t *)(void *)buf)); /* XXX */
 	rc = n;
 ret:
 	free(msg.msg_control);

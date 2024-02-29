@@ -701,12 +701,14 @@ exec_bhyve(struct vm *vm)
 		funlockfile(fp);
 		fclose(fp);
 		if (dopipe) {
-			for (args = (char**)buf; *args != NULL; args++)
+			/* XXX */
+			for (args = (char**)(void *)buf; *args != NULL; args++)
 				printf("%s ", *args);
 			printf("\n");
 			fflush(stdout);
 		}
-		args = (char **)buf;
+		/* XXX */
+		args = (char **)(void *)buf;
 		execv(args[0], args);
 		ERR("cannot exec %s\n", args[0]);
 		exit(1);

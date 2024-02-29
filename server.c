@@ -256,7 +256,8 @@ retry:
 		sb->read_size = nread;
 		if (nread == size) {
 			sb->read_state = 1;
-			sb->buf_size = ntohl(*((int32_t *)sb->size));
+			/* XXX */
+			sb->buf_size = ntohl(*((int32_t *)(void *)sb->size));
 			if (sb->buf_size > 1024 * 1024)
 				return -1;
 			if ((sb->buf = malloc(sb->buf_size)) == NULL)
