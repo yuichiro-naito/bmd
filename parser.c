@@ -34,7 +34,7 @@ mpool_expand()
 	    MAP_SHARED | MAP_ANON, -1, 0);
 	if (m == NULL)
 		return -1;
-	m->end = (void *)m + DEFAULT_MMAP_SIZE;
+	m->end = (void *)((uintptr_t)m + DEFAULT_MMAP_SIZE);
 	m->used = m->last_used = m->data;
 	m->error_number = MPERR_NONE;
 
@@ -54,7 +54,7 @@ mpool_destroy()
 {
 	struct mpool *m, *mn;
 	STAILQ_FOREACH_SAFE (m, &mpools, next, mn)
-		munmap(m, m->end - (void *)m);
+		munmap(m, (uintptr_t)m->end - (uintptr_t)m);
 	STAILQ_INIT(&mpools);
 }
 
@@ -104,7 +104,7 @@ mpool_alloc(size_t sz)
 	}
 
 	STAILQ_FOREACH (m, &mpools, next)
-		if (m->used + sz <= m->end)
+		if ((uintptr_t)m->used + sz <= (uintptr_t)m->end)
 			break;
 
 	if (m == NULL) {
@@ -113,7 +113,7 @@ mpool_alloc(size_t sz)
 	}
 
 	ret = m->used;
-	m->used += sz;
+	m->used = (void *)((uintptr_t)m->used + sz);
 	return ret;
 }
 
