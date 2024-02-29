@@ -22,4 +22,6 @@ FILESDIR=	$(LOCALBASE)/etc
 FILESMODE=	${NOBINMODE}
 CLEANFILES=	y.output
 
+WARNS?=		6
+
 .include <bsd.prog.mk>
