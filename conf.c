@@ -1543,12 +1543,11 @@ del_var(struct vartree *vars, const char *k)
 	if (key.key == NULL)
 		return -1;
 
-	n = RB_REMOVE(vartree, vars, &key);
-	if (n == NULL)
-		return -1;
-	free(n->key);
-	free(n->val);
-	free(n);
+	if ((n = RB_FIND(vartree, vars, &key))) {
+		RB_REMOVE(vartree, vars, n);
+		free_var(n);
+	}
+	free(key.key);
 	return 0;
 }
 
