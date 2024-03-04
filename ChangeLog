@@ -1,4 +1,6 @@
 * 2.3
+        - Bugfix: Override template arguments correctly.
+          (7f518fe9306f948c36d885ea59975fc4a83fbd31)
 	- Allow '.include' macro to unprivileged users.
 	  (bc70299d2c4829c978a4d4cc46c4a799f32a68b1)
 	- Add 'bhyve_env' parameter.
