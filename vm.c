@@ -29,16 +29,6 @@
 #define UEFI_FIRMWARE       LOCALBASE"/share/uefi-firmware/BHYVE_UEFI.fd"
 #define UEFI_FIRMWARE_VARS  LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
 
-#define WRITE_STR(fp, str) \
-	fwrite_unlocked(&(const char *[]) { (str) }[0], sizeof(const char *), 1, (fp))
-
-#define WRITE_FMT(fp, fmt, ...)                               \
-	do {                                                  \
-		char *p;                                      \
-		asprintf(&p, (fmt), __VA_ARGS__);             \
-		fwrite_unlocked(&p, sizeof(char *), 1, (fp)); \
-	} while (0)
-
 static int
 redirect_to_com(struct vm *vm, bool redirect_stdin)
 {
@@ -69,24 +59,6 @@ redirect_to_com(struct vm *vm, bool redirect_stdin)
 	dup2(fd, 2);
 
 	return 0;
-}
-
-static char *
-get_fbuf_option(int pcid, struct fbuf *fb)
-{
-	char *ret;
-	if (fb->password == NULL) {
-		if (asprintf(&ret, "%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
-			     pcid, fb->ipaddr, fb->port, fb->width, fb->height,
-			     fb->vgaconf, fb->wait ? ",wait" : "") < 0)
-			return NULL;
-		return ret;
-	}
-	if (asprintf(&ret, "%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s,password=%s",
-		     pcid, fb->ipaddr, fb->port, fb->width, fb->height, fb->vgaconf,
-		     fb->wait ? ",wait" : "", fb->password) < 0)
-		return NULL;
-	return ret;
 }
 
 int
@@ -566,10 +538,6 @@ exec_bhyve(struct vm *vm)
 	pid_t pid;
 	int pcid;
 	int outfd[2], errfd[2];
-	char **args;
-	char *buf = NULL;
-	size_t buf_size;
-	FILE *fp;
 	bool dopipe = ((vm->assigned_comport == NULL) ||
 	    (strcasecmp(vm->assigned_comport, "stdio") != 0));
 
@@ -599,6 +567,11 @@ exec_bhyve(struct vm *vm)
 		vm->pid = pid;
 		vm->state = RUN;
 	} else if (pid == 0) {
+		char **args;
+		char *buf;
+		size_t buf_size;
+		FILE *fp;
+
 		/* child process */
 		if (dopipe) {
 			close(outfd[0]);
@@ -618,96 +591,83 @@ exec_bhyve(struct vm *vm)
 		}
 		flockfile(fp);
 
-		WRITE_STR(fp, "/usr/sbin/bhyve");
-		WRITE_STR(fp, "-A");
-		WRITE_STR(fp, "-H");
-		WRITE_STR(fp, "-w");
+		fprintf(fp, "/usr/sbin/bhyve\n-A\n-H\n-w\n");
 		if (conf->utctime == true)
-			WRITE_STR(fp, "-u");
+			fprintf(fp, "-u\n");
 		if (conf->wired_memory == true)
-			WRITE_STR(fp, "-S");
-		if (conf->debug_port != NULL) {
-			WRITE_STR(fp, "-G");
-			WRITE_STR(fp, conf->debug_port);
-		}
-		WRITE_STR(fp, "-c");
-		WRITE_STR(fp, conf->ncpu);
-		WRITE_STR(fp, "-m");
-		WRITE_STR(fp, conf->memory);
-		if (vm->assigned_comport != NULL) {
-			WRITE_STR(fp, "-l");
-			WRITE_FMT(fp, "com1,%s", vm->assigned_comport);
-		}
+			fprintf(fp, "-S\n");
+		if (conf->debug_port != NULL)
+			fprintf(fp, "-G\n%s\n", conf->debug_port);
 
-		if (conf->keymap != NULL) {
-			WRITE_STR(fp, "-K");
-			WRITE_STR(fp, conf->keymap);
-		}
+		fprintf(fp, "-c\n%s\n", conf->ncpu);
+		fprintf(fp, "-m\n%s\n", conf->memory);
+		if (vm->assigned_comport != NULL)
+			fprintf(fp, "-l\ncom1,%s\n", vm->assigned_comport);
+
+		if (conf->keymap != NULL)
+			fprintf(fp, "-K\n%s\n", conf->keymap);
+
 		if (strcasecmp(conf->loader, "uefi") == 0) {
-			WRITE_STR(fp, "-l");
+			fprintf(fp, "-l\nbootrom,%s", UEFI_FIRMWARE);
 			if (vm->varsfile)
-				WRITE_FMT(fp, "bootrom,"UEFI_FIRMWARE",%s",
-					  vm->varsfile);
-			else
-				WRITE_STR(fp, "bootrom,"UEFI_FIRMWARE);
+				fprintf(fp, ",%s", vm->varsfile);
+			fprintf(fp, "\n");
 
-		} else if (strcasecmp(conf->loader, "csm") == 0) {
-			WRITE_STR(fp, "-l");
-			WRITE_STR(fp, "bootrom,"UEFI_CSM_FIRMWARE);
-		}
-		WRITE_STR(fp, "-s");
+		} else if (strcasecmp(conf->loader, "csm") == 0)
+			fprintf(fp, "-l\nbootrom,%s\n", UEFI_CSM_FIRMWARE);
+
 		switch (conf->hostbridge) {
 		case NONE:
 			break;
 		case INTEL:
-			WRITE_STR(fp, "0,hostbridge");
+			fprintf(fp, "-s\n0,hostbridge\n");
 			break;
 		case AMD:
-			WRITE_STR(fp, "0,amd_hostbridge");
+			fprintf(fp, "-s\n0,amd_hostbridge\n");
 			break;
 		}
-		WRITE_STR(fp, "-s");
-		WRITE_STR(fp, "1,lpc");
+		fprintf(fp, "-s\n1,lpc\n");
 
 		pcid = 2;
-		STAILQ_FOREACH (dc, &conf->disks, next) {
-			WRITE_STR(fp, "-s");
-			WRITE_FMT(fp, "%d,%s,%s", pcid++, dc->type, dc->path);
-		}
-		STAILQ_FOREACH (ic, &conf->isoes, next) {
-			WRITE_STR(fp, "-s");
-			WRITE_FMT(fp, "%d,%s,%s", pcid++, ic->type, ic->path);
-		}
-		STAILQ_FOREACH (nc, &vm->taps, next) {
-			WRITE_STR(fp, "-s");
-			WRITE_FMT(fp, "%d,%s,%s", pcid++, nc->type, nc->tap);
-		}
-		STAILQ_FOREACH (pc, &conf->passthrues, next) {
-			WRITE_STR(fp, "-s");
-			WRITE_FMT(fp, "%d,passthru,%s", pcid++, pc->devid);
-		}
+		STAILQ_FOREACH (dc, &conf->disks, next)
+			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, dc->type,
+				dc->path);
+		STAILQ_FOREACH (ic, &conf->isoes, next)
+			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
+				ic->path);
+		STAILQ_FOREACH (nc, &vm->taps, next)
+			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, nc->type,
+				nc->tap);
+		STAILQ_FOREACH (pc, &conf->passthrues, next)
+			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);
 		if (conf->fbuf->enable) {
-			WRITE_STR(fp, "-s");
-			WRITE_STR(fp, get_fbuf_option(pcid++, conf->fbuf));
+			struct fbuf *fb = conf->fbuf;
+			fprintf(fp, "-s\n%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
+				pcid++, fb->ipaddr, fb->port, fb->width,
+				fb->height, fb->vgaconf,
+				fb->wait ? ",wait" : "");
+			if (fb->password)
+				fprintf(fp, ",password=%s", fb->password);
+			fprintf(fp, "\n");
 		}
-		if (conf->mouse) {
-			WRITE_STR(fp, "-s");
-			WRITE_FMT(fp, "%d,xhci,tablet", pcid++);
-		}
-		WRITE_STR(fp, conf->name);
-		WRITE_STR(fp, NULL);
+		if (conf->mouse)
+			fprintf(fp, "-s\n%d,xhci,tablet\n", pcid++);
+		fprintf(fp, "%s\n", conf->name);
 
 		funlockfile(fp);
 		fclose(fp);
+		args = split_args(buf);
+		if (args == NULL) {
+			ERR("malloc %s\n", strerror(errno));
+			exit(1);
+		}
 		if (dopipe) {
-			/* XXX */
-			for (args = (char**)(void *)buf; *args != NULL; args++)
-				printf("%s ", *args);
+			char **t;
+			for (t = args; *t != NULL; t++)
+				printf("%s ", *t);
 			printf("\n");
 			fflush(stdout);
 		}
-		/* XXX */
-		args = (char **)(void *)buf;
 		execv(args[0], args);
 		ERR("cannot exec %s\n", args[0]);
 		exit(1);
