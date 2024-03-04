@@ -481,25 +481,23 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-#if 0
-static struct bhyve_env *
+struct bhyve_env *
 get_bhyve_env(struct vm_conf *conf)
 {
 	return STAILQ_FIRST(&conf->bhyve_envs);
 }
 
-static struct bhyve_env *
+struct bhyve_env *
 next_bhyve_env(struct bhyve_env *be)
 {
 	return STAILQ_NEXT(be, next);
 }
 
-static char *
+char *
 get_bhyve_env_env(struct bhyve_env *be)
 {
 	return be->env;
 }
-#endif
 
 struct net_conf *
 copy_net_conf(const struct net_conf *nc)
