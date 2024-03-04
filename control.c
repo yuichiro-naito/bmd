@@ -123,6 +123,7 @@ static int
 recv_size(int sock, uint32_t *sz, int *fd)
 {
 	int rc;
+	uint32_t t;
 	size_t n = 0;
 	bool fd_set = false;
 	struct msghdr msg;
@@ -164,8 +165,10 @@ retry:
 	if (n < sizeof(buf))
 		goto retry;
 
-	if (sz)
-		*sz = ntohl(*((uint32_t *)(void *)buf)); /* XXX */
+	if (sz) {
+		memcpy(&t, buf, sizeof(uint32_t));
+		*sz = ntohl(t);
+	}
 	rc = n;
 ret:
 	free(msg.msg_control);
