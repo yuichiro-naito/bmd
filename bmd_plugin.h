@@ -126,6 +126,7 @@ bool is_mouse(struct vm_conf *);
 bool is_wired_memory(struct vm_conf *);
 bool is_utctime(struct vm_conf *);
 char *get_keymap(struct vm_conf *);
+char **split_args(char *);
 
 /*
   Plugin call back function
@@ -176,5 +177,7 @@ typedef struct plugin_desc {
 	struct vm_method *method;
 	void (*on_reload_config)(nvlist_t *, nvlist_t *);
 } PLUGIN_DESC;
+
+extern PLUGIN_DESC plugin_desc;
 
 #endif

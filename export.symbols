@@ -70,4 +70,5 @@ is_utctime;
 get_keymap;
 plugin_wait_for_process;
 plugin_set_timer;
+split_args;
 };
