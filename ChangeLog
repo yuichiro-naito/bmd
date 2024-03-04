@@ -1,4 +1,6 @@
 * 2.3
+	- Bugfix: Assing tap interfaces for the 'run' subcommand.
+	  (69e0587a2712f21fc627c72dbfa0848a5943d7d2)
         - Bugfix: Override template arguments correctly.
           (7f518fe9306f948c36d885ea59975fc4a83fbd31)
 	- Allow '.include' macro to unprivileged users.
