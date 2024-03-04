@@ -121,7 +121,7 @@ mddetach(long unit)
 }
 
 #define	IOV_ENTRY_DECONST(v) { .iov_base = strdup(v), .iov_len = strlen(v) + 1 }
-#define	IOV_LAST_ENTRY(v)	(v)[nitems(v) - 1]     
+#define	IOV_LAST_ENTRY(v)	(v)[nitems(v) - 1]
 
 static int
 mount_iso(struct inspection *ins)
