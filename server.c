@@ -208,6 +208,7 @@ recv_sock_buf(struct sock_buf *sb)
 	ssize_t n;
 	char *start;
 	size_t nread, size;
+	uint32_t t;
 	char buf[1];
 
 	if (sb->read_state == 0) {
@@ -253,8 +254,8 @@ retry:
 		sb->read_size = nread;
 		if (nread == size) {
 			sb->read_state = 1;
-			/* XXX */
-			sb->buf_size = ntohl(*((int32_t *)(void *)sb->size));
+			memcpy(&t, sb->size, sizeof(uint32_t));
+			sb->buf_size = ntohl(t);
 			if (sb->buf_size > 1024 * 1024)
 				return -1;
 			if ((sb->buf = malloc(sb->buf_size)) == NULL)
