@@ -22,10 +22,7 @@
 #include "server.h"
 #include "vm.h"
 
-extern struct vm_conf_head vm_conf_list;
-extern SLIST_HEAD(, vm_entry) vm_list;
-
-static LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
+static struct sock_list sock_list = LIST_HEAD_INITIALIZER();
 
 struct sock_buf *
 create_sock_buf(int fd)
@@ -368,7 +365,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 {
 	char *name = VM_CONF(vm_ent)->name;
 	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
-	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
+	struct vm_conf_list list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_file(&list, false) < 0) {
 		ERR("%s\n", "failed to load VM config files");

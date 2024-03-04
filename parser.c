@@ -1337,7 +1337,7 @@ retry:
 #undef END_UP
 
 int
-load_config_file(struct vm_conf_head *list, bool update_gl_conf)
+load_config_file(struct vm_conf_list *list, bool update_gl_conf)
 {
 	struct cfsection *sc;
 	struct vm_conf *conf;
@@ -1346,7 +1346,7 @@ load_config_file(struct vm_conf_head *list, bool update_gl_conf)
 	struct global_conf *global_conf;
 	struct vartree *gv;
 	struct variables vars;
-	struct plugin_data_head head;
+	struct plugin_data_list head;
 	struct passwd *pw;
 
 	if (mpool_init() < 0) {

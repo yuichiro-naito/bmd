@@ -26,24 +26,21 @@
 #include "vm.h"
 #include "bmd_plugin.h"
 
-extern SLIST_HEAD(vm_list_t, vm_entry) vm_list;
-extern struct vm_conf_head vm_conf_list;
-
 /*
   List of VM configurations.
  */
-struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
+struct vm_conf_list vm_conf_list = LIST_HEAD_INITIALIZER();
 
 /*
   List of virtual machines.
  */
-struct vm_list_t vm_list = SLIST_HEAD_INITIALIZER();
-static SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
+struct vm_list vm_list = SLIST_HEAD_INITIALIZER();
+static struct plugin_list plugin_list = SLIST_HEAD_INITIALIZER();
 
 /*
   All Events
 */
-static LIST_HEAD(, event) event_list = LIST_HEAD_INITIALIZER();
+static struct event_list event_list = LIST_HEAD_INITIALIZER();
 
 /*
   Global event queue
@@ -869,7 +866,7 @@ call_plugins(struct vm_entry *vm_ent)
 }
 
 int
-call_plugin_parser(struct plugin_data_head *head,
+call_plugin_parser(struct plugin_data_list *head,
 		   const char *key, const char *val)
 {
 	int rc;
@@ -912,7 +909,7 @@ free_vm_list(void)
 }
 
 void
-free_plugin_data(struct plugin_data_head *head)
+free_plugin_data(struct plugin_data_list *head)
 {
 	struct plugin_data *pld, *pln;
 
@@ -931,7 +928,7 @@ free_vm_conf_entry(struct vm_conf_entry *conf_ent)
 }
 
 int
-create_plugin_data(struct plugin_data_head *head)
+create_plugin_data(struct plugin_data_list *head)
 {
 	struct plugin_entry *pl_ent;
 	struct plugin_data *pld;
@@ -1243,7 +1240,7 @@ reload_virtual_machines(void)
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent, *cen;
 	struct vm_entry *vm_ent, *vmn;
-	struct vm_conf_head new_list = LIST_HEAD_INITIALIZER();
+	struct vm_conf_list new_list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_file(&new_list, false) < 0)
 		return -1;

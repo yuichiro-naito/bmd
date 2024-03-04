@@ -45,7 +45,7 @@ struct vm_conf_entry *
 lookup_vm_conf(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen, *ret = NULL;
-	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
+	struct vm_conf_list list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_file(&list, false) < 0) {
 		printf("failed to load VM config files\n");
@@ -367,7 +367,7 @@ static int
 do_showconfig(const char *name)
 {
 	struct vm_conf_entry *conf_ent, *cen;
-	struct vm_conf_head list = LIST_HEAD_INITIALIZER();
+	struct vm_conf_list list = LIST_HEAD_INITIALIZER();
 	int count = 0;
 
 	LOG_OPEN_PERROR();

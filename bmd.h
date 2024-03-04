@@ -27,6 +27,7 @@ struct global_conf;
   Entry of plugins.
   The individual entries refer to the installed plugin.
  */
+SLIST_HEAD(plugin_list, plugin_entry);
 struct plugin_entry {
 	struct plugin_desc desc;
 	void *handle;
@@ -36,6 +37,7 @@ struct plugin_entry {
 /*
   Plugin data is for each plugin and virtual machine.
  */
+SLIST_HEAD(plugin_data_list, plugin_data);
 struct plugin_data {
 	struct plugin_entry *ent;
 	nvlist_t *pl_conf;
@@ -47,9 +49,10 @@ struct plugin_data {
   The individual entories hold the VM configuration.
   Make sure that 'conf' is the first member of this structure.
  */
+LIST_HEAD(vm_conf_list, vm_conf_entry);
 struct vm_conf_entry {
 	struct vm_conf conf;
-	SLIST_HEAD(plugin_data_head, plugin_data) pl_data;
+	struct plugin_data_list pl_data;
 	LIST_ENTRY(vm_conf_entry) next;
 };
 
@@ -90,6 +93,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
   Entry of vm list.
   The individual entries indicate the virtual machine process.
  */
+SLIST_HEAD(vm_list, vm_entry);
 struct vm_entry {
 	struct vm vm;
 	struct vm_conf *new_conf;
@@ -102,6 +106,7 @@ struct vm_entry {
    Event Structure.
  */
 typedef int (*event_call_back)(int ident, void *data);
+LIST_HEAD(event_list, event);
 struct event {
 	enum EVENT_TYPE type;
 	struct kevent kev;
@@ -113,6 +118,7 @@ struct event {
 /*
   Socker buffer.
  */
+LIST_HEAD(sock_list, sock_buf);
 struct sock_buf {
 	LIST_ENTRY(sock_buf) next;
 	int fd;
@@ -131,7 +137,9 @@ struct sock_buf {
 	struct xucred peer;
 };
 
-LIST_HEAD(vm_conf_head, vm_conf_entry);
+extern struct global_conf *gl_conf;
+extern struct vm_conf_list vm_conf_list;
+extern struct vm_list vm_list;
 
 int init_gl_conf(void);
 void free_gl_conf(void);
@@ -140,13 +148,13 @@ void free_global_conf(struct global_conf *);
 
 int remove_plugins(void);
 void call_plugins(struct vm_entry *);
-int call_plugin_parser(struct plugin_data_head *,
+int call_plugin_parser(struct plugin_data_list *,
 		       const char *, const char *);
 int load_plugins(const char *);
 int vm_method_exists(char *);
 
-int create_plugin_data(struct plugin_data_head *);
-void free_plugin_data(struct plugin_data_head *);
+int create_plugin_data(struct plugin_data_list *);
+void free_plugin_data(struct plugin_data_list *);
 void free_vm_conf_entry(struct vm_conf_entry *);
 struct vm_entry *lookup_vm_by_name(const char *);
 int set_timer(struct vm_entry *, int);
@@ -154,8 +162,6 @@ int start_virtual_machine(struct vm_entry *);
 
 int direct_run(const char *, bool, bool);
 
-int load_config_file(struct vm_conf_head *, bool);
+int load_config_file(struct vm_conf_list *, bool);
 int compare_vm_conf_entry(struct vm_conf_entry *, struct vm_conf_entry *);
-
-extern struct global_conf *gl_conf;
 #endif
