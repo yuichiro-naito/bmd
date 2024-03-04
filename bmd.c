@@ -1648,6 +1648,14 @@ direct_run(const char *name, bool install, bool single)
 		goto err;
 	}
 
+	if (assign_taps(VM_PTR(vm_ent)) < 0)
+		goto err;
+
+	if (activate_taps(VM_PTR(vm_ent)) < 0) {
+		remove_taps(VM_PTR(vm_ent));
+		goto err;
+	}
+
 	if (VM_START(vm_ent) < 0)
 		goto err;
 	i = 0;
@@ -1700,6 +1708,7 @@ wait:
 
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
+	remove_taps(VM_PTR(vm_ent));
 	free_vm_entry(vm_ent);
 	remove_plugins();
 	free_id_list();
