@@ -483,7 +483,9 @@ control(int argc, char *argv[])
 			  strcmp(argv[1], "stop") == 0 ||
 			  strcmp(argv[1], "shutdown") == 0)) {
 		cmd = nvlist_create(0);
-		nvlist_add_string(cmd, "command", argv[1]);
+		nvlist_add_string(cmd, "command",
+				  strcmp(argv[1], "stop") == 0 ?
+				  "shutdown" : argv[1]);
 		nvlist_add_string(cmd, "name", argv[2]);
 	} else
 		return usage(argc, argv);
