@@ -1537,7 +1537,7 @@ del_var(struct vartree *vars, const char *k)
 
 	if (k == NULL)
 		return -1;
- 	key = (struct conf_var){.key = strdup(k), .val = NULL};
+	key = (struct conf_var){.key = strdup(k), .val = NULL};
 	if (key.key == NULL)
 		return -1;
 
