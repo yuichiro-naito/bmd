@@ -315,10 +315,8 @@ grub_load(struct vm *vm)
 			fprintf(fp, "hd0,%s\n", conf->grub_run_partition);
 		else
 			fprintf(fp, "hd0,1\n");
-		fprintf(fp, "-M\n");
-		fprintf(fp, "%s\n", conf->memory);
-		fprintf(fp, "-m\n");
-		fprintf(fp, "%s\n", vm->mapfile);
+		fprintf(fp, "-M\n%s\n", conf->memory);
+		fprintf(fp, "-m\n%s\n", vm->mapfile);
 		fprintf(fp, "%s\n", conf->name);
 		funlockfile(fp);
 		fclose(fp);
@@ -396,26 +394,17 @@ bhyve_load(struct vm *vm)
 		fprintf(fp, "/usr/sbin/bhyveload\n");
 		if (conf->wired_memory == true)
 			fprintf(fp, "-S\n");
-		if (conf->single_user) {
-			fprintf(fp, "-e\n");
-			fprintf(fp, "boot_single=YES\n");
-		}
-		STAILQ_FOREACH (be, &conf->bhyveload_envs, next) {
-			fprintf(fp, "-e\n");
-			fprintf(fp, "%s\n", &be->env[0]);
-		}
-		if (conf->bhyveload_loader) {
-			fprintf(fp, "-l\n");
-			fprintf(fp, "%s\n", conf->bhyveload_loader);
-		}
-		fprintf(fp, "-c\n");
-		fprintf(fp, "%s\n", (vm->assigned_comport != NULL)
+		if (conf->single_user)
+			fprintf(fp, "-e\nboot_single=YES\n");
+		STAILQ_FOREACH (be, &conf->bhyveload_envs, next)
+			fprintf(fp, "-e\n%s\n", &be->env[0]);
+		if (conf->bhyveload_loader)
+			fprintf(fp, "-l\n%s\n", conf->bhyveload_loader);
+		fprintf(fp, "-c\n%s\n", (vm->assigned_comport != NULL)
 		    ? vm->assigned_comport
 		    : "stdio");
-		fprintf(fp, "-m\n");
-		fprintf(fp, "%s\n", conf->memory);
-		fprintf(fp, "-d\n");
-		fprintf(fp, "%s\n", (conf->install)
+		fprintf(fp, "-m\n%s\n", conf->memory);
+		fprintf(fp, "-d\n%s\n", (conf->install)
 		    ? STAILQ_FIRST(&conf->isoes)->path
 		    : STAILQ_FIRST(&conf->disks)->path);
 		fprintf(fp, "%s\n", conf->name);
