@@ -2,17 +2,23 @@
 #include <stdlib.h>
 #include "conf.h"
 #include "server.h"
+#include "bmd.h"
 #include "bmd_plugin.h"
 
 /*
   Default global configuration.
  */
-struct global_conf gl_conf0 = {
-	.config_file = LOCALBASE "/etc/bmd.conf",
-	.plugin_dir = LOCALBASE "/libexec/bmd",
-	.vars_dir = LOCALBASE "/var/cache/bmd",
-	.pid_path = "/var/run/bmd.pid",
-	.cmd_sock_path = "/var/run/bmd.sock",
+static char gl0_config_file[] = LOCALBASE "/etc/bmd.conf";
+static char gl0_plugin_dir[] = LOCALBASE "/libexec/bmd";
+static char gl0_vars_dir[] = LOCALBASE "/var/cache/bmd";
+static char gl0_pid_path[] = "/var/run/bmd.pid";
+static char gl0_cmd_sock_path[] = "/var/run/bmd.sock";
+static struct global_conf gl_conf0 = {
+	.config_file = gl0_config_file,
+	.plugin_dir = gl0_plugin_dir,
+	.vars_dir = gl0_vars_dir,
+	.pid_path = gl0_pid_path,
+	.cmd_sock_path = gl0_cmd_sock_path,
 	.unix_domain_socket_mode = NULL,
 	.nmdm_offset = DEFAULT_NMDM_OFFSET,
 	.foreground = 0
@@ -33,14 +39,14 @@ free_global_conf(struct global_conf *gc)
 }
 
 void
-free_gl_conf()
+free_gl_conf(void)
 {
 	free_global_conf(gl_conf);
 	gl_conf = &gl_conf0;
 }
 
 int
-init_gl_conf()
+init_gl_conf(void)
 {
 	struct global_conf *t;
 	if ((t = calloc(1, sizeof(*t))) == NULL)

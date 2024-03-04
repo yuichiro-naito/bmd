@@ -35,6 +35,8 @@
 #include <sys/time.h>
 #include <stdio.h>
 
+#include "y.tab.h"
+
 enum CF_TYPE {
 	CF_STR,
 	CF_VAR,
@@ -141,30 +143,39 @@ struct parser_context {
 	struct cffile    *cur_file;
 };
 
+extern int yydebug;
+extern int yyerrflag;
+extern int yychar;
+extern int yynerrs;
+extern YYSTYPE yyval;
+extern FILE *yyin;
+extern int lineno;
+extern struct parser_context *pctxt, *pctxt_snapshot;
+
 int yyparse(void);
 void yyerror(const char *);
 int yylex(void);
 void yyerror(const char *);
 int yylex_destroy(void);
 
-void glob_path(struct cftokens *ts);
-int apply_global_vars(struct cfsection *sc);
-char *peek_filename();
-uid_t peek_fileowner();
+void glob_path(struct cftokens *);
+int apply_global_vars(struct cfsection *);
+char *peek_filename(void);
+uid_t peek_fileowner(void);
 
-void *mpool_alloc(size_t sz);
+void *mpool_alloc(size_t);
 #define objalloc(t)    mpool_alloc(sizeof(struct t))
 
-void free_cfexpr(struct cfexpr *ex);
-void free_cftoken(struct cftoken *tk);
-void free_cftokens(struct cftokens *ts);
-void free_cfvalue(struct cfvalue *vl);
-void free_cfvalues(struct cfvalues *vs);
-void free_cfparam(struct cfparam *pr);
-void free_cfparams(struct cfparams *ps);
-void free_cfsection(struct cfsection *sec);
-void free_cfsections(struct cfsections *ss);
-void free_cfarg(struct cfarg *ag);
-void free_cfargs(struct cfargs *as);
-void free_cfargdef(struct cfargdef *ad);
-void free_cfargdefs(struct cfargdefs *ds);
+void free_cfexpr(struct cfexpr *);
+void free_cftoken(struct cftoken *);
+void free_cftokens(struct cftokens *);
+void free_cfvalue(struct cfvalue *);
+void free_cfvalues(struct cfvalues *);
+void free_cfparam(struct cfparam *);
+void free_cfparams(struct cfparams *);
+void free_cfsection(struct cfsection *);
+void free_cfsections(struct cfsections *);
+void free_cfarg(struct cfarg *);
+void free_cfargs(struct cfargs *);
+void free_cfargdef(struct cfargdef *);
+void free_cfargdefs(struct cfargdefs *);

@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,9 @@
 #include "vm.h"
 #include "bmd_plugin.h"
 
+extern SLIST_HEAD(vm_list_t, vm_entry) vm_list;
+extern struct vm_conf_head vm_conf_list;
+
 /*
   List of VM configurations.
  */
@@ -33,13 +37,13 @@ struct vm_conf_head vm_conf_list = LIST_HEAD_INITIALIZER();
 /*
   List of virtual machines.
  */
-SLIST_HEAD(, vm_entry) vm_list = SLIST_HEAD_INITIALIZER();
-SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
+struct vm_list_t vm_list = SLIST_HEAD_INITIALIZER();
+static SLIST_HEAD(, plugin_entry) plugin_list = SLIST_HEAD_INITIALIZER();
 
 /*
   All Events
 */
-LIST_HEAD(, event) event_list = LIST_HEAD_INITIALIZER();
+static LIST_HEAD(, event) event_list = LIST_HEAD_INITIALIZER();
 
 /*
   Global event queue
@@ -61,15 +65,13 @@ static int timer_id = 0;
  */
 static int sigterm = 0;
 
-extern struct vm_method bhyve_method;
-
-static int reload_virtual_machines();
-static void stop_virtual_machine(struct vm_entry *vm_ent);
-static void free_vm_entry(struct vm_entry *vm_ent);
+static int reload_virtual_machines(void);
+static void stop_virtual_machine(struct vm_entry *);
+static void free_vm_entry(struct vm_entry *);
 
 // implemented in control.c
-int control(int argc, char *argv[]);
-struct vm_conf_entry *lookup_vm_conf(const char *name);
+extern int control(int, char *[]);
+extern struct vm_conf_entry *lookup_vm_conf(const char *);
 
 static int
 kevent_set(struct kevent *kev, int n)
@@ -98,7 +100,7 @@ vm_output(struct event *ev, void *data)
 	struct vm_entry *e = data;
 
 	return  ev->data == e && k->filter == EVFILT_READ && (
-		k->ident == VM_OUTFD(e) || k->ident == VM_ERRFD(e));
+		(int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e));
 }
 
 static bool
@@ -110,7 +112,7 @@ vm_output_and_timers(struct event *ev, void *data)
 	return ev->data == e && (
 		k->filter == EVFILT_TIMER ||
 		(k->filter == EVFILT_READ &&
-		 (k->ident == VM_OUTFD(e) || k->ident == VM_ERRFD(e)))
+		 ((int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e)))
 		);
 }
 
@@ -144,7 +146,7 @@ stop_waiting_for(bool (*fn)(struct event *, void *), void *data)
 		kev[i] = ev->kev;
 		kev[i].flags = EV_DELETE;
 		i++;
-		if (i >= sizeof(kev)/sizeof(kev[0])) {
+		if (i >= (int)nitems(kev)) {
 			if (kevent_set(kev, i) < 0)
 				ERR("failed to remove kevent (%s)\n",
 				    strerror(errno));
@@ -330,7 +332,7 @@ static int
 send_ack(int sock)
 {
 	int rc;
-	static char *buf = "ack";
+	static const char *buf = "ack";
 
 	while ((rc = send(sock, buf, strlen(buf) + 1, 0)) < 0)
 		if (errno != EINTR && errno != EAGAIN)
@@ -359,7 +361,7 @@ open_err_logfile(struct vm_conf *conf)
 	pid_t pid;
 	int socks[2];
 	struct stat st;
-	gid_t group;
+	int64_t group;
 	struct passwd *pwd;
 
 	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0)
@@ -375,11 +377,11 @@ open_err_logfile(struct vm_conf *conf)
 		close(socks[0]);
 		if (conf->owner > 0) {
 			if ((group = conf->group) == -1)
-				group = (pwd = getpwuid(conf->owner)) ?
+				group = (pwd = getpwuid((uid_t)conf->owner)) ?
 					pwd->pw_gid : GID_NOBODY;
 
-			setgid(group);
-			setuid(conf->owner);
+			setgid((gid_t)group);
+			setuid((uid_t)conf->owner);
 		}
 
 		while ((fd = open(conf->err_logfile,
@@ -424,7 +426,7 @@ on_read_vm_output(int fd, void *data)
 	if (write_err_log(fd, VM_PTR(vm_ent)) == 0) {
 		LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
 			kev = &ev->kev;
-			if (ev->data != vm_ent || kev->ident != fd ||
+			if (ev->data != vm_ent || (int)kev->ident != fd ||
 			    kev->filter != EVFILT_READ)
 				continue;
 			/*
@@ -468,7 +470,7 @@ wait_for_vm_output(struct vm_entry *vm_ent)
 }
 
 static void
-free_events()
+free_events(void)
 {
 	struct event *ev, *evn;
 
@@ -478,7 +480,7 @@ free_events()
 }
 
 static int
-on_timer(int ident, void *data)
+on_timer(int ident __unused, void *data)
 {
 	struct vm_entry *vm_ent = data;
 
@@ -539,7 +541,7 @@ reason_string(int status)
 }
 
 static int
-on_vm_exit(int ident, void *data)
+on_vm_exit(int ident __unused, void *data)
 {
 	int status;
 	struct vm_entry *vm_ent = data;
@@ -595,7 +597,7 @@ on_vm_exit(int ident, void *data)
 	return 0;
 }
 
-int
+static int
 wait_for_vm(struct vm_entry *vm_ent)
 {
 	struct kevent kev;
@@ -660,7 +662,7 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 }
 
 static int
-on_recv_sock_buf(int ident, void *data)
+on_recv_sock_buf(int ident __unused, void *data)
 {
 	struct sock_buf *sb = data;
 
@@ -682,7 +684,7 @@ on_recv_sock_buf(int ident, void *data)
 }
 
 static int
-on_send_sock_buf(int ident, void *data)
+on_send_sock_buf(int ident __unused, void *data)
 {
 	struct sock_buf *sb = data;
 
@@ -720,7 +722,7 @@ wait_for_sock_buf(struct sock_buf *sb)
 }
 
 static int
-on_accept_cmd_sock(int ident, void *data)
+on_accept_cmd_sock(int ident __unused, void *data __unused)
 {
 	struct sock_buf *sb;
 	int n, sock = cmd_sock;
@@ -822,7 +824,7 @@ load_plugins(const char *plugin_dir)
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 
 	if ((d = opendir(plugin_dir)) == NULL) {
-		ERR("can not open %s\n", plugin_dir);
+		ERR("cannot open %s\n", plugin_dir);
 		return -1;
 	}
 
@@ -840,7 +842,7 @@ load_plugins(const char *plugin_dir)
 }
 
 int
-remove_plugins()
+remove_plugins(void)
 {
 	struct plugin_entry *pl_ent, *pln;
 
@@ -900,7 +902,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 }
 
 static void
-free_vm_list()
+free_vm_list(void)
 {
 	struct vm_entry *vm_ent, *vmn;
 
@@ -1088,7 +1090,7 @@ assign_comport(struct vm_entry *vm_ent)
 	return 0;
 }
 
-void
+static void
 cleanup_virtual_machine(struct vm_entry *vm_ent)
 {
 	remove_taps(VM_PTR(vm_ent));
@@ -1155,7 +1157,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 }
 
 static int
-on_sigterm(int ident, void *data)
+on_sigterm(int ident __unused, void *data __unused)
 {
 	INFO("%s\n", "stopping daemon");
 	sigterm++;
@@ -1163,7 +1165,7 @@ on_sigterm(int ident, void *data)
 }
 
 static int
-on_sighup(int ident, void *data)
+on_sighup(int ident __unused, void *data __unused)
 {
 	INFO("%s\n", "reload config file");
 	reload_virtual_machines();
@@ -1171,7 +1173,7 @@ on_sighup(int ident, void *data)
 }
 
 static int
-start_virtual_machines()
+start_virtual_machines(void)
 {
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
@@ -1236,7 +1238,7 @@ copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 }
 
 static int
-reload_virtual_machines()
+reload_virtual_machines(void)
 {
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent, *cen;
@@ -1361,7 +1363,7 @@ reload_virtual_machines()
 }
 
 static int
-event_loop()
+event_loop(void)
 {
 	struct kevent ev;
 	struct event *event;
@@ -1399,7 +1401,7 @@ event_loop()
 }
 
 static int
-stop_virtual_machines()
+stop_virtual_machines(void)
 {
 	struct kevent ev;
 	struct event *event;
@@ -1487,17 +1489,12 @@ parse_opt(int argc, char *argv[])
 	return 0;
 }
 
-static int
+static bool
 strendswith(const char *t, const char *s)
 {
-	const char *p = &t[strlen(t)];
-	const char *q = &s[strlen(s)];
+	const char *p;
 
-	while (p > t && q > s)
-		if (*--p != *--q)
-			return (*p) - (*q);
-
-	return (*p) - (*q);
+	return ((p = strstr(t, s)) != NULL) && (strlen(p) == strlen(s));
 }
 
 int
@@ -1519,7 +1516,7 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (strendswith(argv[0], "ctl") == 0)
+	if (strendswith(argv[0], "ctl"))
 		return control(argc, argv);
 
 	if (parse_opt(argc, argv) < 0)
@@ -1540,7 +1537,7 @@ main(int argc, char *argv[])
 
 	if (procctl(P_PID, getpid(), PROC_SPROTECT, &(int[]) { PPROT_SET }[0]) <
 	    0)
-		WARN("%s\n", "can not protect from OOM killer");
+		WARN("%s\n", "cannot protect from OOM killer");
 
 	if (load_config_file(&vm_conf_list, true) < 0)
 		return 1;
@@ -1551,12 +1548,12 @@ main(int argc, char *argv[])
 #else
 	if ((eventq = kqueue()) < 0) {
 #endif
-		ERR("%s\n", "can not open kqueue");
+		ERR("%s\n", "cannot open kqueue");
 		return 1;
 	}
 
 	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
-		ERR("can not bind %s\n", gl_conf->cmd_sock_path);
+		ERR("cannot bind %s\n", gl_conf->cmd_sock_path);
 		return 1;
 	}
 
@@ -1627,7 +1624,7 @@ direct_run(const char *name, bool install, bool single)
 	LOG_OPEN_PERROR();
 
 	if ((eventq = kqueue()) < 0) {
-		ERR("%s\n", "can not open kqueue");
+		ERR("%s\n", "cannot open kqueue");
 		return 1;
 	}
 
@@ -1685,7 +1682,7 @@ wait:
 	case EVFILT_PROC:
 		if (waitpid(ev.ident, &status, 0) < 0)
 			goto err;
-		if (ev.ident != VM_PID(vm_ent))
+		if ((pid_t)ev.ident != VM_PID(vm_ent))
 			goto wait;
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 			break;

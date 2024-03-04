@@ -500,13 +500,11 @@ expr	: NUMBER
 	;
 %%
 
-struct parser_context *pctxt, *pctxt_snapshot;
-
-struct cfsection *
+static struct cfsection *
 add_section(enum SECTION sec, char *name)
 {
 	static struct cfsections *section;
-	static char *sec_names[] = { "global", "template", "vm" };
+	static const char *sec_names[] = { "global", "template", "vm" };
 	struct cfsection *v;
 
 	switch (sec) {
@@ -542,7 +540,7 @@ add_section(enum SECTION sec, char *name)
 	return v;
 }
 
-struct cftoken *
+static struct cftoken *
 create_token(enum CF_TYPE t)
 {
 	struct cftoken *tk;

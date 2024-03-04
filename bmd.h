@@ -122,7 +122,7 @@ struct sock_buf {
 	size_t read_size;
 	size_t read_bytes;
 	char *buf;
-	int sent_size;
+	size_t sent_size;
 	int res_fd;
 	size_t res_size;
 	size_t res_bytes;
@@ -133,29 +133,29 @@ struct sock_buf {
 
 LIST_HEAD(vm_conf_head, vm_conf_entry);
 
-int init_gl_conf();
-void free_gl_conf();
-int merge_global_conf(struct global_conf *gc);
-void free_global_conf(struct global_conf *gc);
+int init_gl_conf(void);
+void free_gl_conf(void);
+int merge_global_conf(struct global_conf *);
+void free_global_conf(struct global_conf *);
 
-int remove_plugins();
-void call_plugins(struct vm_entry *vm_ent);
-int call_plugin_parser(struct plugin_data_head *head,
-		       const char *key, const char *val);
-int load_plugins(const char *plugin_dir);
-int vm_method_exists(char *name);
+int remove_plugins(void);
+void call_plugins(struct vm_entry *);
+int call_plugin_parser(struct plugin_data_head *,
+		       const char *, const char *);
+int load_plugins(const char *);
+int vm_method_exists(char *);
 
-int create_plugin_data(struct plugin_data_head *head);
-void free_plugin_data(struct plugin_data_head *head);
-void free_vm_conf_entry(struct vm_conf_entry *conf_ent);
-struct vm_entry *lookup_vm_by_name(const char *name);
-int set_timer(struct vm_entry *vm_ent, int second);
-int start_virtual_machine(struct vm_entry *vm_ent);
+int create_plugin_data(struct plugin_data_head *);
+void free_plugin_data(struct plugin_data_head *);
+void free_vm_conf_entry(struct vm_conf_entry *);
+struct vm_entry *lookup_vm_by_name(const char *);
+int set_timer(struct vm_entry *, int);
+int start_virtual_machine(struct vm_entry *);
 
-int direct_run(const char *name, bool install, bool single);
+int direct_run(const char *, bool, bool);
 
-int load_config_file(struct vm_conf_head *list, bool update_gl_conf);
-int compare_vm_conf_entry(struct vm_conf_entry *a, struct vm_conf_entry *b);
+int load_config_file(struct vm_conf_head *, bool);
+int compare_vm_conf_entry(struct vm_conf_entry *, struct vm_conf_entry *);
 
 extern struct global_conf *gl_conf;
 #endif

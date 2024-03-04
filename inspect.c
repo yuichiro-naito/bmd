@@ -54,11 +54,12 @@ free_inspection(struct inspection *ins)
 	free(ins->load_cmd);
 	free(ins->block_dev);
 	free(ins->ufs_dev);
+	free(ins->grub_run_partition);
 	free(ins);
 }
 
 static int
-mdattach(char *path, unsigned *unit)
+mdattach(char *path, long *unit)
 {
 	int fd;
 	struct stat sb;
@@ -89,7 +90,7 @@ mdattach(char *path, unsigned *unit)
 		goto err;
 	close(fd);
 
-	*unit = mdio.md_unit;
+	*unit = (long)mdio.md_unit;
 	return 0;
 err:
 	close(fd);
@@ -97,14 +98,14 @@ err:
 }
 
 static int
-mddetach(unsigned unit)
+mddetach(long unit)
 {
 	int fd, rc = 0;
 	struct md_ioctl mdio;
 
 	memset(&mdio, 0, sizeof(mdio));
 	mdio.md_version = MDIOVERSION;
-	mdio.md_unit = unit;
+	mdio.md_unit = (unsigned)unit;
 
 	while ((fd = open(MDCTL_PATH, O_RDWR, 0)) < 0)
 		if (errno != EINTR)
@@ -119,53 +120,57 @@ mddetach(unsigned unit)
 	return rc;
 }
 
-static void
-set_iovec(struct iovec *iov, char *val)
-{
-	iov->iov_base = val;
-	iov->iov_len = strlen(val) + 1;
-}
+#define	IOV_ENTRY_DECONST(v) { .iov_base = strdup(v), .iov_len = strlen(v) + 1 }
+#define	IOV_LAST_ENTRY(v)	(v)[nitems(v) - 1]     
 
 static int
 mount_iso(struct inspection *ins)
 {
-	int rc, i;
-	char *md_path;
-	struct iovec iov[6];
+	size_t i;
+	int rc;
+	struct iovec iov[] = {
+		IOV_ENTRY_DECONST("fstype"),
+		IOV_ENTRY_DECONST("cd9660"),
+		IOV_ENTRY_DECONST("fspath"),
+		IOV_ENTRY_DECONST(ins->mount_point),
+		IOV_ENTRY_DECONST("from"),
+		IOV_ENTRY_DECONST("/dev/mdNNNNNNNNNN")
+	};
 
-	if (asprintf(&md_path, "/dev/md%d", ins->md_unit) < 0)
+	/* XXX: The last .iov_len will be a bit longer. */
+	if (snprintf(IOV_LAST_ENTRY(iov).iov_base, IOV_LAST_ENTRY(iov).iov_len,
+	    "/dev/md%d", (unsigned)ins->md_unit) < 0)
 		return -1;
 
-	memset(iov, 0, sizeof(iov));
-	rc = i = 0;
-	set_iovec(&iov[i++], "fstype");
-	set_iovec(&iov[i++], "cd9660");
-	set_iovec(&iov[i++], "fspath");
-	set_iovec(&iov[i++], ins->mount_point);
-	set_iovec(&iov[i++], "from");
-	set_iovec(&iov[i++], md_path);
-	if (nmount(iov, i, MNT_RDONLY) < 0)
-		rc = -1;
+	rc = nmount(iov, nitems(iov), MNT_RDONLY);
+	for (i = 0; i < nitems(iov); i++)
+		free(iov[i].iov_base);
 
-	free(md_path);
 	return rc;
 }
 
 static int
 mount_ufs(struct inspection *ins, char *path)
 {
-	int i = 0;
-	struct iovec iov[6];
+	size_t i;
+	int rc;
+	struct iovec iov[] = {
+		IOV_ENTRY_DECONST("fstype"),
+		IOV_ENTRY_DECONST("ufs"),
+		IOV_ENTRY_DECONST("fspath"),
+		IOV_ENTRY_DECONST(ins->mount_point),
+		IOV_ENTRY_DECONST("from"),
+		IOV_ENTRY_DECONST(path)
+	};
 
-	memset(iov, 0, sizeof(iov));
-	set_iovec(&iov[i++], "fstype");
-	set_iovec(&iov[i++], "ufs");
-	set_iovec(&iov[i++], "fspath");
-	set_iovec(&iov[i++], ins->mount_point);
-	set_iovec(&iov[i++], "from");
-	set_iovec(&iov[i++], path);
-	return nmount(iov, i, MNT_RDONLY);
+	rc = nmount(iov, nitems(iov), MNT_RDONLY);
+	for (i = 0; i < nitems(iov); i++)
+		free(iov[i].iov_base);
+
+	return rc;
 }
+#undef IOV_ENTRY_DECONST
+#undef IOV_LAST_ENTRY
 
 /* match [0-9]+\.[0-9]+ */
 static bool
@@ -219,7 +224,8 @@ static int
 inspect_netbsd_iso(struct inspection *ins)
 {
 	int rc;
-	char *path, *cmd;
+	char *path;
+	const char *cmd;
 
 	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		return -1;
@@ -408,7 +414,7 @@ inspect_openbsd_partition(struct inspection *ins)
 	char *p;
 
 	/* set default partition number */
-	ins->grub_run_partition = "1";
+	set_string(&ins->grub_run_partition, "1");
 
 	if (ins->ufs_dev == NULL)
 		return;
@@ -421,7 +427,7 @@ inspect_openbsd_partition(struct inspection *ins)
 		return;
 
 	if (*p == 'p')
-		ins->grub_run_partition = p + 1;
+		set_string(&ins->grub_run_partition, p + 1);
 }
 
 static int
@@ -465,7 +471,8 @@ ret:
 static int
 inspect_netbsd_disk(struct inspection *ins)
 {
-	char *path, *cmd;
+	char *path;
+	const char *cmd;
 
 	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
@@ -496,7 +503,8 @@ inspect_disk_image(struct inspection *ins)
 
 	if (strncmp(ins->disk_path, "/dev", 4) != 0) {
 		if (mdattach(ins->disk_path, &ins->md_unit) < 0 ||
-		    asprintf(&ins->block_dev, "/dev/md%d", ins->md_unit) < 0)
+		    asprintf(&ins->block_dev, "/dev/md%d",
+			(unsigned)ins->md_unit) < 0)
 			return -1;
 	} else {
 		if ((ins->block_dev = strdup(ins->disk_path)) == NULL)

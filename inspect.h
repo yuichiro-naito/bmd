@@ -7,9 +7,11 @@
 #define OPENBSD_UPGRADE_KERNEL  "bsd.upgrade"
 #define MDCTL_PATH  "/dev/" MDCTL_NAME
 
+_Static_assert(sizeof(unsigned) <= sizeof(uint32_t),
+    "unsigned must be shorter than uint32_t");
 struct inspection {
 	int single_user;
-	unsigned md_unit;
+	long md_unit;		/* unsigned <= uint32_t < md_unit */
 	struct vm_conf *conf;
 	char *mount_point;       /* needs to be freed */
 	char *iso_path;
@@ -18,10 +20,11 @@ struct inspection {
 	char *ufs_dev;           /* needs to be freed */
 	char *install_cmd;       /* needs to be freed */
 	char *load_cmd;          /* needs to be freed */
-	char *grub_run_partition;
+	char *grub_run_partition;	/* needs to be freed */
 };
 
-int inspect_with_grub(struct inspection *ins);
-char *inspect(struct vm_conf *conf);
+int inspect_with_grub(struct inspection *);
+char *inspect(struct vm_conf *);
+bool is_file(char *);
 
 #endif

@@ -19,12 +19,13 @@
 
 #include "bmd.h"
 #include "log.h"
+#include "server.h"
 #include "vm.h"
 
 extern struct vm_conf_head vm_conf_list;
 extern SLIST_HEAD(, vm_entry) vm_list;
 
-LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
+static LIST_HEAD(, sock_buf) sock_list = LIST_HEAD_INITIALIZER();
 
 struct sock_buf *
 create_sock_buf(int fd)
@@ -255,7 +256,8 @@ retry:
 		sb->read_size = nread;
 		if (nread == size) {
 			sb->read_state = 1;
-			sb->buf_size = ntohl(*((int32_t *)sb->size));
+			/* XXX */
+			sb->buf_size = ntohl(*((int32_t *)(void *)sb->size));
 			if (sb->buf_size > 1024 * 1024)
 				return -1;
 			if ((sb->buf = malloc(sb->buf_size)) == NULL)
@@ -478,18 +480,18 @@ err:
 static int
 check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
 {
-	uid_t owner = VM_CONF(vm_ent)->owner;
-	gid_t group = VM_CONF(vm_ent)->group;
+	int64_t owner = VM_CONF(vm_ent)->owner;
+	int64_t group = VM_CONF(vm_ent)->group;
 	int i;
 
-	if (ucred->cr_uid == 0 || ucred->cr_uid == owner)
+	if (ucred->cr_uid == 0 || ucred->cr_uid == (uid_t)owner)
 		return 0;
 
 	if (group == -1)
 		return -1;
 
 	for (i = 0; i < ucred->cr_ngroups; i++)
-		if (ucred->cr_groups[i] == group)
+		if (ucred->cr_groups[i] == (gid_t)group)
 			return 0;
 
 	return -1;
@@ -501,7 +503,8 @@ check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
  *  -  1 = install
  */
 static nvlist_t *
-boot0_command(int s, const nvlist_t *nv, int style, struct xucred *ucred)
+boot0_command(int s __unused, const nvlist_t *nv, int style,
+    struct xucred *ucred)
 {
 	const char *name, *reason, *comport;
 	struct vm_entry *vm_ent = NULL;
@@ -576,7 +579,7 @@ install_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 }
 
 static nvlist_t *
-showcomport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+showcomport_command(int s __unused, const nvlist_t *nv,  struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -614,7 +617,8 @@ ret:
 }
 
 static nvlist_t *
-showvgaport_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+showvgaport_command(int s __unused, const nvlist_t *nv __unused,
+    struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -648,7 +652,7 @@ ret:
 }
 
 static nvlist_t *
-list_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+list_command(int s __unused, const nvlist_t *nv __unused, struct xucred *ucred)
 {
 	size_t i, count = 0;
 	const char *reason;
@@ -673,7 +677,7 @@ list_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 
 	if ((list = malloc(count * sizeof(nvlist_t *))) == NULL) {
 		error = true;
-		reason = "can not allocate memory";
+		reason = "cannot allocate memory";
 		goto ret;
 	}
 
@@ -706,7 +710,8 @@ ret:
 }
 
 static nvlist_t *
-vm_down_command(int s, const nvlist_t *nv, int how,  struct xucred *ucred)
+vm_down_command(int s __unused, const nvlist_t *nv __unused, int how,
+    struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -776,12 +781,12 @@ poweroff_command(int s, const nvlist_t *nv,  struct xucred *ucred)
 typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv, struct xucred *ucred);
 
 struct command_entry {
-	char *name;
+	const char *name;
 	cfunc func;
 };
 
 /* must be sorted by name */
-struct command_entry command_list[] = {
+static struct command_entry command_list[] = {
 	{ "boot", &boot_command },
 	{ "install", &install_command },
 	{ "list", &list_command },
@@ -817,7 +822,7 @@ int
 recv_command(struct sock_buf *sb)
 {
 	const char *cmd;
-	char *reason = "unknown command";
+	const char *reason = "unknown command";
 	nvlist_t *nv, *res = NULL;
 	cfunc func;
 

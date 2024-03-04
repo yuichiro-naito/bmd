@@ -1,3 +1,5 @@
+#include <sys/param.h>
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -16,7 +18,10 @@
 
 #include "conf.h"
 #include "inspect.h"
+#include "log.h"
 #include "vm.h"
+
+extern char **split_args(char *);
 
 struct proc_pipe {
 	pid_t pid;
@@ -44,7 +49,7 @@ SLIST_HEAD(disk_info_head, disk_info);
 #define PROMPT   "grub> "
 
 static struct disk_info *
-create_disk_info()
+create_disk_info(void)
 {
 	return calloc(1, sizeof(struct disk_info));
 }
@@ -179,7 +184,8 @@ strip_newline(char *str)
 static int
 pp_expect(struct proc_pipe *pp, const char *expect, char *buf, size_t size)
 {
-	int rc, n;
+	int rc;
+	size_t n;
 	char *p;
 retry:
 	if ((rc = pp_read(pp)) < 0)
@@ -271,8 +277,7 @@ static int
 spawn_grub(struct proc_pipe *pp)
 {
 	pid_t pid;
-	int i, pfd[2];
-	char *argv[8];
+	int pfd[2];
 
 	if (pipe2(pfd, O_CLOEXEC | O_NONBLOCK) < 0)
 		return -1;
@@ -280,17 +285,34 @@ spawn_grub(struct proc_pipe *pp)
 	if ((pid = fork()) < 0)
 		goto err;
 	if (pid == 0) {
+		char **argv;
+		FILE *fp;
+		char *bp;
+		size_t len;
+
 		close(pfd[0]);
 		setenv("TERM", "xterm", 1);
-		i = 0;
-		argv[i++] = "grub-bhyve";
-		argv[i++] = "-n";
-		argv[i++] = "-e";
-		argv[i++] = "-m";
-		argv[i++] = pp->mapfile;
-		argv[i++] = pp->vm_name;
-		argv[i++] = NULL;
 
+		fp = open_memstream(&bp, &len);
+		if (fp == NULL) {
+			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			exit(1);
+		}
+		flockfile(fp);
+		fprintf(fp,
+		    "grub-bhyve\n"
+		    "-n\n"
+		    "-e\n"
+		    "-m\n"
+		    "%s\n"
+		    "%s\n", pp->mapfile, pp->vm_name);
+		funlockfile(fp);
+		fclose(fp);
+		argv = split_args(bp);
+		if (argv == NULL) {
+			ERR("malloc: %s\n", strerror(errno));
+			exit(1);
+		}
 		dup2(pfd[1], 0);
 		dup2(pfd[1], 1);
 		dup2(pfd[1], 2);
@@ -311,17 +333,17 @@ err:
 
 #if __FreeBSD_version < 1400071
 static int
-compare_disk_info(void *thunk, const void *l, const void *r)
+compare_disk_info(void *thunk __unused, const void *l, const void *r)
 #else
 static int
-compare_disk_info(const void *l, const void *r, void *thunk)
+compare_disk_info(const void *l, const void *r, void *thunk __unused)
 #endif
 {
 	const struct disk_info *a, *b;
 	int c;
 
-	a = *(const struct disk_info **)l;
-	b = *(const struct disk_info **)r;
+	a = *(const struct disk_info *const *)l;
+	b = *(const struct disk_info *const *)r;
 
 	if (a->disk_name == NULL && b->disk_name == NULL)
 		return 0;
@@ -382,7 +404,7 @@ sort_disk_info_list(struct disk_info_head *list, int nlist)
 #endif
 
 static int
-parse_disks(char *line, struct disk_info_head *list, int nlist)
+parse_disks(char *line, struct disk_info_head *list, int nlist __unused)
 {
 	struct disk_info *di;
 	char *s, *e, *n, t;

@@ -1,5 +1,4 @@
 MK_DEBUG_FILES?=	no
-LOCALBASE?=		/usr/local
 SUBDIR=		rc.d
 BINDIR=		$(LOCALBASE)/sbin
 MANDIR=		$(LOCALBASE)/man/man
@@ -22,4 +21,7 @@ FILESDIR=	$(LOCALBASE)/etc
 FILESMODE=	${NOBINMODE}
 CLEANFILES=	y.output
 
+WARNS?=		6
+
+.include "Makefile.inc"
 .include <bsd.prog.mk>
