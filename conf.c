@@ -1558,7 +1558,7 @@ set_var0(struct vartree *vars, const char *k, const char *v)
 	if (k == NULL || v == NULL)
 		return -1;
 
- 	key = (struct conf_var){.key = strdup(k), .val = NULL};
+	key = (struct conf_var){.key = strdup(k), .val = NULL};
 	if (key.key == NULL)
 		return -1;
 
