@@ -1,3 +1,4 @@
+* 3.0
 * 2.3
 	- Bugfix: Assing tap interfaces for the 'run' subcommand.
 	  (69e0587a2712f21fc627c72dbfa0848a5943d7d2)
