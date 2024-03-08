@@ -524,6 +524,7 @@ exec_bhyve(struct vm *vm)
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	struct bhyve_env *be;
+	struct cpu_pin *cp;
 	pid_t pid;
 	int pcid;
 	int outfd[2], errfd[2];
@@ -589,6 +590,8 @@ exec_bhyve(struct vm *vm)
 			fprintf(fp, "-G\n%s\n", conf->debug_port);
 
 		fprintf(fp, "-c\n%s\n", conf->ncpu);
+		STAILQ_FOREACH (cp, &conf->cpu_pins, next)
+			fprintf(fp, "-p\n%d:%d\n", cp->vcpu, cp->hostcpu);
 		fprintf(fp, "-m\n%s\n", conf->memory);
 		if (vm->assigned_comport != NULL)
 			fprintf(fp, "-l\ncom1,%s\n", vm->assigned_comport);

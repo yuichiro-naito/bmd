@@ -66,6 +66,12 @@ struct bhyve_env {
 	char env[0];
 };
 
+struct cpu_pin {
+	STAILQ_ENTRY(cpu_pin) next;
+	int vcpu;
+	int hostcpu;
+};
+
 struct conf_var {
 	RB_ENTRY(conf_var) entry;
 	char *key, *val;
@@ -126,6 +132,8 @@ struct vm_conf {
 	STAILQ_HEAD(, bhyveload_env) bhyveload_envs;
 	int nbhyve_envs;
 	STAILQ_HEAD(, bhyve_env) bhyve_envs;
+	int ncpu_pins;
+	STAILQ_HEAD(, cpu_pin) cpu_pins;
 };
 
 struct vm {
@@ -154,6 +162,7 @@ void free_net_conf(struct net_conf *);
 void free_vm_conf(struct vm_conf *);
 void free_bhyveload_env(struct bhyveload_env *);
 void free_bhyve_env(struct bhyve_env *);
+void free_cpu_pin(struct cpu_pin *);
 void free_fbuf(struct fbuf *);
 void clear_passthru_conf(struct vm_conf *);
 void clear_disk_conf(struct vm_conf *);
@@ -161,6 +170,7 @@ void clear_iso_conf(struct vm_conf *);
 void clear_net_conf(struct vm_conf *);
 void clear_bhyveload_env(struct vm_conf *);
 void clear_bhyve_env(struct vm_conf *);
+void clear_cpu_pin(struct vm_conf *);
 
 int add_passthru_conf(struct vm_conf *, const char *);
 int add_disk_conf(struct vm_conf *, const char *, const char *);
@@ -168,6 +178,7 @@ int add_iso_conf(struct vm_conf *, const char *, const char *);
 int add_net_conf(struct vm_conf *, const char *, const char *);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);
+int add_cpu_pin(struct vm_conf *, int, int);
 struct net_conf *copy_net_conf(const struct net_conf *);
 int set_name(struct vm_conf *, const char *);
 int set_memory_size(struct vm_conf *, const char *);
@@ -208,11 +219,6 @@ struct vm_conf *create_vm_conf(const char *vm_);
 int finalize_vm_conf(struct vm_conf *);
 int dump_vm_conf(struct vm_conf *, FILE *);
 
-int compare_fbuf(const struct fbuf *, const struct fbuf *);
-int compare_passthru_conf(const struct passthru_conf *, const struct passthru_conf *);
-int compare_disk_conf(const struct disk_conf *, const struct disk_conf *);
-int compare_iso_conf(const struct iso_conf *, const struct iso_conf *);
-int compare_net_conf(const struct net_conf *, const struct net_conf *);
 int compare_vm_conf(const struct vm_conf *, const struct vm_conf *);
 int compare_nvlist(const nvlist_t *, const nvlist_t *);
 

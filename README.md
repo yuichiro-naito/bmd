@@ -174,6 +174,7 @@ Following keys are available.
 | memory | memory size<br>e.g. 2G | yes | (none) |
 | name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs | yes | (none) |
+| cpu_pin | Pin guest's vCPU to host CPU | no | (none) |
 | network | bridge name(s)<br>e.g. bridge0 e1000:bridge1 | no | (none) |
 | owner | owner of VM | no | same as the file owner in which the vm section is written |
 | passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |

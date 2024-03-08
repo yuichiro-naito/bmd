@@ -1,4 +1,4 @@
-.Dd Feb 27, 2024
+.Dd Mar 6, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -158,6 +158,23 @@ Specify physical memory size. This parameter is mandatory.
 Change the virtual machine name from vm section name;
 .It Cm ncpu = Ar num;
 Set the number of CPUs for VM. This parameter is mandatory.
+.It Cm cpu_pin = (+=) Ar vcpu:hostcpu;
+Pin guest's virtual CPU
+.Ar vcpu
+to
+.Ar hostcpu .
+Host CPUs and guest virtual CPUs are numberd starting from 0.
+The number of
+.Ar vcpu
+must be smaller than
+.Ar ncpu
+value.
+The number of
+.Ar hostcpu
+must be smaller than
+.Ar hw.ncpu
+.Xr sysctl 8
+value.
 .It Cm network = (+=) Ar type:bridge;
 Type is one of "e1000", "virtio-net"  or can be omitted to specify
 the default type "virtio-net". Bridge is a bridge name that a tap interface

@@ -25,6 +25,33 @@ static int compare_variable_key(struct conf_var *, struct conf_var *);
 RB_GENERATE_STATIC(vartree, conf_var, entry, compare_variable_key);
 struct vartree *global_vars = NULL;
 
+#define generate_list_accessor(type, member)		\
+	struct type *get_##type(struct vm_conf *conf)	\
+	{						\
+		return STAILQ_FIRST(&conf->member);	\
+	}						\
+	struct type *next_##type(struct type *p)	\
+	{						\
+		return STAILQ_NEXT(p, next);		\
+	}
+
+#define generate_member_accessor(rtype, type, member) \
+	rtype					    \
+	get_##type##_##member(struct type *p)	    \
+	{					    \
+		return p->member;		    \
+	}
+
+#define generate_clear_list(type, member)			\
+	void							\
+	clear_##type(struct vm_conf *vc)			\
+	{							\
+		struct type *p, *pn;				\
+		STAILQ_FOREACH_SAFE (p, &vc->member, next, pn)	\
+			free_##type(p);				\
+		STAILQ_INIT(&vc->member);			\
+	}
+
 void
 free_id_list(void)
 {
@@ -111,6 +138,14 @@ free_bhyve_env(struct bhyve_env *e)
 }
 
 void
+free_cpu_pin(struct cpu_pin *p)
+{
+	if (p == NULL)
+		return;
+	free(p);
+}
+
+void
 free_fbuf(struct fbuf *f)
 {
 	if (f == NULL)
@@ -121,59 +156,13 @@ free_fbuf(struct fbuf *f)
 	free(f);
 }
 
-void
-clear_passthru_conf(struct vm_conf *vc)
-{
-	struct passthru_conf *pc, *pn;
-	STAILQ_FOREACH_SAFE (pc, &vc->passthrues, next, pn)
-		free_passthru_conf(pc);
-	STAILQ_INIT(&vc->passthrues);
-}
-
-void
-clear_disk_conf(struct vm_conf *vc)
-{
-	struct disk_conf *dc, *dn;
-	STAILQ_FOREACH_SAFE (dc, &vc->disks, next, dn)
-		free_disk_conf(dc);
-	STAILQ_INIT(&vc->disks);
-}
-
-void
-clear_iso_conf(struct vm_conf *vc)
-{
-	struct iso_conf *ic, *in;
-	STAILQ_FOREACH_SAFE (ic, &vc->isoes, next, in)
-		free_iso_conf(ic);
-	STAILQ_INIT(&vc->isoes);
-}
-
-void
-clear_net_conf(struct vm_conf *vc)
-{
-	struct net_conf *nc, *nn;
-	STAILQ_FOREACH_SAFE (nc, &vc->nets, next, nn)
-		free_net_conf(nc);
-	STAILQ_INIT(&vc->nets);
-}
-
-void
-clear_bhyveload_env(struct vm_conf *vc)
-{
-	struct bhyveload_env *be, *bn;
-	STAILQ_FOREACH_SAFE(be, &vc->bhyveload_envs, next, bn)
-		free_bhyveload_env(be);
-	STAILQ_INIT(&vc->bhyveload_envs);
-}
-
-void
-clear_bhyve_env(struct vm_conf *vc)
-{
-	struct bhyve_env *be, *bn;
-	STAILQ_FOREACH_SAFE(be, &vc->bhyve_envs, next, bn)
-		free_bhyve_env(be);
-	STAILQ_INIT(&vc->bhyve_envs);
-}
+generate_clear_list(passthru_conf, passthrues)
+generate_clear_list(disk_conf, disks)
+generate_clear_list(iso_conf, isoes)
+generate_clear_list(net_conf, nets)
+generate_clear_list(bhyveload_env, bhyveload_envs)
+generate_clear_list(bhyve_env, bhyve_envs)
+generate_clear_list(cpu_pin, cpu_pins)
 
 static void
 free_var(struct conf_var *c)
@@ -226,6 +215,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->bhyveload_loader);
 	clear_bhyveload_env(vc);
 	clear_bhyve_env(vc);
+	clear_cpu_pin(vc);
 	free(vc);
 }
 
@@ -252,23 +242,8 @@ err:
 	return -1;
 }
 
-struct passthru_conf *
-get_passthru_conf(struct vm_conf *conf)
-{
-	return STAILQ_FIRST(&conf->passthrues);
-}
-
-struct passthru_conf *
-next_passthru_conf(struct passthru_conf *p_conf)
-{
-	return STAILQ_NEXT(p_conf, next);
-}
-
-char *
-get_passthru_conf_devid(struct passthru_conf *p_conf)
-{
-	return p_conf->devid;
-}
+generate_list_accessor(passthru_conf, passthrues)
+generate_member_accessor(char *, passthru_conf, devid)
 
 int
 add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -296,29 +271,9 @@ err:
 	return -1;
 }
 
-struct disk_conf *
-get_disk_conf(struct vm_conf *conf)
-{
-	return STAILQ_FIRST(&conf->disks);
-}
-
-struct disk_conf *
-next_disk_conf(struct disk_conf *d_conf)
-{
-	return STAILQ_NEXT(d_conf, next);
-}
-
-char *
-get_disk_conf_type(struct disk_conf *d_conf)
-{
-	return d_conf->type;
-}
-
-char *
-get_disk_conf_path(struct disk_conf *d_conf)
-{
-	return d_conf->path;
-}
+generate_list_accessor(disk_conf, disks)
+generate_member_accessor(char *, disk_conf, type)
+generate_member_accessor(char *, disk_conf, path)
 
 int
 add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -346,29 +301,9 @@ err:
 	return -1;
 }
 
-struct iso_conf *
-get_iso_conf(struct vm_conf *conf)
-{
-	return STAILQ_FIRST(&conf->isoes);
-}
-
-struct iso_conf *
-next_iso_conf(struct iso_conf *i_conf)
-{
-	return STAILQ_NEXT(i_conf, next);
-}
-
-char *
-get_iso_conf_type(struct iso_conf *i_conf)
-{
-	return i_conf->type;
-}
-
-char *
-get_iso_conf_path(struct iso_conf *i_conf)
-{
-	return i_conf->path;
-}
+generate_list_accessor(iso_conf, isoes)
+generate_member_accessor(char *, iso_conf, type)
+generate_member_accessor(char *, iso_conf, path)
 
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
@@ -397,35 +332,10 @@ err:
 	return -1;
 }
 
-struct net_conf *
-get_net_conf(struct vm_conf *conf)
-{
-	return STAILQ_FIRST(&conf->nets);
-}
-
-struct net_conf *
-next_net_conf(struct net_conf *n_conf)
-{
-	return STAILQ_NEXT(n_conf, next);
-}
-
-char *
-get_net_conf_type(struct net_conf *n_conf)
-{
-	return n_conf->type;
-}
-
-char *
-get_net_conf_bridge(struct net_conf *n_conf)
-{
-	return n_conf->bridge;
-}
-
-char *
-get_net_conf_tap(struct net_conf *n_conf)
-{
-	return n_conf->tap;
-}
+generate_list_accessor(net_conf, nets)
+generate_member_accessor(char *, net_conf, type)
+generate_member_accessor(char *, net_conf, bridge)
+generate_member_accessor(char *, net_conf, tap)
 
 int
 add_bhyveload_env(struct vm_conf *conf, const char *env)
@@ -445,23 +355,8 @@ add_bhyveload_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-struct bhyveload_env *
-get_bhyveload_env(struct vm_conf *conf)
-{
-	return STAILQ_FIRST(&conf->bhyveload_envs);
-}
-
-struct bhyveload_env *
-next_bhyveload_env(struct bhyveload_env *be)
-{
-	return STAILQ_NEXT(be, next);
-}
-
-char *
-get_bhyveload_env_env(struct bhyveload_env *be)
-{
-	return be->env;
-}
+generate_list_accessor(bhyveload_env, bhyveload_envs)
+generate_member_accessor(char *, bhyveload_env, env)
 
 int
 add_bhyve_env(struct vm_conf *conf, const char *env)
@@ -481,23 +376,30 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-struct bhyve_env *
-get_bhyve_env(struct vm_conf *conf)
+generate_list_accessor(bhyve_env, bhyve_envs)
+generate_member_accessor(char *, bhyve_env, env)
+
+int
+add_cpu_pin(struct vm_conf *conf, int vcpu, int hostcpu)
 {
-	return STAILQ_FIRST(&conf->bhyve_envs);
+	struct cpu_pin *pin;
+
+	if (conf == NULL)
+		return 0;
+
+	if ((pin = malloc(sizeof(struct cpu_pin))) == NULL)
+		return -1;
+	pin->vcpu = vcpu;
+	pin->hostcpu = hostcpu;
+
+	STAILQ_INSERT_TAIL(&conf->cpu_pins, pin, next);
+	conf->ncpu_pins++;
+	return 0;
 }
 
-struct bhyve_env *
-next_bhyve_env(struct bhyve_env *be)
-{
-	return STAILQ_NEXT(be, next);
-}
-
-char *
-get_bhyve_env_env(struct bhyve_env *be)
-{
-	return be->env;
-}
+generate_list_accessor(cpu_pin, cpu_pins)
+generate_member_accessor(int, cpu_pin, vcpu)
+generate_member_accessor(int, cpu_pin, hostcpu)
 
 struct net_conf *
 copy_net_conf(const struct net_conf *nc)
@@ -1212,6 +1114,7 @@ create_vm_conf(const char *vm_name)
 	STAILQ_INIT(&ret->nets);
 	STAILQ_INIT(&ret->bhyveload_envs);
 	STAILQ_INIT(&ret->bhyve_envs);
+	STAILQ_INIT(&ret->cpu_pins);
 
 	return ret;
 err:
@@ -1245,6 +1148,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct passthru_conf *pc;
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
+	struct cpu_pin *cp;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
 				       "always", "reboot" };
@@ -1259,6 +1163,12 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, dfmt, "owner", conf->owner);
 	fprintf(fp, dfmt, "group", conf->group);
 	fprintf(fp, fmt, "ncpu", conf->ncpu);
+	if ((cp = STAILQ_FIRST(&conf->cpu_pins))) {
+		fprintf(fp, "%18s = %d:%d", "cpu_pin", cp->vcpu, cp->hostcpu);
+		while ((cp = STAILQ_NEXT(cp, next)))
+			fprintf(fp, ", %d:%d", cp->vcpu, cp->hostcpu);
+		fprintf(fp, "\n");
+	}
 	fprintf(fp, fmt, "memory", conf->memory);
 	fprintf(fp, fmt, "wired_memory", bool_str[conf->wired_memory]);
 	fprintf(fp, fmt, "utctime", bool_str[conf->utctime]);
@@ -1341,7 +1251,7 @@ compare_string(const char *a, const char *b)
 	if ((rc = compare_string((a)->t, (b)->t)) != 0) \
 		return rc
 
-int
+static int
 compare_fbuf(const struct fbuf *a, const struct fbuf *b)
 {
 	int rc;
@@ -1358,7 +1268,7 @@ compare_fbuf(const struct fbuf *a, const struct fbuf *b)
 	return 0;
 }
 
-int
+static int
 compare_passthru_conf(const struct passthru_conf *a, const struct passthru_conf *b)
 {
 	int rc;
@@ -1368,7 +1278,7 @@ compare_passthru_conf(const struct passthru_conf *a, const struct passthru_conf 
 	return 0;
 }
 
-int
+static int
 compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 {
 	int rc;
@@ -1379,7 +1289,7 @@ compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 	return 0;
 }
 
-int
+static int
 compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b)
 {
 	int rc;
@@ -1390,7 +1300,7 @@ compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b)
 	return 0;
 }
 
-int
+static int
 compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 {
 	int rc;
@@ -1408,16 +1318,52 @@ compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 	return 0;
 }
 
+static int
+compare_bhyveload_env(const struct bhyveload_env *a, const struct bhyveload_env *b)
+{
+	int rc;
+
+	CMP_STR(env);
+	return 0;
+}
+
+static int
+compare_bhyve_env(const struct bhyve_env *a, const struct bhyve_env *b)
+{
+	int rc;
+
+	CMP_STR(env);
+	return 0;
+}
+
+static int
+compare_cpu_pin(const struct cpu_pin *a, const struct cpu_pin *b)
+{
+	int rc;
+	CMP_NUM(vcpu);
+	CMP_NUM(hostcpu);
+	return 0;
+}
+
+#define CMP_LIST(type, member)						\
+	do {								\
+		struct type *ea, *eb;					\
+		for (ea = STAILQ_FIRST(&a->member),			\
+			     eb = STAILQ_FIRST(&b->member);		\
+		     ea != NULL && eb != NULL;				\
+		     ea = STAILQ_NEXT(ea, next), eb = STAILQ_NEXT(eb, next)) \
+			if ((rc = compare_##type(ea, eb)) != 0)		\
+				return rc;				\
+		if (ea != NULL)						\
+			return 1;					\
+		if (eb != NULL)						\
+			return -1;					\
+	} while(0)
+
 int
 compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 {
 	int rc;
-	struct passthru_conf *pa, *pb;
-	struct disk_conf *da, *db;
-	struct iso_conf *ia, *ib;
-	struct net_conf *na, *nb;
-	struct bhyveload_env *ba, *bb;
-	struct bhyve_env *ea, *eb;
 
 	CMP_NUM(boot_delay);
 	CMP_NUM(loader_timeout);
@@ -1453,67 +1399,13 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(nisoes);
 	CMP_NUM(nnets);
 
-	for (pa = STAILQ_FIRST(&a->passthrues), pb = STAILQ_FIRST(&b->passthrues);
-	     pa != NULL && pb != NULL;
-	     pa = STAILQ_NEXT(pa, next), pb = STAILQ_NEXT(pb, next))
-		if ((rc = compare_passthru_conf(pa, pb)) != 0)
-			return rc;
-	if (pa != NULL)
-		return 1;
-	if (pb != NULL)
-		return -1;
-
-	for (da = STAILQ_FIRST(&a->disks), db = STAILQ_FIRST(&b->disks);
-	     da != NULL && db != NULL;
-	     da = STAILQ_NEXT(da, next), db = STAILQ_NEXT(db, next))
-		if ((rc = compare_disk_conf(da, db)) != 0)
-			return rc;
-	if (da != NULL)
-		return 1;
-	if (db != NULL)
-		return -1;
-
-	for (ia = STAILQ_FIRST(&a->isoes), ib = STAILQ_FIRST(&b->isoes);
-	     ia != NULL && ib != NULL;
-	     ia = STAILQ_NEXT(ia, next), ib = STAILQ_NEXT(ib, next))
-		if ((rc = compare_iso_conf(ia, ib)) != 0)
-			return rc;
-	if (ia != NULL)
-		return 1;
-	if (ib != NULL)
-		return -1;
-
-	for (na = STAILQ_FIRST(&a->nets), nb = STAILQ_FIRST(&b->nets);
-	     na != NULL && nb != NULL;
-	     na = STAILQ_NEXT(na, next), nb = STAILQ_NEXT(nb, next))
-		if ((rc = compare_net_conf(na, nb)) != 0)
-			return rc;
-	if (na != NULL)
-		return 1;
-	if (nb != NULL)
-		return -1;
-
-	for (ba = STAILQ_FIRST(&a->bhyveload_envs),
-		     bb = STAILQ_FIRST(&b->bhyveload_envs);
-	     ba != NULL && bb != NULL;
-	     ba = STAILQ_NEXT(ba, next), bb = STAILQ_NEXT(bb, next))
-		if ((rc = compare_string(ba->env, bb->env)) != 0)
-			return rc;
-	if (ba != NULL)
-		return 1;
-	if (bb != NULL)
-		return -1;
-
-	for (ea = STAILQ_FIRST(&a->bhyve_envs),
-		     eb = STAILQ_FIRST(&b->bhyve_envs);
-	     ea != NULL && eb != NULL;
-	     ea = STAILQ_NEXT(ea, next), eb = STAILQ_NEXT(eb, next))
-		if ((rc = compare_string(ea->env, eb->env)) != 0)
-			return rc;
-	if (ea != NULL)
-		return 1;
-	if (eb != NULL)
-		return -1;
+	CMP_LIST(passthru_conf, passthrues);
+	CMP_LIST(disk_conf, disks);
+	CMP_LIST(iso_conf, isoes);
+	CMP_LIST(net_conf, nets);
+	CMP_LIST(bhyveload_env, bhyveload_envs);
+	CMP_LIST(bhyve_env, bhyve_envs);
+	CMP_LIST(cpu_pin, cpu_pins);
 
 	return 0;
 }

@@ -1,3 +1,4 @@
+#include <sys/sysctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -208,7 +209,7 @@ parse_ncpu(struct vm_conf *conf, char *val)
 {
 	int n;
 
-	if (parse_int(&n, val) < 0)
+	if (parse_int(&n, val) < 0 || n < 0)
 		return -1;
 
 	set_ncpu(conf, n);
@@ -356,6 +357,25 @@ parse_bhyve_env(struct vm_conf *conf, char *val)
 	if (strchr(val, '=') == NULL)
 		return -1;
 	return add_bhyve_env(conf, val);
+}
+
+static int
+parse_cpu_pin(struct vm_conf *conf, char *val)
+{
+	long v;
+	char *p;
+	int vcpu, hostcpu;
+
+	if ((v = strtol(val, &p, 10)) < 0 || v > INT_MAX || *p != ':')
+		return -1;
+	vcpu = (int)v;
+
+	val = p + 1;
+	if ((v = strtol(val, &p, 10)) < 0 || v > INT_MAX || *p != '\0')
+		return -1;
+	hostcpu = (int)v;
+
+	return add_cpu_pin(conf, vcpu, hostcpu);
 }
 
 static int
@@ -649,6 +669,7 @@ static struct parser_entry parser_list[] = {
 	{ "boot", &parse_boot, NULL },
 	{ "boot_delay", &parse_boot_delay, NULL },
 	{ "comport", &parse_comport, NULL },
+	{ "cpu_pin", &parse_cpu_pin, &clear_cpu_pin },
 	{ "debug_port", &parse_debug_port, NULL },
 	{ "disk", &parse_disk, &clear_disk_conf },
 	{ "err_logfile", &parse_err_logfile, NULL },
@@ -693,6 +714,8 @@ static int
 check_conf(struct vm_conf *conf)
 {
 	char *name = conf->name;
+	struct cpu_pin *cp;
+	int hw_ncpu;
 
 	if (name == NULL) {
 		ERR("%s\n", "vm name is required");
@@ -700,18 +723,39 @@ check_conf(struct vm_conf *conf)
 	}
 
 	if (conf->ncpu == NULL) {
-		ERR("ncpu is required for vm %s\n", name);
+		ERR("%s: ncpu is required\n", name);
 		return -1;
 	}
 
 	if (conf->memory == NULL) {
-		ERR("memory is required for vm %s\n", name);
+		ERR("%s: memory is required\n", name);
 		return -1;
 	}
 
 	if (strcmp(conf->backend, "bhyve") == 0 && conf->loader == NULL) {
-		ERR("loader is required for vm %s\n", name);
+		ERR("%s: loader is required\n", name);
 		return -1;
+	}
+
+	if (sysctlbyname("hw.ncpu", &hw_ncpu, &(size_t[]){sizeof(hw_ncpu)}[0],
+			 NULL, 0) < 0) {
+		ERR("%s: failed to sysctl hw.ncpu\n", name);
+		return -1;
+	}
+
+	STAILQ_FOREACH (cp, &conf->cpu_pins, next) {
+		if (atoi(conf->ncpu) <= cp->vcpu) {
+			ERR("%s: cpu_pin: "
+			    "vcpu %d must be smaller than ncpu %s\n",
+			    name, cp->vcpu, conf->ncpu);
+			return -1;
+		}
+		if (hw_ncpu <= cp->hostcpu) {
+			ERR("%s: cpu_pin: "
+			    "hostcpu %d must be smaller than hw.ncpu %d\n",
+			    name, cp->hostcpu, hw_ncpu);
+			return -1;
+		}
 	}
 
 	return 0;
