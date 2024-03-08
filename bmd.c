@@ -1092,6 +1092,7 @@ cleanup_virtual_machine(struct vm_entry *vm_ent)
 {
 	remove_taps(VM_PTR(vm_ent));
 	VM_CLEANUP(vm_ent);
+	VM_STATE(vm_ent) = TERMINATE;
 }
 
 int

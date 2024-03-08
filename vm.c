@@ -775,7 +775,6 @@ cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		free(vm->mapfile);
 		vm->mapfile = NULL;
 	}
-	vm->state = TERMINATE;
 }
 
 int
