@@ -499,6 +499,8 @@ on_timer(int ident __unused, void *data)
 		VM_POWEROFF(vm_ent);
 		break;
 	case RUN:
+	case PRELOAD:
+	case PRERUN:
 		/* ignore timer */
 		break;
 	}
@@ -581,6 +583,9 @@ on_vm_exit(int ident __unused, void *data)
 		INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
 		     (rs == NULL ? "" : rs));
 		free(rs);
+		/* FALLTHROUGH */
+	case PRELOAD:
+	case PRERUN:
 		stop_virtual_machine(vm_ent);
 		VM_CONF(vm_ent)->install = false;
 		break;
