@@ -34,7 +34,9 @@ enum STATE {
 	RUN,	   // bhyve is running
 	STOP,	   // send SIGTERM to stop bhyve
 	REMOVE,	   // send SIGTERM to stop bhyve and remove vm_entry
-	RESTART	   // send SIGTERM and need rebooting
+	RESTART,   // send SIGTERM and need rebooting
+	PRELOAD,   // before executing a loader
+	PRERUN     // before executing bhyve
 };
 
 #define DISK_CONF_FOREACH(dc, conf)	   \
@@ -143,12 +145,17 @@ char *get_tpm_version(struct vm_conf *);
 char **split_args(char *);
 
 /*
-  Plugin call back function
+  Plugin call back function.
  */
 typedef int (*plugin_call_back)(int, void *);
 
-int plugin_wait_for_process(pid_t, plugin_call_back, void *);
-int plugin_set_timer(int, plugin_call_back, void *);
+/*
+  Plugin structures.
+ */
+struct loader_method {
+	const char *name;
+	int (*vm_load)(struct vm *, nvlist_t *);
+};
 
 struct vm_method {
 	const char *name;
@@ -159,7 +166,7 @@ struct vm_method {
 	void (*vm_cleanup)(struct vm *, nvlist_t *);
 };
 
-#define PLUGIN_VERSION 12
+#define PLUGIN_VERSION 13
 
 /*
   Plugin Description
@@ -171,15 +178,34 @@ struct vm_method {
   on_status_change: a function called when VM state changed. (*1)
       parse_config: a function called while parsing VM configuratin (*1)
   on_reload_config: copy plugin data while reloading VM configuration (*1)
+           prehook: a function called before executing loader and bhyve (*1)
 
-  *1: The nvlist_t pointer is available while VM is existing, unless VM is
-      removed from the config file nor VM configuration is reloaded.
-
-  When VM configuration is reloaded, 'parse_config' is called and then
-  on_reload_confg is called. Plugins have a chance to copy its data from
-  old config to new one.
+  *1: The nvlist_t pointer and struct vm pointer is available while VM is
+      existing, unless VM is removed from the config file nor VM configuration
+      is reloaded.
 
   All other pointers in arguments are local scope to the function.
+
+  When VM configuration is reloaded, 'parse_config' is called and then
+  'on_reload_confg' is called. Plugins have a chance to copy its data from
+  old config to new one. The first argument of 'on_reload_config' is the
+  new config and the second is the old one.
+
+  `prehook` is used for external configurations such as firewall, routing, etc.
+  `prehook` will be called twice, before loading and running bhyve.
+
+  `prehook` has to run in the short term, because the bmd is implemented
+  as an event machine. If 'prehook' runs for a long time, the bmd will
+  be blocked all the operations from the client during that time. To get avoid
+  blocking, `prehook` should fork a child process and wait for it.
+
+  Returning a positive number from the 'prehook' function will delay
+  invoking the loader and bhyve until the `plugin_start_virtual_machine`
+  function is called. The `plugin_wait_for_process` function can be used for
+  this purpose. Returning zero from the 'prehook' function will invoke
+  the loader and bhyve soon. Returning a negative number means an error occured
+  in the function.
+
  */
 typedef struct plugin_desc {
 	int version;
@@ -190,8 +216,20 @@ typedef struct plugin_desc {
 	int (*parse_config)(nvlist_t *, const char *, const char *);
 	struct vm_method *method;
 	void (*on_reload_config)(nvlist_t *, nvlist_t *);
+	struct loader_method *loader_method;
+	int (*prehook)(struct vm *, nvlist_t *);
 } PLUGIN_DESC;
 
 extern PLUGIN_DESC plugin_desc;
+
+/*
+  Plugin utilities.
+ */
+int plugin_wait_for_process(pid_t, plugin_call_back, void *);
+int plugin_set_timer(int, plugin_call_back, void *);
+int plugin_start_virtualmachine(struct vm *);
+int plugin_stop_virtualmachine(struct vm *);
+int register_vm_method(struct vm_method *);
+int register_loader_method(struct loader_method *);
 
 #endif
