@@ -58,16 +58,17 @@ struct vm_conf_entry {
 
 enum EVENT_TYPE { EVENT, PLUGIN };
 
-#define VM_START(v)         (v)->method->vm_start(&(v)->vm, (v)->pl_conf)
-#define VM_RESET(v)         (v)->method->vm_reset(&(v)->vm, (v)->pl_conf)
-#define VM_POWEROFF(v)      (v)->method->vm_poweroff(&(v)->vm, (v)->pl_conf)
-#define VM_ACPI_POWEROFF(v) (v)->method->vm_acpi_poweroff(&(v)->vm, (v)->pl_conf)
-#define VM_CLEANUP(v)       (v)->method->vm_cleanup(&(v)->vm, (v)->pl_conf)
+#define VM_START(v)         (v)->vm_method->vm_start(&(v)->vm, (v)->pl_conf)
+#define VM_RESET(v)         (v)->vm_method->vm_reset(&(v)->vm, (v)->pl_conf)
+#define VM_POWEROFF(v)      (v)->vm_method->vm_poweroff(&(v)->vm, (v)->pl_conf)
+#define VM_ACPI_POWEROFF(v) (v)->vm_method->vm_acpi_poweroff(&(v)->vm, (v)->pl_conf)
+#define VM_CLEANUP(v)       (v)->vm_method->vm_cleanup(&(v)->vm, (v)->pl_conf)
+#define VM_LOAD(v)          (v)->loader_method->vm_load(&(v)->vm, (v)->pl_conf)
 #define VM_PTR(v)           (&(v)->vm)
 #define VM_CONF(v)          ((v)->vm.conf)
 #define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
 #define VM_NEWCONF(v)       ((v)->new_conf)
-#define VM_METHOD(v)        ((v)->method)
+#define VM_METHOD(v)        ((v)->vm_method)
 #define VM_PLCONF(v)        ((v)->pl_conf)
 #define VM_TYPE(v)          ((v)->type)
 #define VM_PLUGIN_DATA(v)   (VM_CONF_ENT(v)->pl_data)
@@ -98,7 +99,8 @@ struct vm_entry {
 	struct vm vm;
 	struct vm_conf *new_conf;
 	SLIST_ENTRY(vm_entry) next;
-	struct vm_method *method;
+	struct vm_method *vm_method;
+	struct loader_method *loader_method;
 	nvlist_t *pl_conf;
 };
 
