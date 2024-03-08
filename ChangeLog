@@ -1,10 +1,12 @@
 * 3.0
+	- Add 'cpu_pin' parameter.
+	  (d0c35c3d7bddd4df7ea0c05d13399a66b77f4451)
 * 2.3
 	- Bugfix: Assing tap interfaces for the 'run' subcommand.
 	  (69e0587a2712f21fc627c72dbfa0848a5943d7d2)
         - Bugfix: Override template arguments correctly.
-          (7f518fe9306f948c36d885ea59975fc4a83fbd31)
-	- Allow '.include' macro to unprivileged users.
+	  (7f518fe9306f948c36d885ea59975fc4a83fbd31)
+	- Allow '.include' macro for unprivileged users.
 	  (bc70299d2c4829c978a4d4cc46c4a799f32a68b1)
 	- Add 'bhyve_env' parameter.
 	  (23073e639d1b0ba298ba3f3c11fda59958b7a85c)
