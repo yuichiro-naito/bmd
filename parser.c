@@ -1316,6 +1316,35 @@ check_duplicate(void)
 	return 0;
 }
 
+static bool
+compare_fstat(int fd, struct stat *old)
+{
+	struct stat st;
+
+	if (fstat(fd, &st) < 0)
+		return false;
+
+#define CMP_FIELD(field)  (st.field == old->field)
+#define CMP_TIME(field)  (memcmp(&st.field, &old->field, sizeof(struct timespec)) == 0)
+
+	return (CMP_FIELD(st_dev) &&
+		CMP_FIELD(st_ino) &&
+		CMP_FIELD(st_dev) &&
+		CMP_FIELD(st_nlink) &&
+		CMP_FIELD(st_flags) &&
+		CMP_FIELD(st_size) &&
+		CMP_FIELD(st_blksize) &&
+		CMP_FIELD(st_blocks) &&
+		CMP_FIELD(st_uid) &&
+		CMP_FIELD(st_gid) &&
+		CMP_FIELD(st_mode) &&
+		CMP_TIME(st_mtim) &&
+		CMP_TIME(st_ctim) &&
+		CMP_TIME(st_birthtim));
+#undef CMP_TIME
+#undef CMP_FIELD
+}
+
 #define END_UP(var, type) STAILQ_NEXT(STAILQ_LAST(var, type, next), next) = NULL
 
 static int
@@ -1344,7 +1373,8 @@ retry:
 		*/
 		setgid(st.st_gid);
 		setuid(st.st_uid);
-		if ((fp = fopen(file->filename, "r")) == NULL) {
+		if ((fp = fopen(file->filename, "r")) == NULL ||
+		    ! compare_fstat(fileno(fp), &st)) {
 			ERR("failed to open %s\n", file->filename);
 			exit(0);
 		}
