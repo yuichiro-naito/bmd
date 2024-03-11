@@ -1,4 +1,6 @@
 * 3.0
+	- Avoid race conditions for parsing configuration files.
+	  (ee5e91fbfdb781adbbe8a4da10e8feb7d8ee7f3d)
 	- Add 'cpu_pin' parameter.
 	  (d0c35c3d7bddd4df7ea0c05d13399a66b77f4451)
 * 2.3
