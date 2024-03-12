@@ -811,6 +811,37 @@ err0:
 }
 
 int
+register_vm_method(struct vm_method *vm)
+{
+	struct plugin_entry *pl_ent;
+
+	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+		return -1;
+
+	pl_ent->desc.name = vm->name;
+	pl_ent->desc.method = vm;
+	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+
+	return 0;
+
+}
+
+int
+register_loader_method(struct loader_method *lm)
+{
+	struct plugin_entry *pl_ent;
+
+	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+		return -1;
+
+	pl_ent->desc.name = lm->name;
+	pl_ent->desc.loader_method = lm;
+	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+
+	return 0;
+}
+
+int
 load_plugins(const char *plugin_dir)
 {
 	DIR *d;
@@ -826,7 +857,13 @@ load_plugins(const char *plugin_dir)
 
 	pl_ent->desc.name = "bhyve";
 	pl_ent->desc.method = &bhyve_method;
+	pl_ent->desc.loader_method = &bhyveload_method;
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+
+	if (register_loader_method(&grub2load_method) < 0 ||
+	    register_loader_method(&uefiload_method) < 0 ||
+	    register_loader_method(&csmload_method) < 0)
+		return -1;
 
 	if ((d = opendir(plugin_dir)) == NULL) {
 		ERR("cannot open %s\n", plugin_dir);
@@ -979,6 +1016,25 @@ set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 	return -1;
 }
 
+static int
+set_loader_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
+{
+	struct plugin_data *pd;
+	struct loader_method *m;
+	char *loader = conf_ent->conf.loader;
+
+	SLIST_FOREACH (pd, &conf_ent->pl_data, next) {
+		if ((m = pd->ent->desc.loader_method) == NULL ||
+		    strcmp(m->name, loader) != 0)
+			continue;
+		VM_LD_METHOD(vm_ent) = m;
+		VM_PLCONF(vm_ent) = pd->pl_conf;
+		return 0;
+	}
+
+	return -1;
+}
+
 int
 vm_method_exists(char *name)
 {
@@ -992,6 +1048,20 @@ vm_method_exists(char *name)
 	return -1;
 }
 
+int
+loader_method_exists(char *name)
+{
+	struct plugin_entry *pl_ent;
+	struct loader_method *m;
+
+	SLIST_FOREACH (pl_ent, &plugin_list, next)
+		if ((m = pl_ent->desc.loader_method) &&
+		    strcmp(m->name, name) == 0)
+			return 0;
+
+	return -1;
+}
+
 static struct vm_entry *
 create_vm_entry(struct vm_conf_entry *conf_ent)
 {
@@ -999,7 +1069,8 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 
 	if ((vm_ent = calloc(1, sizeof(struct vm_entry))) == NULL)
 		return NULL;
-	if (set_vm_method(vm_ent, conf_ent) < 0) {
+	if (set_vm_method(vm_ent, conf_ent) < 0 ||
+	    set_loader_method(vm_ent, conf_ent) < 0) {
 		free(vm_ent);
 		return NULL;
 	}
