@@ -253,7 +253,7 @@ split_args(char *buf)
 }
 
 static int
-grub_load(struct vm *vm)
+grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	int ifd[2];
 	pid_t pid;
@@ -337,8 +337,56 @@ grub_load(struct vm *vm)
 	return 0;
 }
 
+static void
+csm_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
+{
+}
+
 static int
-bhyve_load(struct vm *vm)
+csm_load(struct vm *vm __unused, nvlist_t *pl_conf __unused)
+{
+	return 0;
+}
+
+static void
+uefi_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
+{
+}
+
+static int
+uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	if (copy_uefi_vars(vm) < 0)
+		return -1;
+	return 0;
+}
+
+static void
+grub2_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	if (vm->mapfile) {
+		unlink(vm->mapfile);
+		free(vm->mapfile);
+		vm->mapfile = NULL;
+	}
+}
+
+static int
+grub2_load(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	if (write_mapfile(vm->conf, &vm->mapfile) < 0 ||
+	    grub_load(vm, pl_conf) < 0)
+		return -1;
+	return 0;
+}
+
+static void
+bhyve_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
+{
+}
+
+static int
+bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	pid_t pid;
 	int outfd[2], errfd[2];
@@ -754,11 +802,11 @@ start_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		return exec_bhyve(vm);
 
 	if (strcasecmp(conf->loader, "bhyveload") == 0) {
-		if (bhyve_load(vm) < 0)
+		if (bhyve_load(vm, pl_conf) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "grub") == 0) {
 		if (write_mapfile(vm->conf, &vm->mapfile) < 0 ||
-		    grub_load(vm) < 0)
+		    grub_load(vm, pl_conf) < 0)
 			goto err;
 	} else if (strcasecmp(conf->loader, "uefi") == 0) {
 		if (copy_uefi_vars(vm) < 0 || exec_bhyve(vm) < 0)
@@ -841,4 +889,24 @@ write_err_log(int fd, struct vm *vm)
 struct vm_method bhyve_method =
 {"bhyve", start_bhyve, reset_bhyve, poweroff_bhyve, acpi_poweroff_bhyve,
 	  cleanup_bhyve
+};
+
+struct loader_method bhyveload_method =
+{
+	"bhyveload", bhyve_load, bhyve_load_cleanup
+};
+
+struct loader_method grub2load_method =
+{
+	"grub", grub2_load, grub2_load_cleanup
+};
+
+struct loader_method uefiload_method =
+{
+	"uefi", uefi_load, uefi_load_cleanup
+};
+
+struct loader_method csmload_method =
+{
+	"csm", csm_load, csm_load_cleanup
 };

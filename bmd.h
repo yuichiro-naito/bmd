@@ -63,12 +63,14 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_POWEROFF(v)      (v)->vm_method->vm_poweroff(&(v)->vm, (v)->pl_conf)
 #define VM_ACPI_POWEROFF(v) (v)->vm_method->vm_acpi_poweroff(&(v)->vm, (v)->pl_conf)
 #define VM_CLEANUP(v)       (v)->vm_method->vm_cleanup(&(v)->vm, (v)->pl_conf)
-#define VM_LOAD(v)          (v)->loader_method->vm_load(&(v)->vm, (v)->pl_conf)
+#define VM_LD_LOAD(v)       (v)->loader_method->ld_load(&(v)->vm, (v)->pl_conf)
+#define VM_LD_CLEANUP(v)    (v)->loader_method->ld_cleanup(&(v)->vm, (v)->pl_conf)
 #define VM_PTR(v)           (&(v)->vm)
 #define VM_CONF(v)          ((v)->vm.conf)
 #define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
 #define VM_NEWCONF(v)       ((v)->new_conf)
 #define VM_METHOD(v)        ((v)->vm_method)
+#define VM_LD_METHOD(v)     ((v)->loader_method)
 #define VM_PLCONF(v)        ((v)->pl_conf)
 #define VM_TYPE(v)          ((v)->type)
 #define VM_PLUGIN_DATA(v)   (VM_CONF_ENT(v)->pl_data)
@@ -154,6 +156,7 @@ int call_plugin_parser(struct plugin_data_list *,
 		       const char *, const char *);
 int load_plugins(const char *);
 int vm_method_exists(char *);
+int loader_method_exists(char *);
 
 int create_plugin_data(struct plugin_data_list *);
 void free_plugin_data(struct plugin_data_list *);

@@ -154,7 +154,8 @@ typedef int (*plugin_call_back)(int, void *);
  */
 struct loader_method {
 	const char *name;
-	int (*vm_load)(struct vm *, nvlist_t *);
+	int (*ld_load)(struct vm *, nvlist_t *);
+	void (*ld_cleanup)(struct vm *, nvlist_t *);
 };
 
 struct vm_method {
