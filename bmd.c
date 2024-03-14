@@ -764,6 +764,84 @@ wait_for_cmd_sock(int sock)
 	return 0;
 }
 
+static void
+free_plugin_entry(struct plugin_entry *pe)
+{
+	if (pe == NULL)
+		return;
+	if (pe->desc.method) {
+		free(pe->vm_name);
+		free(pe->desc.method);
+	}
+	if (pe->desc.loader_method) {
+		free(pe->lm_name);
+		free(pe->desc.loader_method);
+	}
+	free(pe->desc_name);
+	free(pe);
+}
+
+static struct plugin_entry *
+create_plugin_entry(struct plugin_desc *desc)
+{
+	char *dname, *vname, *lname;
+	struct plugin_entry *pe;
+	struct vm_method *vm;
+	struct loader_method *lm;
+
+	dname = strdup(desc->name);
+	pe = calloc(1, sizeof(*pe));
+	if (dname == NULL || pe == NULL)
+		goto err0;
+
+	memcpy(&pe->desc, desc, sizeof(pe->desc));
+	pe->desc.name = dname;
+	pe->desc_name = dname;
+
+	if (desc->method) {
+		vname = strdup(desc->method->name);
+		vm = malloc(sizeof(*vm));
+		if (vname == NULL || vm == NULL)
+			goto err1;
+		memcpy(vm, desc->method, sizeof(*vm));
+		vm->name = vname;
+		pe->vm_name = vname;
+		pe->desc.method = vm;
+	} else {
+		vname = NULL;
+		vm = NULL;
+		pe->desc.method = NULL;
+	}
+
+	if (desc->loader_method) {
+		lname = strdup(desc->loader_method->name);
+		lm = malloc(sizeof(*lm));
+		if (lname == NULL || lm == NULL)
+			goto err2;
+		memcpy(lm, desc->loader_method, sizeof(*lm));
+		lm->name = lname;
+		pe->lm_name = lname;
+		pe->desc.loader_method = lm;
+	} else {
+		lname = NULL;
+		lm = NULL;
+		pe->desc.loader_method = NULL;
+	}
+
+	return pe;
+
+err2:
+	free(lname);
+	free(lm);
+err1:
+	free(vname);
+	free(vm);
+err0:
+	free(dname);
+	free(pe);
+	return NULL;
+}
+
 static int
 add_plugin(int dirfd, const char *fname)
 {
@@ -785,7 +863,7 @@ add_plugin(int dirfd, const char *fname)
 
 	if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
 	    desc->version != PLUGIN_VERSION ||
-	    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
+	    (pl_ent = create_plugin_entry(desc)) == NULL) {
 		ERR("invalid plugin %s\n", fname);
 		goto err1;
 	}
@@ -794,7 +872,7 @@ add_plugin(int dirfd, const char *fname)
 		ERR("failed to initialize plugin %s %s\n", desc->name, fname);
 		goto err2;
 	}
-	pl_ent->desc = *desc;
+
 	pl_ent->handle = hdl;
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	INFO("load plugin %s %s\n", desc->name, fname);
@@ -813,31 +891,33 @@ err0:
 int
 register_vm_method(struct vm_method *vm)
 {
-	struct plugin_entry *pl_ent;
+	struct plugin_desc desc;
+	struct plugin_entry *pe;
 
-	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+	memset(&desc, 0, sizeof(desc));
+	desc.name = vm->name;
+	desc.method = vm;
+	if ((pe = create_plugin_entry(&desc)) == NULL)
 		return -1;
 
-	pl_ent->desc.name = vm->name;
-	pl_ent->desc.method = vm;
-	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
-
+	SLIST_INSERT_HEAD(&plugin_list, pe, next);
 	return 0;
-
 }
 
 int
 register_loader_method(struct loader_method *lm)
 {
-	struct plugin_entry *pl_ent;
+	struct plugin_desc desc;
+	struct plugin_entry *pe;
 
-	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+	memset(&desc, 0, sizeof(desc));
+	desc.name = lm->name;
+	desc.loader_method = lm;
+
+	if ((pe = create_plugin_entry(&desc)) == NULL)
 		return -1;
 
-	pl_ent->desc.name = lm->name;
-	pl_ent->desc.loader_method = lm;
-	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
-
+	SLIST_INSERT_HEAD(&plugin_list, pe, next);
 	return 0;
 }
 
@@ -846,18 +926,21 @@ load_plugins(const char *plugin_dir)
 {
 	DIR *d;
 	struct dirent *ent;
+	struct plugin_desc desc;
 	struct plugin_entry *pl_ent;
 	static int loaded = 0;
 
 	if (loaded != 0)
 		return 0;
 
-	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+	memset(&desc, 0, sizeof(desc));
+	desc.name = "bhyve";
+	desc.method = &bhyve_method;
+	desc.loader_method = &bhyveload_method;
+
+	if ((pl_ent = create_plugin_entry(&desc)) == NULL)
 		return -1;
 
-	pl_ent->desc.name = "bhyve";
-	pl_ent->desc.method = &bhyve_method;
-	pl_ent->desc.loader_method = &bhyveload_method;
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 
 	if (register_loader_method(&grub2load_method) < 0 ||
@@ -892,7 +975,7 @@ remove_plugins(void)
 		if (pl_ent->desc.finalize)
 			(*pl_ent->desc.finalize)();
 		dlclose(pl_ent->handle);
-		free(pl_ent);
+		free_plugin_entry(pl_ent);
 	}
 	SLIST_INIT(&plugin_list);
 

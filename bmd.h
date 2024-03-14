@@ -32,6 +32,10 @@ struct plugin_entry {
 	struct plugin_desc desc;
 	void *handle;
 	SLIST_ENTRY(plugin_entry) next;
+	/* Remember pointers need to be freed. */
+	char *desc_name;
+	char *vm_name;
+	char *lm_name;
 };
 
 /*
