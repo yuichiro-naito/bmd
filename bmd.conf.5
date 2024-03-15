@@ -1,4 +1,4 @@
-.Dd Mar 6, 2024
+.Dd Mar 15, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -155,8 +155,9 @@ enclosed in double quotes. e.g. "machdep.hyperthreading_allowed=0"
 Specify physical memory size. This parameter is mandatory.
 .It Cm name = Ar vmname;
 Change the virtual machine name from vm section name;
-.It Cm ncpu = Ar num;
-Set the number of CPUs for VM. This parameter is mandatory.
+.It Cm ncpu = Ar num_sockets [ :num_cores [ :num_threads ] ];
+Set the number of CPUs or CPU topology for VM. The default value is 1 for each parameters.
+e.g. 1:4:2 specifies cpus=8,sockets=1,cores=4,threads=2 to the bhyve.
 .It Cm cpu_pin = (+=) Ar vcpu:hostcpu;
 Pin guest's virtual CPU
 .Ar vcpu

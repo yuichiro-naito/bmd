@@ -196,7 +196,6 @@ free_vm_conf(struct vm_conf *vc)
 	free_vartree(vc->vars.local);
 
 	free(vc->name);
-	free(vc->ncpu);
 	free(vc->memory);
 	free(vc->comport);
 	free(vc->loader);
@@ -618,20 +617,31 @@ get_comport(struct vm_conf *conf)
 int
 set_ncpu(struct vm_conf *conf, int ncpu)
 {
-	char *new;
-
 	if (conf == NULL)
 		return 0;
 
-	if ((asprintf(&new, "%d", ncpu)) < 0)
-		return -1;
-
-	free(conf->ncpu);
-	conf->ncpu = new;
+	conf->ncpu = ncpu;
+	conf->ncpu_sockets = ncpu;
+	conf->ncpu_cores = 1;
+	conf->ncpu_threads = 1;
 	return 0;
 }
 
-char *
+int
+set_cpu_topology(struct vm_conf *conf, int ncpu[3])
+{
+	if (conf == NULL)
+		return 0;
+
+	conf->ncpu = ncpu[0] * ncpu[1] * ncpu[2];
+	conf->ncpu_sockets = ncpu[0];
+	conf->ncpu_cores = ncpu[1];
+	conf->ncpu_threads = ncpu[2];
+
+	return 0;
+}
+
+int
 get_ncpu(struct vm_conf *conf)
 {
 	return conf->ncpu;
@@ -1100,6 +1110,10 @@ create_vm_conf(const char *vm_name)
 	} else
 		ERR("failed to allocate \"ID\" number! (%s)\n",
 		    strerror(errno));
+	ret->ncpu = 1;
+	ret->ncpu_sockets = 1;
+	ret->ncpu_cores = 1;
+	ret->ncpu_threads = 1;
 	ret->hostbridge = INTEL;
 	ret->fbuf = fbuf;
 	ret->name = name;
@@ -1162,7 +1176,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, fmt, "name", conf->name);
 	fprintf(fp, dfmt, "owner", conf->owner);
 	fprintf(fp, dfmt, "group", conf->group);
-	fprintf(fp, fmt, "ncpu", conf->ncpu);
+	fprintf(fp, dfmt, "ncpu", conf->ncpu);
 	if ((cp = STAILQ_FIRST(&conf->cpu_pins))) {
 		fprintf(fp, "%18s = %d:%d", "cpu_pin", cp->vcpu, cp->hostcpu);
 		while ((cp = STAILQ_NEXT(cp, next)))
@@ -1372,7 +1386,10 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(owner);
 	CMP_NUM(group);
 	CMP_STR(debug_port);
-	CMP_STR(ncpu);
+	CMP_NUM(ncpu);
+	CMP_NUM(ncpu_sockets);
+	CMP_NUM(ncpu_cores);
+	CMP_NUM(ncpu_threads);
 	CMP_STR(memory);
 	CMP_STR(name);
 	CMP_STR(comport);

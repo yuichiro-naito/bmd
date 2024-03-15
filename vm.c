@@ -589,7 +589,9 @@ exec_bhyve(struct vm *vm)
 		if (conf->debug_port != NULL)
 			fprintf(fp, "-G\n%s\n", conf->debug_port);
 
-		fprintf(fp, "-c\n%s\n", conf->ncpu);
+		fprintf(fp, "-c\ncpus=%d,sockets=%d,cores=%d,threads=%d\n",
+			conf->ncpu, conf->ncpu_sockets, conf->ncpu_cores,
+			conf->ncpu_threads);
 		STAILQ_FOREACH (cp, &conf->cpu_pins, next)
 			fprintf(fp, "-p\n%d:%d\n", cp->vcpu, cp->hostcpu);
 		fprintf(fp, "-m\n%s\n", conf->memory);

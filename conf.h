@@ -101,7 +101,7 @@ struct vm_conf {
 	char *keymap;
 	char *backend;
 	char *debug_port;
-	char *ncpu;
+	int ncpu;
 	char *memory;
 	char *name;
 	char *comport;
@@ -134,6 +134,9 @@ struct vm_conf {
 	STAILQ_HEAD(, bhyve_env) bhyve_envs;
 	int ncpu_pins;
 	STAILQ_HEAD(, cpu_pin) cpu_pins;
+	int ncpu_sockets;
+	int ncpu_cores;
+	int ncpu_threads;
 };
 
 struct vm {
@@ -183,6 +186,7 @@ struct net_conf *copy_net_conf(const struct net_conf *);
 int set_name(struct vm_conf *, const char *);
 int set_memory_size(struct vm_conf *, const char *);
 int set_ncpu(struct vm_conf *, int);
+int set_cpu_topology(struct vm_conf *, int[3]);
 int set_loadcmd(struct vm_conf *, const char *);
 int set_installcmd(struct vm_conf *, const char *);
 int set_err_logfile(struct vm_conf *, const char *);

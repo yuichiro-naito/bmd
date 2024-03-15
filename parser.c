@@ -204,15 +204,52 @@ parse_name(struct vm_conf *conf, char *val)
 	return 0;
 }
 
+static char *
+trim_spaces(char *buf)
+{
+	char *p, *q;
+	p = q = buf;
+	while (*q != '\0') {
+		if (isspace(*q)) {
+			q++;
+			continue;
+		}
+		*p = *q;
+		p++;
+		q++;
+	}
+	*p = '\0';
+	return buf;
+}
+
 static int
 parse_ncpu(struct vm_conf *conf, char *val)
 {
-	int n;
+	unsigned int i;
+	int ncpu[3] = {1, 1, 1};
+	long n;
+	char *p;
 
-	if (parse_int(&n, val) < 0 || n < 0)
-		return -1;
+	val = trim_spaces(val);
 
-	set_ncpu(conf, n);
+	for (i = 0; i < nitems(ncpu); i++) {
+		if ((n = strtol(val, &p, 10)) <= 0)
+			return -1;
+		switch (*p) {
+		case '\0':
+			ncpu[i] = n;
+			set_cpu_topology(conf, ncpu);
+			return 0;
+		case ':':
+			ncpu[i] = n;
+			break;
+		default:
+			return -1;
+		}
+		val = p + 1;
+	}
+	set_cpu_topology(conf, ncpu);
+
 	return 0;
 }
 
@@ -722,11 +759,6 @@ check_conf(struct vm_conf *conf)
 		return -1;
 	}
 
-	if (conf->ncpu == NULL) {
-		ERR("%s: ncpu is required\n", name);
-		return -1;
-	}
-
 	if (conf->memory == NULL) {
 		ERR("%s: memory is required\n", name);
 		return -1;
@@ -744,9 +776,9 @@ check_conf(struct vm_conf *conf)
 	}
 
 	STAILQ_FOREACH (cp, &conf->cpu_pins, next) {
-		if (atoi(conf->ncpu) <= cp->vcpu) {
+		if (conf->ncpu <= cp->vcpu) {
 			ERR("%s: cpu_pin: "
-			    "vcpu %d must be smaller than ncpu %s\n",
+			    "vcpu %d must be smaller than ncpu %d\n",
 			    name, cp->vcpu, conf->ncpu);
 			return -1;
 		}

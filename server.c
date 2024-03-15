@@ -685,7 +685,7 @@ list_command(int s __unused, const nvlist_t *nv __unused, struct xucred *ucred)
 			continue;
 		p = nvlist_create(0);
 		nvlist_add_string(p, "name", VM_CONF(vm_ent)->name);
-		nvlist_add_string(p, "ncpu", VM_CONF(vm_ent)->ncpu);
+		nvlist_add_stringf(p, "ncpu", "%d", VM_CONF(vm_ent)->ncpu);
 		nvlist_add_string(p, "memory", VM_CONF(vm_ent)->memory);
 		nvlist_add_string(p, "loader",
 				  VM_CONF(vm_ent)->loader ?
