@@ -178,7 +178,7 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 	arg = STAILQ_FIRST(&vl->args);
 	STAILQ_FOREACH (def, &tp->argdefs, next) {
 		argval = token_to_string(&conf->vars,
-		    arg ? &arg->tokens : &def->tokens);
+		 (arg && STAILQ_FIRST(&arg->tokens)) ? &arg->tokens : &def->tokens);
 		if (set_var0(args, def->name, argval ? argval : "") < 0)
 			ERR("failed to set \"%s\" argument! (%s)\n", def->name,
 			    strerror(errno));
