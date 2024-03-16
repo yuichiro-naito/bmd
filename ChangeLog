@@ -1,4 +1,8 @@
 * 3.0
+	- Treat empty template arguments correctly.
+	  (804fed7f9f4a63d597f9f7f9f7cfbdad2430fb31)
+	- Add support for CPU topology.
+	  (e5705d73b3f8d8360da95b1d0c4397a12556e0f4)
 	- Avoid race conditions for parsing configuration files.
 	  (ee5e91fbfdb781adbbe8a4da10e8feb7d8ee7f3d)
 	- Add 'cpu_pin' parameter.
