@@ -173,7 +173,7 @@ Following keys are available.
 | bhyveload_env | The FreeBSD loader environment | no | (none) |
 | memory | memory size<br>e.g. 2G | yes | (none) |
 | name | Virtual machine name| no | vm section name |
-| ncpu | number of CPUs | yes | (none) |
+| ncpu | number of CPUs or CPU topology (sockets:cores:threads) | no | 1 |
 | cpu_pin | Pin guest's vCPU to host CPU | no | (none) |
 | network | bridge name(s)<br>e.g. bridge0 e1000:bridge1 | no | (none) |
 | owner | owner of VM | no | same as the file owner in which the vm section is written |
