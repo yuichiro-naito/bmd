@@ -1267,6 +1267,10 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		ERR("failed to set vm method for vm %s\n", name);
 		return -1;
 	}
+	if (set_loader_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
+		ERR("failed to set loader method for vm %s\n", name);
+		return -1;
+	}
 
 	if (assign_comport(vm_ent) < 0) {
 		ERR("failed to assign comport for vm %s\n", name);
