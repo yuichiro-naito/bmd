@@ -111,6 +111,7 @@ STAILQ_HEAD(cffiles, cffile);
 
 struct cffile {
 	char *filename;
+	char *original_name;
 	int line;
 	STAILQ_ENTRY(cffile) next;
 };

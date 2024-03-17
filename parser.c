@@ -1236,7 +1236,7 @@ static int
 push_file(char *fn)
 {
 	struct cffile *file;
-	char *rpath, *path;
+	char *rpath, *path, *opath;
 
 	if (fn == NULL || (path = realpath(fn, NULL)) == NULL)
 		return 0;
@@ -1252,14 +1252,16 @@ push_file(char *fn)
 			goto err;
 		}
 
-	/* No need to free 'rpath', because it's allocated from mpool.  */
+	/* No need to free 'rpath' and 'opath' , because it's allocated from mpool.  */
 	rpath = mpool_strdup(path);
 	free(path);
 	file = objalloc(cffile);
-	if (rpath == NULL || file == NULL)
+	opath = mpool_strdup(fn);
+	if (rpath == NULL || file == NULL || opath == NULL)
 		return -1;
 
 	file->filename = rpath;
+	file->original_name = opath;
 	file->line = 0;
 	STAILQ_INSERT_TAIL(&pctxt->cffiles, file, next);
 	INFO("load config %s\n", rpath);
@@ -1383,7 +1385,7 @@ static int
 parse(struct cffile *file)
 {
 	FILE *fp;
-	struct stat st;
+	struct stat st, lst;
 	int rc, status;
 	pid_t pid;
 
@@ -1394,8 +1396,13 @@ retry:
 	if ((pid = fork()) < 0)
 		return -1;
 	if (pid == 0) {
-		if (stat(file->filename, &st) < 0 || (!S_ISREG(st.st_mode))) {
-			ERR("%s is not a file\n", file->filename);
+		if (stat(file->original_name, &st) < 0 || (!S_ISREG(st.st_mode))) {
+			ERR("%s is not a file\n", file->original_name);
+			exit(0);
+		}
+		if (lstat(file->original_name, &lst) < 0 || st.st_uid != lst.st_uid ||
+			st.st_gid != lst.st_gid) {
+			ERR("access denied %s \n", file->original_name);
 			exit(0);
 		}
 		/*
@@ -1405,9 +1412,9 @@ retry:
 		*/
 		setgid(st.st_gid);
 		setuid(st.st_uid);
-		if ((fp = fopen(file->filename, "r")) == NULL ||
+		if ((fp = fopen(file->original_name, "r")) == NULL ||
 		    ! compare_fstat(fileno(fp), &st)) {
-			ERR("failed to open %s\n", file->filename);
+			ERR("failed to open %s\n", file->original_name);
 			exit(0);
 		}
 		yyin = fp;
