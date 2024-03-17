@@ -1,4 +1,6 @@
 * 3.0
+	- Deny to access the configuration file that is linked from the different owner.
+	  (2dc6e40462e68abf8fcefdab869ed1df20878f4d)
 	- Treat empty template arguments correctly.
 	  (804fed7f9f4a63d597f9f7f9f7cfbdad2430fb31)
 	- Add support for CPU topology.
