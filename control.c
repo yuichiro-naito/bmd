@@ -17,9 +17,6 @@
 #include "bmd.h"
 #include "inspect.h"
 
-int control(int, char *[]);
-struct vm_conf_entry *lookup_vm_conf(const char *);
-
 static int
 usage(int argc __unused, char *argv[])
 {
