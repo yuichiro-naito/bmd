@@ -1308,7 +1308,13 @@ glob_path(struct cftokens *ts)
 	if ((path = token_to_string(&vars, ts)) == NULL)
 		return;
 
-	if (path[0] != '/' && (conf = strdup(tk->filename)) != NULL) {
+	if (path[0] != '/') {
+		if ((conf = strdup(tk->filename)) == NULL) {
+			ERR("failed to allocate memory for globbing %s\n",
+			    path);
+			free(path);
+			return;
+		}
 		dir = dirname(conf);
 		if (asprintf(&npath, "%s/%s", dir, path) >= 0) {
 			free(path);
