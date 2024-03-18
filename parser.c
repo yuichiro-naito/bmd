@@ -752,7 +752,7 @@ check_conf(struct vm_conf *conf)
 {
 	char *name = conf->name;
 	struct cpu_pin *cp;
-	int hw_ncpu;
+	int hw_ncpu, vmm_maxcpu;
 
 	if (name == NULL) {
 		ERR("%s\n", "vm name is required");
@@ -769,6 +769,22 @@ check_conf(struct vm_conf *conf)
 		return -1;
 	}
 
+	/*
+	 * Check if ncpu is equal or smaller than hw.vmm.maxcpu value.
+	 * hw.vmm.maxcpu will be shown after vmm.ko is loaded.
+	 * If hw.vmm.maxcpu is not available, this check will be skipped.
+	 */
+	if (sysctlbyname("hw.vmm.maxcpu",
+			 &vmm_maxcpu, &(size_t[]){sizeof(vmm_maxcpu)}[0],
+			 NULL, 0) >= 0) {
+		if (vmm_maxcpu < conf->ncpu) {
+			ERR("%s: ncpu %d must be equal or smaller"
+			    " than hw.vmm.maxncpu %d\n",
+			    name, conf->ncpu, vmm_maxcpu);
+			return -1;
+		}
+	}
+
 	if (sysctlbyname("hw.ncpu", &hw_ncpu, &(size_t[]){sizeof(hw_ncpu)}[0],
 			 NULL, 0) < 0) {
 		ERR("%s: failed to sysctl hw.ncpu\n", name);
@@ -778,13 +794,13 @@ check_conf(struct vm_conf *conf)
 	STAILQ_FOREACH (cp, &conf->cpu_pins, next) {
 		if (conf->ncpu <= cp->vcpu) {
 			ERR("%s: cpu_pin: "
-			    "vcpu %d must be smaller than ncpu %d\n",
+			    "vcpu %d must be equal or smaller than ncpu %d\n",
 			    name, cp->vcpu, conf->ncpu);
 			return -1;
 		}
 		if (hw_ncpu <= cp->hostcpu) {
 			ERR("%s: cpu_pin: "
-			    "hostcpu %d must be smaller than hw.ncpu %d\n",
+			    "hostcpu %d must be equal or smaller than hw.ncpu %d\n",
 			    name, cp->hostcpu, hw_ncpu);
 			return -1;
 		}
