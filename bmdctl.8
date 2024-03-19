@@ -1,4 +1,4 @@
-.Dd Sep 5, 2023
+.Dd Mar 19, 2024
 .Dt bmdctl 8
 .Os
 .
@@ -9,6 +9,8 @@
 .Nm
 .Op Fl f config_file
 .Cm list
+.Op Fl r
+.Op Fl s Ar colname
 .Nm
 .Op Fl f config_file
 .Cm boot
@@ -66,8 +68,16 @@ Root privileged user can control all virtual machines. Non-privileged user
 can control its own virtual machines.
 
 .Bl -tag -width ".Cm showcomport Fl name"
-.It Cm list
-Show list of virtual machines.
+.It Xo
+.Cm list
+.Op Fl r
+.Op Fl s Ar colname
+.Xc
+Show list of virtual machines sorted by 'id' column.
+.Fl s
+option changes the sort key column.
+.Fl r
+option shows the reverse list.
 .It Xo
 .Cm boot
 .Op Fl c

@@ -40,6 +40,7 @@ get_cpu_pin;
 next_cpu_pin;
 get_cpu_pin_vcpu;
 get_cpu_pin_hostcpu;
+get_id;
 get_name;
 get_memory;
 get_ncpu;

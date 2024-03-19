@@ -360,13 +360,13 @@ Following subcommands are available.
 | shutdown<br>stop | VM name | ACPI shutdown VM |
 | poweroff | VM name | force to power off VM<br>***Warning: damage to disk image*** |
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
-| console | VM name | get comport console via `cu -l` |
+| console | VM name | get comport console and emulate `cu -l` |
 | showcomport | VM name | show current comport device to see which is assigned automatically |
 | showvgaport | VM name | show current vnc listen address and port number |
 | showconfig | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
 | inspect | VM name | run auto inspection manually |
 | run | [-i] [-s] VM name | boot directly with serial console that is redirect to stdio.<br>VM booted from this subcommand is independent from bmd.<br>-i: install mode<br>-s: single user mode|
-| list | (none) | list VMs |
+| list  | [-r] [-s colname] | list VMs sorted by 'colname' |
 
 # Known Issues
 

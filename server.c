@@ -684,6 +684,7 @@ list_command(int s __unused, const nvlist_t *nv __unused, struct xucred *ucred)
 		if (check_owner(vm_ent, ucred) != 0)
 			continue;
 		p = nvlist_create(0);
+		nvlist_add_stringf(p, "id", "%u", VM_CONF(vm_ent)->id);
 		nvlist_add_string(p, "name", VM_CONF(vm_ent)->name);
 		nvlist_add_stringf(p, "ncpu", "%d", VM_CONF(vm_ent)->ncpu);
 		nvlist_add_string(p, "memory", VM_CONF(vm_ent)->memory);

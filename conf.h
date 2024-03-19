@@ -137,6 +137,7 @@ struct vm_conf {
 	int ncpu_sockets;
 	int ncpu_cores;
 	int ncpu_threads;
+	unsigned int id;
 };
 
 struct vm {

@@ -22,18 +22,18 @@ usage(int argc __unused, char *argv[])
 {
 	printf(
 	    "usage: %s [-f config_file] <subcommand>\n"
-	    "  boot [-c] <name>     : boot VM\n"
-	    "  install [-c] <name>  : install VM from ISO image\n"
-	    "  shutdown <name>      : ACPI shutdown VM\n"
-	    "  poweroff <name>      : poweroff VM\n"
-	    "  reset <name>         : reset VM\n"
-	    "  console <name>       : connect to com port\n"
-	    "  showcomport <name>   : show comport\n"
-	    "  showvgaport <name>   : show vgaport\n"
-	    "  showconfig [<name>]  : show VM config\n"
-	    "  inspect <name>       : inspect and print installcmd & loadcmd\n"
-	    "  run [-i] [-s] <name> : directly run with serial console\n"
-	    "  list                 : list VM name & status\n",
+	    "  boot [-c] <name>         : boot VM\n"
+	    "  install [-c] <name>      : install VM from ISO image\n"
+	    "  shutdown <name>          : ACPI shutdown VM\n"
+	    "  poweroff <name>          : poweroff VM\n"
+	    "  reset <name>             : reset VM\n"
+	    "  console <name>           : connect to com port\n"
+	    "  showcomport <name>       : show comport\n"
+	    "  showvgaport <name>       : show vgaport\n"
+	    "  showconfig [<name>]      : show VM config\n"
+	    "  inspect <name>           : inspect and print installcmd & loadcmd\n"
+	    "  run [-i] [-s] <name>     : directly run with serial console\n"
+	    "  list [-r] [-s <colname>] : list VM name & status\n",
 	    argv[0]);
 	return 1;
 }
@@ -106,14 +106,6 @@ do_inspect(char *name)
 	free_vm_conf_entry(conf_ent);
 	free_id_list();
 	return 0;
-}
-
-static int
-compare_by_name(const void *a, const void *b)
-{
-#define GETNAME(v) nvlist_get_string(*((nvlist_t *const *)v), "name")
-	return strcmp(GETNAME(a), GETNAME(b));
-#undef GETNAME
 }
 
 static int
@@ -215,13 +207,149 @@ end:
 	return res;
 }
 
+#define NVGET(v, key) nvlist_get_string(*((nvlist_t *const *)v), #key)
+
 static int
-do_list(void)
+cmp_by_id(const void *a, const void *b)
+{
+	return strtol(NVGET(a, id), NULL, 10) -
+		strtol(NVGET(b, id), NULL, 10);
+}
+
+static int
+cmp_by_id_r(const void *a, const void *b)
+{
+	return strtol(NVGET(b, id), NULL, 10) -
+		strtol(NVGET(a, id), NULL, 10);
+}
+
+static int
+cmp_by_name(const void *a, const void *b)
+{
+	return strcmp(NVGET(a, name), NVGET(b, name));
+}
+
+static int
+cmp_by_name_r(const void *a, const void *b)
+{
+	return strcmp(NVGET(b, name), NVGET(a, name));
+}
+
+static int
+cmp_by_ncpu(const void *a, const void *b)
+{
+	return strtol(NVGET(a, ncpu), NULL, 10) -
+		strtol(NVGET(b, ncpu), NULL, 10);
+}
+
+static int
+cmp_by_ncpu_r(const void *a, const void *b)
+{
+	return strtol(NVGET(b, ncpu), NULL, 10) -
+		strtol(NVGET(a, ncpu), NULL, 10);
+}
+
+static long
+calc_memsize(const char *ms) {
+
+	long n;
+	char *p;
+
+	n = strtol(ms, &p, 10);
+	switch (*p) {
+	case 'k':
+	case 'K':
+		return n * 1024;
+	case 'm':
+	case 'M':
+		return n * 1024 * 1024;
+	case 'g':
+	case 'G':
+		return n * 1024 * 1024 * 1024;
+	case 't':
+	case 'T':
+		return n * 1024 * 1024 * 1024 * 1024;
+	}
+	return n;
+}
+
+static int
+cmp_by_memory(const void *a, const void *b)
+{
+	long la, lb;
+	la = calc_memsize(NVGET(a, memory));
+	lb = calc_memsize(NVGET(b, memory));
+	return (la > lb) ? 1 : (la == lb) ? 0 : -1;
+}
+
+static int
+cmp_by_memory_r(const void *a, const void *b)
+{
+	long la, lb;
+	la = calc_memsize(NVGET(a, memory));
+	lb = calc_memsize(NVGET(b, memory));
+	return (lb > la) ? 1 : (lb == la) ? 0 : -1;
+}
+
+static int
+cmp_by_loader(const void *a, const void *b)
+{
+	return strcmp(NVGET(a, loader), NVGET(b, loader));
+}
+
+static int
+cmp_by_loader_r(const void *a, const void *b)
+{
+	return strcmp(NVGET(b, loader), NVGET(a, loader));
+}
+
+static int
+cmp_by_state(const void *a, const void *b)
+{
+	return strcmp(NVGET(a, state), NVGET(b, state));
+}
+
+static int
+cmp_by_state_r(const void *a, const void *b)
+{
+	return strcmp(NVGET(b, state), NVGET(a, state));
+}
+
+static int
+cmp_by_owner(const void *a, const void *b)
+{
+	return strcmp(NVGET(a, owner), NVGET(b, owner));
+}
+
+static int
+cmp_by_owner_r(const void *a, const void *b)
+{
+	return strcmp(NVGET(b, owner), NVGET(a, owner));
+}
+
+#undef NVGET
+
+static struct compar_entry {
+	const char *name;
+	int (*compar)(const void *, const void*);
+	int (*compar_r)(const void *, const void*);
+} compar_list[] = {
+	{"id", cmp_by_id, cmp_by_id_r},
+	{"name", cmp_by_name, cmp_by_name_r},
+	{"ncpu", cmp_by_ncpu, cmp_by_ncpu_r},
+	{"memory", cmp_by_memory, cmp_by_memory_r},
+	{"loader", cmp_by_loader, cmp_by_loader_r},
+	{"state", cmp_by_state, cmp_by_state_r},
+	{"owner", cmp_by_owner, cmp_by_owner_r}
+};
+
+static int
+do_list(int col, bool reverse)
 {
 	int ret = 0;
 	nvlist_t **l, *cmd, *res = NULL;
 	size_t i, count;
-	const static char *fmt = "%20s%5s%7s%10s%12s%12s\n";
+	const static char *fmt = "%4s%20s%5s%7s%10s%12s%12s\n";
 	const nvlist_t *const *list;
 
 	cmd = nvlist_create(0);
@@ -237,8 +365,8 @@ do_list(void)
 		goto end;
 	}
 
-	printf(fmt, "name", "ncpu", "memory", "loader", "state", "owner");
-	printf(fmt, "-------------------",
+	printf(fmt, "id", "name", "ncpu", "memory", "loader", "state", "owner");
+	printf(fmt, "---","-------------------",
 	       "----", "------", "---------", "-----------", "----------");
 
 	if (!nvlist_exists(res, "vm_list"))
@@ -251,9 +379,11 @@ do_list(void)
 		goto end;
 	}
 	memcpy(l, list, sizeof(nvlist_t *) * count);
-	qsort(l, count, sizeof(nvlist_t *), compare_by_name);
+	qsort(l, count, sizeof(nvlist_t *),
+	      reverse ? compar_list[col].compar_r : compar_list[col].compar);
 	for (i = 0; i < count; i++) {
 		printf(fmt,
+		       nvlist_get_string(l[i], "id"),
 		       nvlist_get_string(l[i], "name"),
 		       nvlist_get_string(l[i], "ncpu"),
 		       nvlist_get_string(l[i], "memory"),
@@ -415,8 +545,33 @@ control(int argc, char *argv[])
 		fprintf(stderr, "failed to load %s. use default value\n",
 			gl_conf->config_file);
 
-	if (strcmp(argv[1], "list") == 0)
-		return do_list();
+	if (strcmp(argv[1], "list") == 0) {
+		char c, *key = NULL;
+		unsigned int i;
+		bool r = false;
+		while ((c = getopt(argc - 1, argv + 1, "rs:")) != -1) {
+			switch (c) {
+			case 'r':
+				r = true;
+				break;
+			case 's':
+				key = optarg;
+				break;
+			default:
+				return usage(argc, argv);
+			}
+		}
+		if (key == NULL)
+			i = 0;
+		else {
+			for (i = 0; i < nitems(compar_list); i++)
+				if (strcmp(key, compar_list[i].name) == 0)
+					break;
+			if (i == nitems(compar_list))
+				i = 0;
+		}
+		return do_list(i, r);
+	}
 
 	if (strcmp(argv[1], "showconfig") == 0)
 		return do_showconfig(argv[2]);

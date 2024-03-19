@@ -63,7 +63,7 @@ free_id_list(void)
 }
 
 static int
-get_id(const char *name, unsigned int *id)
+assign_id(const char *name, unsigned int *id)
 {
 	static unsigned int lastid = 0;
 	struct id_entry *e;
@@ -439,6 +439,13 @@ set_string(char **var, const char *value)
 	*var = new;
 	return 0;
 }
+
+unsigned int
+get_id(struct vm_conf *c)
+{
+	return c->id;
+}
+
 
 int
 set_name(struct vm_conf *conf, const char *name)
@@ -1102,7 +1109,7 @@ create_vm_conf(const char *vm_name)
 	if (set_var0(local, "NAME", name) < 0)
 		ERR("failed to set \"NAME\" variable! (%s)\n",
 		    strerror(errno));
-	if (get_id(name, &id) == 0) {
+	if (assign_id(name, &id) == 0) {
 		snprintf(idnum, sizeof(idnum), "%u", id);
 		if (set_var0(local, "ID", idnum) < 0)
 			ERR("failed to set \"ID\" variable! (%s)\n",
@@ -1110,6 +1117,7 @@ create_vm_conf(const char *vm_name)
 	} else
 		ERR("failed to allocate \"ID\" number! (%s)\n",
 		    strerror(errno));
+	ret->id = id;
 	ret->ncpu = 1;
 	ret->ncpu_sockets = 1;
 	ret->ncpu_cores = 1;

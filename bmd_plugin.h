@@ -90,6 +90,7 @@ char *get_net_conf_tap(struct net_conf *);
 struct bhyveload_env *get_bhyveload_env(struct vm_conf *);
 struct bhyveload_env *next_bhyveload_env(struct bhyveload_env *);
 char *get_bhyveload_env_env(struct bhyveload_env *);
+unsigned int get_id(struct vm_conf *);
 char *get_name(struct vm_conf *);
 char *get_memory(struct vm_conf *);
 int get_ncpu(struct vm_conf *);
