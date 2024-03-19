@@ -1,4 +1,4 @@
-* 3.0
+* 2.4
 	- Add sort key and reverse list options for `bmdctl list`.
 	- `bmdctl list` shows id column.
 	  (191d2d45dcd23ce811648dfb430b136deb850451)
