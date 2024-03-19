@@ -1,4 +1,7 @@
 * 3.0
+	- Add sort key and reverse list options for `bmdctl list`.
+	- `bmdctl list` shows id column.
+	  (191d2d45dcd23ce811648dfb430b136deb850451)
 	- Deny to access the configuration file that is linked from the different owner.
 	  (2dc6e40462e68abf8fcefdab869ed1df20878f4d)
 	- Treat empty template arguments correctly.
