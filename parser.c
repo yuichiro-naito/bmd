@@ -1,6 +1,6 @@
-#include <sys/sysctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <sys/wait.h>
 
 #include <ctype.h>
