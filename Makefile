@@ -1,7 +1,7 @@
 MK_DEBUG_FILES?=	no
 SUBDIR=		rc.d
 BINDIR=		$(LOCALBASE)/sbin
-MANDIR=		$(LOCALBASE)/man/man
+MANDIR=		$(LOCALBASE)/share/man/man
 DIRS=		UEFIVARDIR PLUGINDIR
 UEFIVARDIR=	$(LOCALBASE)/var/cache/bmd
 PLUGINDIR=	$(LOCALBASE)/libexec/bmd
