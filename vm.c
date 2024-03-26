@@ -345,7 +345,7 @@ csm_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
 static int
 csm_load(struct vm *vm __unused, nvlist_t *pl_conf __unused)
 {
-	return 0;
+	return (vm->bootrom = strdup(UEFI_CSM_FIRMWARE)) ? 0 : -1;
 }
 
 static void
@@ -356,8 +356,14 @@ uefi_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
 static int
 uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	if (copy_uefi_vars(vm) < 0)
+	char *p = strdup(UEFI_FIRMWARE);
+
+	if (p == NULL || copy_uefi_vars(vm) < 0) {
+		free(p);
 		return -1;
+	}
+
+	vm->bootrom = p;
 	return 0;
 }
 
@@ -652,14 +658,12 @@ exec_bhyve(struct vm *vm)
 		if (conf->keymap != NULL)
 			fprintf(fp, "-K\n%s\n", conf->keymap);
 
-		if (strcasecmp(conf->loader, "uefi") == 0) {
-			fprintf(fp, "-l\nbootrom,%s", UEFI_FIRMWARE);
+		if (vm->bootrom != NULL) {
+			fprintf(fp, "-l\nbootrom,%s", vm->bootrom);
 			if (vm->varsfile)
 				fprintf(fp, ",%s", vm->varsfile);
 			fprintf(fp, "\n");
-
-		} else if (strcasecmp(conf->loader, "csm") == 0)
-			fprintf(fp, "-l\nbootrom,%s\n", UEFI_CSM_FIRMWARE);
+		}
 
 		if (conf->tpm_dev) {
 			if (conf->tpm_version)

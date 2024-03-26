@@ -1020,6 +1020,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	*/
 	stop_waiting_for(vm_entry, vm_ent);
 	free(VM_MAPFILE(vm_ent));
+	free(VM_BOOTROM(vm_ent));
 	free(VM_VARSFILE(vm_ent));
 	free(VM_ASCOMPORT(vm_ent));
 	free_vm_conf_entry(VM_CONF_ENT(vm_ent));

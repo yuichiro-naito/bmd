@@ -82,6 +82,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_TAPS(v)          (&(v)->vm.taps)
 #define VM_STATE(v)         ((v)->vm.state)
 #define VM_MAPFILE(v)       ((v)->vm.mapfile)
+#define VM_BOOTROM(v)       ((v)->vm.bootrom)
 #define VM_VARSFILE(v)      ((v)->vm.varsfile)
 #define VM_ASCOMPORT(v)     ((v)->vm.assigned_comport)
 #define VM_INFD(v)          ((v)->vm.infd)
