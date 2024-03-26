@@ -1085,16 +1085,15 @@ set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 {
 	struct plugin_data *pd;
 	struct vm_method *m;
-	char *backend = conf_ent->conf.backend;
+	const char *backend = conf_ent->conf.backend;
 
-	SLIST_FOREACH (pd, &conf_ent->pl_data, next) {
-		if ((m = pd->ent->desc.method) == NULL ||
-		    strcmp(m->name, backend) != 0)
-			continue;
-		VM_METHOD(vm_ent) = m;
-		VM_PLCONF(vm_ent) = pd->pl_conf;
-		return 0;
-	}
+	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
+		if ((m = pd->ent->desc.method) != NULL &&
+		    strcmp(m->name, backend) == 0) {
+			VM_METHOD(vm_ent) = m;
+			VM_PLCONF(vm_ent) = pd->pl_conf;
+			return 0;
+		}
 
 	return -1;
 }
@@ -1104,21 +1103,20 @@ set_loader_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 {
 	struct plugin_data *pd;
 	struct loader_method *m;
-	char *loader = conf_ent->conf.loader;
+	const char *loader = conf_ent->conf.loader;
 
-	SLIST_FOREACH (pd, &conf_ent->pl_data, next) {
-		if ((m = pd->ent->desc.loader_method) == NULL ||
-		    strcmp(m->name, loader) != 0)
-			continue;
-		VM_LD_METHOD(vm_ent) = m;
-		VM_PLCONF(vm_ent) = pd->pl_conf;
-		return 0;
-	}
+	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
+		if ((m = pd->ent->desc.loader_method) != NULL &&
+		    strcmp(m->name, loader) == 0) {
+			VM_LD_METHOD(vm_ent) = m;
+			VM_PLCONF(vm_ent) = pd->pl_conf;
+			return 0;
+		}
 
 	return -1;
 }
 
-int
+bool
 vm_method_exists(char *name)
 {
 	struct plugin_entry *pl_ent;
@@ -1126,12 +1124,12 @@ vm_method_exists(char *name)
 
 	SLIST_FOREACH (pl_ent, &plugin_list, next)
 		if ((m = pl_ent->desc.method) && strcmp(m->name, name) == 0)
-			return 0;
+			return true;
 
-	return -1;
+	return false;
 }
 
-int
+bool
 loader_method_exists(char *name)
 {
 	struct plugin_entry *pl_ent;
@@ -1140,9 +1138,9 @@ loader_method_exists(char *name)
 	SLIST_FOREACH (pl_ent, &plugin_list, next)
 		if ((m = pl_ent->desc.loader_method) &&
 		    strcmp(m->name, name) == 0)
-			return 0;
+			return true;
 
-	return -1;
+	return false;
 }
 
 static struct vm_entry *

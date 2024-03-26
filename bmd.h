@@ -159,8 +159,8 @@ void call_plugins(struct vm_entry *);
 int call_plugin_parser(struct plugin_data_list *,
 		       const char *, const char *);
 int load_plugins(const char *);
-int vm_method_exists(char *);
-int loader_method_exists(char *);
+bool vm_method_exists(char *);
+bool loader_method_exists(char *);
 
 int create_plugin_data(struct plugin_data_list *);
 void free_plugin_data(struct plugin_data_list *);
