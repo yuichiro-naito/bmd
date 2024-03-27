@@ -560,6 +560,7 @@ on_vm_exit(int ident __unused, void *data)
 		} else {
 			ERR("failed loading vm %s (status:%d)\n",
 			    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
+			VM_LD_CLEANUP(vm_ent);
 			stop_virtual_machine(vm_ent);
 		}
 		break;
@@ -781,6 +782,26 @@ free_plugin_entry(struct plugin_entry *pe)
 	free(pe);
 }
 
+static int
+dummy0(struct vm *vm __unused, nvlist_t *pl_ent __unused)
+{
+	return 0;
+}
+
+static int
+dummy1(struct vm *vm __unused, nvlist_t *pl_ent __unused)
+{
+	return 1;
+}
+
+static void
+dummy2(struct vm *vm __unused, nvlist_t *pl_ent __unused)
+{
+	return;
+}
+
+#define set_default(o, m, f)   (o)->m = (o)->m ? (o)->m : (f)
+
 static struct plugin_entry *
 create_plugin_entry(struct plugin_desc *desc)
 {
@@ -804,6 +825,13 @@ create_plugin_entry(struct plugin_desc *desc)
 		if (vname == NULL || vm == NULL)
 			goto err1;
 		memcpy(vm, desc->method, sizeof(*vm));
+
+		set_default(vm, vm_start, dummy0);
+		set_default(vm, vm_reset, dummy0);
+		set_default(vm, vm_poweroff, dummy0);
+		set_default(vm, vm_acpi_poweroff, dummy0);
+		set_default(vm, vm_cleanup, dummy2);
+
 		vm->name = vname;
 		pe->vm_name = vname;
 		pe->desc.method = vm;
@@ -819,6 +847,10 @@ create_plugin_entry(struct plugin_desc *desc)
 		if (lname == NULL || lm == NULL)
 			goto err2;
 		memcpy(lm, desc->loader_method, sizeof(*lm));
+
+		set_default(lm, ld_load, dummy1);
+		set_default(lm, ld_cleanup, dummy2);
+
 		lm->name = lname;
 		pe->lm_name = lname;
 		pe->desc.loader_method = lm;
@@ -841,6 +873,7 @@ err0:
 	free(pe);
 	return NULL;
 }
+#undef set_default
 
 static int
 add_plugin(int dirfd, const char *fname)
@@ -1256,18 +1289,47 @@ cleanup_virtual_machine(struct vm_entry *vm_ent)
 	VM_STATE(vm_ent) = TERMINATE;
 }
 
-int
-start_virtual_machine(struct vm_entry *vm_ent)
+static int
+load_virtual_machine(struct vm_entry *vm_ent)
 {
+	int rc;
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
 
-	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
-		ERR("failed to set vm method for vm %s\n", name);
+	if (VM_LD_METHOD(vm_ent) == NULL)
+		return 1;
+
+	if ((rc = VM_LD_LOAD(vm_ent)) < 0) {
+		ERR("failed to load vm %s\n", name);
+		cleanup_virtual_machine(vm_ent);
 		return -1;
 	}
-	if (set_loader_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
-		ERR("failed to set loader method for vm %s\n", name);
+	if (rc == 0) {
+		if (wait_for_vm(vm_ent) < 0 ||
+		    wait_for_vm_output(vm_ent) < 0)
+			return -2;
+		call_plugins(vm_ent);
+		if (conf->loader_timeout > 0 &&
+		    set_timer(vm_ent,
+			      conf->loader_timeout) < 0) {
+			ERR("failed to set timer for vm %s\n",
+			    name);
+			return -1;
+		}
+		return 0;
+	}
+	return rc;
+}
+
+int
+start_virtual_machine(struct vm_entry *vm_ent)
+{
+	int rc;
+	struct vm_conf *conf = VM_CONF(vm_ent);
+	char *name = conf->name;
+
+	if (VM_METHOD(vm_ent) == NULL) {
+		ERR("no backend for vm %s\n", name);
 		return -1;
 	}
 
@@ -1283,7 +1345,15 @@ start_virtual_machine(struct vm_entry *vm_ent)
 			remove_taps(VM_PTR(vm_ent));
 			return -1;
 		}
+		rc = load_virtual_machine(vm_ent);
+		if (rc <= -2)
+			goto force_kill;
+		if (rc <= 0)
+			return rc;
+		/* FALLTHROUGH */
 	}
+
+	VM_LD_CLEANUP(vm_ent);
 
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
@@ -1291,32 +1361,30 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	if (wait_for_vm(vm_ent) < 0 || wait_for_vm_output(vm_ent) < 0) {
-		ERR("failed to set kevent for vm %s\n", name);
-		/*
-		 * Force to kill bhyve.
-		 * If this error happens, we can't manage bhyve process at all.
-		 */
-		VM_POWEROFF(vm_ent);
-		waitpid(VM_PID(vm_ent), NULL, 0);
-		cleanup_virtual_machine(vm_ent);
-		return -1;
-	}
+	if (wait_for_vm(vm_ent) < 0 || wait_for_vm_output(vm_ent) < 0)
+		goto force_kill;
 
 	if (VM_STATE(vm_ent) == RUN)
 		INFO("start vm %s\n", name);
 
 	call_plugins(vm_ent);
-	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout > 0 &&
-	    set_timer(vm_ent, conf->loader_timeout) < 0) {
-		ERR("failed to set timer for vm %s\n", name);
-		return -1;
-	}
 
 	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
 		VM_LOGFD(vm_ent) = open_err_logfile(conf);
 
 	return 0;
+
+force_kill:
+	ERR("failed to set kevent for vm %s\n", name);
+	/*
+	 * Force to kill bhyve.
+	 * If this error happens,
+	 * we can't manage bhyve process at all.
+	 */
+	VM_POWEROFF(vm_ent);
+	waitpid(VM_PID(vm_ent), NULL, 0);
+	cleanup_virtual_machine(vm_ent);
+	return -1;
 }
 
 static int
