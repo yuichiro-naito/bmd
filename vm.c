@@ -252,6 +252,16 @@ split_args(char *buf)
 	return (ap0);
 }
 
+static void
+grub_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	if (vm->mapfile) {
+		unlink(vm->mapfile);
+		free(vm->mapfile);
+		vm->mapfile = NULL;
+	}
+}
+
 static int
 grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
@@ -262,6 +272,9 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	char *cmd;
 	bool doredirect = (vm->assigned_comport == NULL) ||
 	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
+
+	if (write_mapfile(vm->conf, &vm->mapfile) < 0)
+		return -1;
 
 	cmd = create_load_command(conf, &len);
 
@@ -337,20 +350,10 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	return 0;
 }
 
-static void
-csm_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
-{
-}
-
 static int
 csm_load(struct vm *vm __unused, nvlist_t *pl_conf __unused)
 {
-	return (vm->bootrom = strdup(UEFI_CSM_FIRMWARE)) ? 0 : -1;
-}
-
-static void
-uefi_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
-{
+	return (vm->bootrom = strdup(UEFI_CSM_FIRMWARE)) ? 1 : -1;
 }
 
 static int
@@ -364,31 +367,7 @@ uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	}
 
 	vm->bootrom = p;
-	return 0;
-}
-
-static void
-grub2_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
-{
-	if (vm->mapfile) {
-		unlink(vm->mapfile);
-		free(vm->mapfile);
-		vm->mapfile = NULL;
-	}
-}
-
-static int
-grub2_load(struct vm *vm, nvlist_t *pl_conf __unused)
-{
-	if (write_mapfile(vm->conf, &vm->mapfile) < 0 ||
-	    grub_load(vm, pl_conf) < 0)
-		return -1;
-	return 0;
-}
-
-static void
-bhyve_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf __unused)
-{
+	return 1;
 }
 
 static int
@@ -573,7 +552,7 @@ err:
 }
 
 static int
-exec_bhyve(struct vm *vm)
+exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	struct vm_conf *conf = vm->conf;
 	struct passthru_conf *pc;
@@ -797,37 +776,6 @@ acpi_poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	return kill(vm->pid, SIGTERM);
 }
 
-static int
-start_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
-{
-	struct vm_conf *conf = vm->conf;
-
-	if (vm->state == LOAD)
-		return exec_bhyve(vm);
-
-	if (strcasecmp(conf->loader, "bhyveload") == 0) {
-		if (bhyve_load(vm, pl_conf) < 0)
-			goto err;
-	} else if (strcasecmp(conf->loader, "grub") == 0) {
-		if (write_mapfile(vm->conf, &vm->mapfile) < 0 ||
-		    grub_load(vm, pl_conf) < 0)
-			goto err;
-	} else if (strcasecmp(conf->loader, "uefi") == 0) {
-		if (copy_uefi_vars(vm) < 0 || exec_bhyve(vm) < 0)
-			goto err;
-	} else if (strcasecmp(conf->loader, "csm") == 0) {
-		if (exec_bhyve(vm) < 0)
-			goto err;
-	} else {
-		ERR("unknown loader %s\n", conf->loader);
-		goto err;
-	}
-
-	return 0;
-err:
-	return -1;
-}
-
 static void
 cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
@@ -891,26 +839,26 @@ write_err_log(int fd, struct vm *vm)
 }
 
 struct vm_method bhyve_method =
-{"bhyve", start_bhyve, reset_bhyve, poweroff_bhyve, acpi_poweroff_bhyve,
+{"bhyve", exec_bhyve, reset_bhyve, poweroff_bhyve, acpi_poweroff_bhyve,
 	  cleanup_bhyve
 };
 
 struct loader_method bhyveload_method =
 {
-	"bhyveload", bhyve_load, bhyve_load_cleanup
+	"bhyveload", bhyve_load, NULL
 };
 
 struct loader_method grub2load_method =
 {
-	"grub", grub2_load, grub2_load_cleanup
+	"grub", grub_load, grub_load_cleanup
 };
 
 struct loader_method uefiload_method =
 {
-	"uefi", uefi_load, uefi_load_cleanup
+	"uefi", uefi_load, NULL
 };
 
 struct loader_method csmload_method =
 {
-	"csm", csm_load, csm_load_cleanup
+	"csm", csm_load, NULL
 };
