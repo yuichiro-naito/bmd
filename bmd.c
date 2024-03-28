@@ -1139,6 +1139,11 @@ set_loader_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 	struct loader_method *m;
 	const char *loader = conf_ent->conf.loader;
 
+	if (loader == NULL) {
+		VM_LD_METHOD(vm_ent) = NULL;
+		return 0;
+	}
+
 	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
 		if ((m = pd->ent->desc.loader_method) != NULL &&
 		    strcmp(m->name, loader) == 0) {
