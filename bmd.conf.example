@@ -1,5 +1,5 @@
 global {
-	cmd_sock_mode = 0660;
+	cmd_socket_mode = 0660;
 	$imgpath = /dev/zpol/zpool/images;
 	$isopath = /zpool/iso;
 }
