@@ -748,6 +748,26 @@ compare_parser_entry(const void *a, const void *b)
 }
 
 static int
+check_disks(struct vm_conf *conf)
+{
+	char *name = conf->name;
+	struct disk_conf *dc;
+	struct stat st;
+
+	STAILQ_FOREACH (dc, &conf->disks, next) {
+		if (stat(dc->path, &st) < 0) {
+			ERR("%s: %s is not found\n", name, dc->path);
+			return -1;
+		}
+		if (access(dc->path, R_OK|W_OK) < 0) {
+			ERR("%s: %s access denied\n", name, dc->path);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static int
 check_conf(struct vm_conf *conf)
 {
 	char *name = conf->name;
@@ -768,6 +788,9 @@ check_conf(struct vm_conf *conf)
 		ERR("%s: loader is required\n", name);
 		return -1;
 	}
+
+	if (check_disks(conf) < 0)
+		return -1;
 
 	/*
 	 * Check if ncpu is equal or smaller than hw.vmm.maxcpu value.
