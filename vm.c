@@ -299,7 +299,7 @@ grub_load(struct vm *vm)
 
 		fp = open_memstream(&bp, &len);
 		if (fp == NULL) {
-			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			ERR("cannot open memstream (%s)\n", strerror(errno));
 			exit(1);
 		}
 		flockfile(fp);
@@ -386,7 +386,7 @@ bhyve_load(struct vm *vm)
 		}
 		fp = open_memstream(&bp, &len);
 		if (fp == NULL) {
-			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			ERR("cannot open memstream (%s)\n", strerror(errno));
 			exit(1);
 		}
 		flockfile(fp);
@@ -496,7 +496,8 @@ assign_taps(struct vm *vm)
 		if (create_tap(s, &nc->tap) < 0 ||
 		    set_tap_description(s, nc->tap, desc) < 0 ||
 		    add_to_bridge(s, nc->bridge, nc->tap) < 0) {
-			ERR("failed to create tap for %s\n", nc->bridge);
+			ERR("%s: failed to create tap for %s\n", conf->name,
+			    nc->bridge);
 			free(desc);
 			remove_taps(vm);
 			close(s);
@@ -576,7 +577,7 @@ exec_bhyve(struct vm *vm)
 
 		fp = open_memstream(&buf, &buf_size);
 		if (fp == NULL) {
-			ERR("cannot open memstrem (%s)\n", strerror(errno));
+			ERR("cannot open memstream (%s)\n", strerror(errno));
 			exit(1);
 		}
 		flockfile(fp);
