@@ -759,8 +759,9 @@ check_disks(struct vm_conf *conf)
 			ERR("%s: %s is not found\n", name, dc->path);
 			return -1;
 		}
-		if (access(dc->path, R_OK|W_OK) < 0) {
-			ERR("%s: %s access denied\n", name, dc->path);
+		if (! S_ISREG(st.st_mode) && ! S_ISCHR(st.st_mode)) {
+			ERR("%s: %s is not a file nor block device\n", name,
+			    dc->path);
 			return -1;
 		}
 	}
