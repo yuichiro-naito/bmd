@@ -61,6 +61,13 @@ $ sudo make installconfig
 
     `service bmd reload`
 
+## Logging
+
+BMD writes log messages to LOG_DAEMON facility. Usually it is written in
+the `/var/log/daemon.log` file by the syslogd(8). You can see error messages
+of BMD and informational messages such as starting a VM or stopping a VM with
+or without an error.
+
 ## BMD options
 
 BMD can take following options. Write the options after "bmd_flags=" in /etc/rc.conf.

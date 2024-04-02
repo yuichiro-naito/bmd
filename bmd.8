@@ -1,4 +1,4 @@
-.Dd Jul 27, 2023
+.Dd Apr 2, 2024
 .Dt BMD 8
 .Os
 .Sh NAME
@@ -68,6 +68,14 @@ reloads the configuration file to check updates for boot target. If any
 updates are found, the
 .Nm
 adopts the updated configuration.
+.Sh LOGGING
+.Nm
+writes log messages to LOG_DAEMON facility. Usually it is written in
+the '/var/log/daemon.log' file by the
+.Xr syslogd 8 .
+You can see error messages of BMD and informational messages such as starting
+a VM or stopping a VM with or without an error.
+
 .Sh SIGNAL HANDLING
 .Nm
 deals with the following signals:
