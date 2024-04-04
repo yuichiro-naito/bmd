@@ -93,7 +93,7 @@ Specify com1 port device (e.g. /dev/nmdm0B). "auto" assigns a nmdm device
 automatically.
 .It Cm debug_port = Ar port_number;
 Gdb debug port.
-.It Cm disk = (+=) Ar type:filename;
+.It Cm disk = (+=) Oo Ar type : Oc Ar filename ;
 Type is one of "nvme", "ahci", "ahci-hd", "virtio-blk" or can be omitted
 to specify the default type "virtio-blk".
 Filename is disk image filename(e.g. /var/images/vm-disk-0) or device file
@@ -175,7 +175,7 @@ must be smaller than
 .Ar hw.ncpu
 .Xr sysctl 8
 value.
-.It Cm network = (+=) Ar type:bridge;
+.It Cm network = (+=) Oo Ar type : Oc Ar bridge ;
 Type is one of "e1000", "virtio-net"  or can be omitted to specify
 the default type "virtio-net". Bridge is a bridge name that a tap interface
 to be added. e.g. "bridge1"
