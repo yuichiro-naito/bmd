@@ -1,4 +1,4 @@
-.Dd Mar 15, 2024
+.Dd Apr 8, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -19,15 +19,24 @@ The templates are part of VM configurations common to multiple VMs.
 It is applied with optional arguments from a vm section or a template section.
 The same template cannot be applied more than once.
 Each template argument can take a default value in case it is omitted.
-The default value is written following the "=" after the argument.
+The default value is written following the
+.Qq \&=
+after the argument.
 
 The section starts with its type name. The vm and template sections are
 followed by name. Vm names are unique identifier for each vm section and
 template names are also unique identifier for each template sections.
 
-In each sections, configurations are written in "key = value;" like C language
-statement. If a key takes multiple value, use "+=" operator or write multiple
-values separated by a comma ','.
+In each sections, configurations are written in
+.Qo
+key = value;
+.Qs
+like C language
+statement. If a key takes multiple value, use
+.Qq +=
+operator or write multiple
+values separated by a comma
+.Sq \&, .
 
 The general syntax is:
 .Bd -literal -offset indent
@@ -50,17 +59,22 @@ vm hostB {
 .Ss Global Parameters
 .Bl -tag -width cmd_socket_path
 .It Cm cmd_socket_path = Ar pathname;
-Unix domain socket path. The default value is "/var/run/bmd.sock".
+Unix domain socket path. The default value is
+.Qq Pa /var/run/bmd.sock .
 .It Cm cmd_socket_mode = Ar mode;
-File mode bits in octal number. The default value is "0600".
+File mode bits in octal number. The default value is
+.Qq 0600.
 .It Cm vars_directory = Ar dirname;
-The directory to write UEFI variables. The default value is "/usr/local/var/cache/bmd".
+The directory to write UEFI variables. The default value is
+.Qq Pa /usr/local/var/cache/bmd .
 .It Cm nmdm_offset = Ar noffset;
-The offset of auto assigned nmdm number. The default value is "200".
+The offset of auto assigned nmdm number. The default value is
+.Qq 200 .
 .It Cm pid_file = Ar filepath;
 The file to write
 .Xr bmd 8
-pid. The default value is "/var/run/bmd.pid".
+pid. The default value is
+.Qq Pa /var/run/bmd.pid .
 .El
 .Ss Vm Parameters
 .Bl -tag -width installcmd
@@ -87,64 +101,109 @@ shutdown. If VM exits with an error,
 does not reboot again.
 .El
 .It Cm boot_delay = Ar delay_second;
-Boot delay in seconds. The default value is "0".
+Boot delay in seconds. The default value is
+.Qq 0 .
 .It Cm comport = Ar com_device;
-Specify com1 port device (e.g. /dev/nmdm0B). "auto" assigns a nmdm device
+Specify com1 port device (e.g. /dev/nmdm0B).
+.Qq auto
+assigns a nmdm device
 automatically.
 .It Cm debug_port = Ar port_number;
 Gdb debug port.
 .It Cm disk = (+=) Oo Ar type : Oc Ar filename ;
-Type is one of "nvme", "ahci", "ahci-hd", "virtio-blk" or can be omitted
-to specify the default type "virtio-blk".
+Type is one of
+.Qq nvme ,
+.Qq ahci ,
+.Qq ahci-hd ,
+.Qq virtio-blk
+or can be omitted
+to specify the default type
+.Qq virtio-blk .
 Filename is disk image filename(e.g. /var/images/vm-disk-0) or device file
 (e.g. /dev/zvol/zpool/vm-disk-1).
 .It Cm err_logfile = Ar filename;
 Log filename of bhyve messages.
 .It Cm graphics = Ar yes | no;
-Set "yes" to use frame buffer device. The default is "no".
+Set
+.Qq yes
+to use frame buffer device. The default is
+.Qq no .
 .It Cm graphics_listen = Ar port_num;
-Vnc port number. The default value is "5900".
+Vnc port number. The default value is
+.Qq 5900 .
 .It Cm graphics_password = Ar password;
 Password for vnc access. This is not set by default.
 .It Cm graphics_res = Ar width x height;
-Vnc resolution. The default value is "1280x720".
+Vnc resolution. The default value is
+.Qq 1280x720 .
 .It Cm graphics_vga = Ar on | off | io;
-Vga conf of bhyve. The default is "io".
+Vga conf of bhyve. The default is
+.Qq io .
 .It Cm graphics_wait = Ar yes | no;
-Wait for vnc connection before booting. The default is "no".
+Wait for vnc connection before booting. The default is
+.Qq no .
 .It Cm hostbridge = Ar standard | amd;
-Hostbridge device. The default is "standard".
+Hostbridge device. The default is
+.Qq standard .
 .It Cm install = Ar yes | no;
-Set "yes" to boot from ISO. The default is "no".
+Set
+.Qq yes
+to boot from ISO. The install mode VM will never restart, it always quits the
+bhyve execution. After the installation has finished,
+change the configuration to
+.Qq no .
+The default is
+.Qq no .
 .It Cm installcmd = Ar install_cmd;
-Install script for grub-bhyve. Setting "auto" inspects iso image.
-e.g. "kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd"
+Install script for grub-bhyve. Setting
+.Qq auto
+inspects iso image.
+e.g.
+.Qo
+kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd
+.Qs
 .It Cm iso = (+=) Ar image_filepath;
 ISO image filename.
 .It Cm keymap = Ar keymap;
 Keymap for vnc.
 .It Cm loadcmd = Ar load_cmd;
-Boot script for grub-bhyve. Setting "auto" inspects disk image.
-e.g. "kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd"
+Boot script for grub-bhyve. Setting
+.Qq auto
+inspects disk image.
+e.g.
+.Qo
+kopenbsd -h com0 -r sd0a (hd0,gpt4)/bsd
+.Qs
 .It Cm loader = Ar bhyveload | grub | uefi;
 Specify boot loader. This parameter is mandatory.
 .It Cm loader_timeout = Ar timeout_sec;
 Loader timeout in seconds. If set to 0 or negative value, timeout is disabled.
-The default value is "15".
+The default value is
+.Qq 15 .
 .It Cm bhyve_env = (+=) Ar Environment_definition;
 Specify an environment variable for the bhyve process. Note that
 .Ar Environment_definition
-must contain a equal character '='. It must be escaped by backslash or
-enclosed in double quotes. e.g. "BHYVE_TMPDIR=/tmp"
+must contain a equal character '='. It must be escaped by a backslash or
+enclosed in double quotes. e.g.
+.Qq BHYVE_TMPDIR=/tmp
 .It Cm bhyveload_loader = Ar OS_loader_path;
-Specify the path to the OS loader. It is passed with "-l" to the bhyveload.
-If omitted, the default OS loader "/boot/userboot.so" is used.
+Specify the path to the OS loader. It is passed with
+.Qq -l
+to the bhyveload.
+If omitted, the default OS loader
+.Qq Pa /boot/userboot.so
+is used.
 .It Cm bhyveload_env = (+=) Ar Environment_definition;
 Specify an environment variable for the FreeBSD boot loader.
-It is passed with "-e" to the bhyveload. Note that
+It is passed with
+.Qq -e
+to the bhyveload. Note that
 .Ar Environment_definition
-must contain a equal character '='. It must be escaped by backslash or
-enclosed in double quotes. e.g. "machdep.hyperthreading_allowed=0"
+must contain a equal character
+.Sq = .
+It must be escaped by a backslash or
+enclosed in double quotes. e.g.
+.Qq machdep.hyperthreading_allowed=0
 .It Xo
 .Cm memory = Ar memsize Ns Oo
 .Sm off
@@ -155,7 +214,7 @@ enclosed in double quotes. e.g. "machdep.hyperthreading_allowed=0"
 Specify physical memory size. This parameter is mandatory.
 .It Cm name = Ar vmname;
 Change the virtual machine name from vm section name;
-.It Cm ncpu = Ar num_sockets [ :num_cores [ :num_threads ] ];
+.It Cm ncpu = Ar num_sockets Op Ar :num_cores Op Ar :num_threads ;
 Set the number of CPUs or CPU topology for VM. The default value is 1 for each parameters.
 e.g. 1:4:2 specifies cpus=8,sockets=1,cores=4,threads=2 to the bhyve.
 .It Cm cpu_pin = (+=) Ar vcpu:hostcpu;
@@ -176,9 +235,17 @@ must be smaller than
 .Xr sysctl 8
 value.
 .It Cm network = (+=) Oo Ar type : Oc Ar bridge ;
-Type is one of "e1000", "virtio-net"  or can be omitted to specify
-the default type "virtio-net". Bridge is a bridge name that a tap interface
-to be added. e.g. "bridge1"
+.Ar Type
+is one of
+.Qq e1000 ,
+.Qq virtio-net
+or can be omitted to specify
+the default type
+.Qq virtio-net .
+.Ar Bridge
+is a bridge name that a tap interface
+to be added. e.g.
+.Qq bridge1
 .It Cm owner = Ar user_name Op : Ar group_name ;
 Owner of VM. The owner is permitted to control the VM via
 .Xr bmdctl 8 .
@@ -194,16 +261,32 @@ is as same as the file owner.
 .It Cm passthru = (+=) Ar bus/slot/function;
 PCI passthrough device id. e.g. 1/0/130
 .It Cm reboot_on_change = Ar yes | no;
-Set "yes" to force ACPI reboot if VM config file is change. The default is "no".
+Set
+.Qq yes
+to force ACPI reboot if VM config file is change. The default is
+.Qq no .
 .It Cm stop_timeout = Ar timeout_sec;
-VM exit timeout in seconds. if expired, force to kill VM. The default value is "300". This timeout will never be disabled.
+VM exit timeout in seconds. if expired, force to kill VM. The default value is
+.Qq 300 .
+This timeout will never be disabled.
 .It Cm utctime = Ar yes | no;
-Set "yes" for RTC to keep UTC time. Set "no" for RTC to keep localtime.
-The default value is "yes".
+Set
+.Qq yes
+for RTC to keep UTC time. Set
+.Qq no
+for RTC to keep localtime.
+The default value is
+.Qq yes .
 .It Cm wired_memory = Ar yes | no;
-Set "yes" to wire VM memory. The default is "no".
+Set
+.Qq yes
+to wire VM memory. The default is
+.Qq no .
 .It Cm xhci_mouse = Ar yes | no;
-Set "yes" to use xhci tablet. The default is "no".
+Set
+.Qq yes
+to use xhci tablet. The default is
+.Qq no .
 .El
 .Ss String format
 Parameter values, including vm names and template names, can be single tokens
@@ -266,7 +349,7 @@ summarized blow.
 .Bl -tag -width "Variables" -offset indent
 .It Values
 All values are type of
-.Ft longmax_t .
+.Ft long .
 .It Constants
 Decimal, octal (starting with
 .Li 0 )
@@ -282,23 +365,28 @@ Both global and vm scope variables can be read and contain integer constants.
 2 macros are available.
 .Bl -tag -width .include
 .It Cm .apply Ar template_name Op (arg1, ...), template_name2 ;
-Apply the template(s) with optional arguments. This macro can be written in vm and template sections.
+Apply the template(s) with optional arguments. This macro can be written in the
+vm and template sections.
 .It Cm .include Ar include_pattern ;
 Include another configuration file(s). This macro must be written outside of
 the sections. This is only one exception not to be written in the sections.
 The
 .Ar include_pattern
-can contain special characters '*', '?', or '[', ']' that matches as same as
-shell wildcard.
+can contain special characters
+.Sq \&* ,
+.Sq \&? ,
+or
+.Sq \&[ ,
+.Sq \&]
+that matches as same as shell wildcard.
 The
 .Ar include_pattern
 can contain global scope variable which is defined earlier than this macro.
-This macro is allowed to use in a file which root privileged user owns.
 .Sh EXAMPLES
 
 .Bd -literal -offset indent
 global {
-	cmd_sock_mode = 0660;
+	cmd_socket_mode = 0660;
 	$imgpath = /dev/zpol/zpool/images;
 	$isopath = /zpool/iso;
 }

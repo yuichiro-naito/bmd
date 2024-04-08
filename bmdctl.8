@@ -1,4 +1,4 @@
-.Dd Mar 19, 2024
+.Dd Apr 8, 2024
 .Dt bmdctl 8
 .Os
 .
@@ -73,7 +73,9 @@ can control its own virtual machines.
 .Op Fl r
 .Op Fl s Ar colname
 .Xc
-Show list of virtual machines sorted by 'id' column.
+Show list of virtual machines sorted by
+.Sq id
+column.
 .Fl s
 option changes the sort key column.
 .Fl r
@@ -172,12 +174,16 @@ Stop
 (only available with job control).
 .It Ic ~^Y
 Stop only the
-.Dq "local side"
+.Do
+local side
+.Dc
 of
 .Nm
 .Ic console
 (only available with job control); the
-.Dq "remote side"
+.Do
+remote side
+.Dc
 of
 .Nm
 .Ic console ,
