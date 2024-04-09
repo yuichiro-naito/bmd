@@ -1,3 +1,5 @@
+	- Change the 'cmd_socket_mode' default value to '0600'.
+	  (31a70ce265b82f1a994bb2a0629bbe689774e70e)
 * 2.4
 	- Add sort key and reverse list options for `bmdctl list`.
 	- `bmdctl list` shows id column.
