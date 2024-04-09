@@ -806,7 +806,6 @@ write_err_log(int fd, struct vm *vm)
 			if ((rc = write(vm->logfd, buf + n, size - n)) < 0)
 				if (errno != EINTR && errno != EAGAIN)
 					break;
-			rc = 0;
 			if (rc < 0)
 				ERR("%s: failed to write err_logfile (%s)\n",
 				    vm->conf->name, strerror(errno));
