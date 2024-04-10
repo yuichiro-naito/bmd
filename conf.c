@@ -752,10 +752,14 @@ create_vm_conf(const char *vm_name)
 		if (set_var0(local, "ID", idnum) < 0)
 			ERR("failed to set \"ID\" variable! (%s)\n",
 			    strerror(errno));
-	} else
+		ret->id = id;
+	} else {
 		ERR("failed to allocate \"ID\" number! (%s)\n",
 		    strerror(errno));
-	ret->id = id;
+		free_vartree(local);
+		local = NULL;
+		goto err;
+	}
 	ret->ncpu = 1;
 	ret->ncpu_sockets = 1;
 	ret->ncpu_cores = 1;
