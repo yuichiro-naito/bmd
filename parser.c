@@ -204,24 +204,6 @@ parse_name(struct vm_conf *conf, char *val)
 	return 0;
 }
 
-static char *
-trim_spaces(char *buf)
-{
-	char *p, *q;
-	p = q = buf;
-	while (*q != '\0') {
-		if (isspace(*q)) {
-			q++;
-			continue;
-		}
-		*p = *q;
-		p++;
-		q++;
-	}
-	*p = '\0';
-	return buf;
-}
-
 static int
 parse_ncpu(struct vm_conf *conf, char *val)
 {
@@ -229,8 +211,6 @@ parse_ncpu(struct vm_conf *conf, char *val)
 	int ncpu[3] = {1, 1, 1};
 	long n;
 	char *p;
-
-	val = trim_spaces(val);
 
 	for (i = 0; i < nitems(ncpu); i++) {
 		if ((n = strtol(val, &p, 10)) <= 0)
