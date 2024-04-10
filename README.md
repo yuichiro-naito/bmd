@@ -187,6 +187,7 @@ Following keys are available.
 | passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |
 | reboot_on_change | set "yes" to force ACPI reboot if VM config file is changed when bmd reloads it| no | no |
 | stop_timeout | VM exit timeout in seconds<br>if expired, force to kill VM | no | 300 |
+| tpm | TPM device name | no | (none) |
 | utctime | "yes": RTC keeps UTC time<br>"no" : RTC keeps localtime | no | yes |
 | wired_memory | set "yes" to wire VM memory | no | no |
 | xhci_mouse | set "yes" to use xhci tablet | no | no |

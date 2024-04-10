@@ -138,6 +138,9 @@ struct vm_conf {
 	int ncpu_cores;
 	int ncpu_threads;
 	unsigned int id;
+	char *tpm_dev;
+	char *tpm_type;
+	char *tpm_version;
 };
 
 struct vm {
@@ -218,6 +221,9 @@ int set_mouse(struct vm_conf *, bool);
 int set_wired_memory(struct vm_conf *, bool);
 int set_utctime(struct vm_conf *, bool);
 int set_keymap(struct vm_conf *, const char *);
+int set_tpm_dev(struct vm_conf *, const char *);
+int set_tpm_type(struct vm_conf *, const char *);
+int set_tpm_version(struct vm_conf *, const char *);
 
 struct fbuf *create_fbuf(void);
 struct vm_conf *create_vm_conf(const char *vm_);

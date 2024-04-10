@@ -611,6 +611,16 @@ exec_bhyve(struct vm *vm)
 		} else if (strcasecmp(conf->loader, "csm") == 0)
 			fprintf(fp, "-l\nbootrom,%s\n", UEFI_CSM_FIRMWARE);
 
+		if (conf->tpm_dev) {
+			if (conf->tpm_version)
+				fprintf(fp, "-l\ntpm,%s,%s,version=%s\n",
+					conf->tpm_type,	conf->tpm_dev,
+					conf->tpm_version);
+			else
+				fprintf(fp, "-l\ntpm,%s,%s\n",
+					conf->tpm_type, conf->tpm_dev);
+		}
+
 		switch (conf->hostbridge) {
 		case NONE:
 			break;

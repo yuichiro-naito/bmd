@@ -131,6 +131,10 @@ bool is_mouse(struct vm_conf *);
 bool is_wired_memory(struct vm_conf *);
 bool is_utctime(struct vm_conf *);
 char *get_keymap(struct vm_conf *);
+char *get_tpm_dev(struct vm_conf *);
+char *get_tpm_type(struct vm_conf *);
+char *get_tpm_version(struct vm_conf *);
+
 char **split_args(char *);
 
 /*

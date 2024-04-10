@@ -529,6 +529,58 @@ err:
 }
 
 static int
+parse_tpm(struct vm_conf *conf, char *val)
+{
+	unsigned int i;
+	char *p, *q, *tpm[3], *val2 = NULL;
+
+	if ((val2 = strdup(val)) == NULL)
+		return -1;
+
+	for (i = 0, p = val2;
+	     (i < nitems(tpm) - 1) && (q = strchr(p, ':')) != NULL;
+	     i++, p = q + 1) {
+		*q = '\0';
+		tpm[i] = p;
+	}
+	tpm[i] = p;
+
+	/* version string must consist of numbers and periods. */
+	if (i > 0)
+		for (p = tpm[i]; *p != '\0'; p++)
+			if ((! isnumber(*p)) && (*p != '.'))
+				goto err;
+
+	switch(i) {
+	case 2:
+		/* type must be "passthru" */
+		if (strcmp(tpm[0], "passthru") != 0)
+			goto err;
+		set_tpm_version(conf, tpm[2]);
+		set_tpm_dev(conf, tpm[1]);
+		set_tpm_type(conf, tpm[0]);
+		break;
+	case 1:
+		set_tpm_version(conf, tpm[1]);
+		set_tpm_dev(conf, tpm[0]);
+		set_tpm_type(conf, "passthru");
+		break;
+	case 0:
+		set_tpm_dev(conf, tpm[0]);
+		set_tpm_type(conf, "passthru");
+		break;
+	default:
+		goto err;
+	}
+
+	free(val2);
+	return 0;
+err:
+	free(val2);
+	return -1;
+}
+
+static int
 parse_boot(struct vm_conf *conf, char *val)
 {
 	const char *const *p;
@@ -734,6 +786,7 @@ static struct parser_entry parser_list[] = {
 	{ "passthru", &parse_passthru, &clear_passthru_conf },
 	{ "reboot_on_change", &parse_reboot_on_change, NULL },
 	{ "stop_timeout", &parse_stop_timeout, NULL },
+	{ "tpm", &parse_tpm, NULL},
 	{ "utctime", &parse_utctime, NULL },
 	{ "wired_memory", &parse_wired_memory, NULL },
 	{ "xhci_mouse", &parse_xhci_mouse, NULL },

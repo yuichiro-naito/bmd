@@ -215,6 +215,9 @@ free_vm_conf(struct vm_conf *vc)
 	clear_bhyveload_env(vc);
 	clear_bhyve_env(vc);
 	clear_cpu_pin(vc);
+	free(vc->tpm_dev);
+	free(vc->tpm_type);
+	free(vc->tpm_version);
 	free(vc);
 }
 
@@ -977,6 +980,48 @@ is_utctime(struct vm_conf *conf)
 }
 
 int
+set_tpm_dev(struct vm_conf *conf, const char *tpm)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->tpm_dev, tpm);
+}
+
+int
+set_tpm_type(struct vm_conf *conf, const char *tt)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->tpm_type, tt);
+}
+
+int
+set_tpm_version(struct vm_conf *conf, const char *tpmver)
+{
+	if (conf == NULL)
+		return 0;
+	return set_string(&conf->tpm_version, tpmver);
+}
+
+char *
+get_tpm_dev(struct vm_conf *c)
+{
+	return c->tpm_dev;
+}
+
+char *
+get_tpm_type(struct vm_conf *c)
+{
+	return c->tpm_type;
+}
+
+char *
+get_tpm_version(struct vm_conf *c)
+{
+	return c->tpm_version;
+}
+
+int
 get_infd(struct vm *vm)
 {
 	return vm->infd;
@@ -1227,6 +1272,15 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 		fprintf(fp, "\n");
 	}
 
+	if (conf->tpm_dev) {
+		if (conf->tpm_version)
+			fprintf(fp, "%18s = %s:%s:%s\n", "tpm", conf->tpm_type,
+				conf->tpm_dev, conf->tpm_version);
+		else
+			fprintf(fp, "%18s = %s:%s\n", "tpm", conf->tpm_type,
+				conf->tpm_dev);
+	}
+
 	i = 0;
 	STAILQ_FOREACH (dc, &conf->disks, next) {
 		snprintf(buf, sizeof(buf), "disk%d", i++);
@@ -1431,6 +1485,9 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_LIST(bhyveload_env, bhyveload_envs);
 	CMP_LIST(bhyve_env, bhyve_envs);
 	CMP_LIST(cpu_pin, cpu_pins);
+	CMP_STR(tpm_dev);
+	CMP_STR(tpm_type);
+	CMP_STR(tpm_version);
 
 	return 0;
 }

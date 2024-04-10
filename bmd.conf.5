@@ -269,6 +269,19 @@ to force ACPI reboot if VM config file is change. The default is
 VM exit timeout in seconds. if expired, force to kill VM. The default value is
 .Qq 300 .
 This timeout will never be disabled.
+.It Cm tpm = Ar dev Oo : Ar version Oc | Ar type : Ar dev : Ar version ;
+Specify a TPM device for the VM. The
+.Ar dev
+paramter is a tpm device name. e.g.
+.Qq /dev/tpm0 .
+Currently the
+.Ar type
+parameter supports
+.Qq passthru
+only. The default value of
+.Ar version
+is
+.Qq 2.0 .
 .It Cm utctime = Ar yes | no;
 Set
 .Qq yes
