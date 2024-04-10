@@ -183,7 +183,13 @@ static int
 register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
 {
 	int i;
-	struct event *ev[n];
+	struct event **ev;
+
+	if (n <= 0)
+		return 0;
+
+	if ((ev = malloc(sizeof(struct event *) * n)) == NULL)
+		return -1;
 
 	for (i = 0; i < n; i++)
 		ev[i] = malloc(sizeof(struct event));
@@ -203,11 +209,12 @@ register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
 
 	for (i = 0; i < n; i++)
 		LIST_INSERT_HEAD(&event_list, ev[i], next);
-
+	free(ev);
 	return 0;
 err:
 	for (i = 0; i < n; i++)
 		free(ev[i]);
+	free(ev);
 	return -1;
 }
 
