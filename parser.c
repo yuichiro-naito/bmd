@@ -277,7 +277,7 @@ parse_memory(struct vm_conf *conf, char *val)
 		return -1;
 	}
 
-	set_memory_size(conf, val);
+	set_memory(conf, val);
 	return 0;
 }
 

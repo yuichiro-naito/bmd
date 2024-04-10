@@ -25,7 +25,7 @@ static int compare_variable_key(struct conf_var *, struct conf_var *);
 RB_GENERATE_STATIC(vartree, conf_var, entry, compare_variable_key);
 struct vartree *global_vars = NULL;
 
-#define generate_list_accessor(type, member)		\
+#define generate_list_getter(type, member)		\
 	struct type *get_##type(struct vm_conf *conf)	\
 	{						\
 		return STAILQ_FIRST(&conf->member);	\
@@ -35,7 +35,7 @@ struct vartree *global_vars = NULL;
 		return STAILQ_NEXT(p, next);		\
 	}
 
-#define generate_member_accessor(rtype, type, member) \
+#define generate_member_getter(rtype, type, member) \
 	rtype					    \
 	get_##type##_##member(struct type *p)	    \
 	{					    \
@@ -50,6 +50,69 @@ struct vartree *global_vars = NULL;
 		STAILQ_FOREACH_SAFE (p, &vc->member, next, pn)	\
 			free_##type(p);				\
 		STAILQ_INIT(&vc->member);			\
+	}
+
+#define generate_getter(rtype, member)	    \
+	rtype					    \
+	get_##member(struct vm_conf *c)		    \
+	{					    \
+		return c->member;		    \
+	}
+
+#define generate_string_accessor(member)	    \
+	char *					    \
+	get_##member(struct vm_conf *c)		    \
+	{					    \
+		return c->member;		    \
+	}					    \
+	int						\
+	set_##member(struct vm_conf *c, const char *v)	\
+	{						\
+		if (c == NULL)				\
+			return -1;			\
+		return set_string(&c->member, v);	\
+	}
+
+#define generate_number_accessor(type, member)	    \
+	type					    \
+	get_##member(struct vm_conf *c)		    \
+	{					    \
+		return c->member;		    \
+	}					    \
+	int						\
+	set_##member(struct vm_conf *c, type v)		\
+	{						\
+		if (c == NULL)				\
+			return -1;			\
+		c->member = v;				\
+		return 0;				\
+	}
+
+#define generate_bool_accessor(member)		    \
+	bool					    \
+	is_##member(struct vm_conf *c)		    \
+	{					    \
+		return c->member;		    \
+	}					    \
+	int						\
+	set_##member(struct vm_conf *c, bool v)		\
+	{						\
+		if (c == NULL)				\
+			return -1;			\
+		c->member = v;				\
+		return 0;				\
+	}
+
+#define generate_vm_accessor(type, member)	    \
+	type					    \
+	get_##member(struct vm *vm)		    \
+	{					    \
+		return vm->member;		    \
+	}					    \
+	void						\
+	set_##member(struct vm *vm, type v)		\
+	{						\
+		vm->member = v;				\
 	}
 
 void
@@ -119,30 +182,6 @@ free_net_conf(struct net_conf *c)
 	free(c->bridge);
 	free(c->tap);
 	free(c);
-}
-
-void
-free_bhyveload_env(struct bhyveload_env *e)
-{
-	if (e == NULL)
-		return;
-	free(e);
-}
-
-void
-free_bhyve_env(struct bhyve_env *e)
-{
-	if (e == NULL)
-		return;
-	free(e);
-}
-
-void
-free_cpu_pin(struct cpu_pin *p)
-{
-	if (p == NULL)
-		return;
-	free(p);
 }
 
 void
@@ -244,8 +283,8 @@ err:
 	return -1;
 }
 
-generate_list_accessor(passthru_conf, passthrues)
-generate_member_accessor(char *, passthru_conf, devid)
+generate_list_getter(passthru_conf, passthrues)
+generate_member_getter(char *, passthru_conf, devid)
 
 int
 add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -273,9 +312,9 @@ err:
 	return -1;
 }
 
-generate_list_accessor(disk_conf, disks)
-generate_member_accessor(char *, disk_conf, type)
-generate_member_accessor(char *, disk_conf, path)
+generate_list_getter(disk_conf, disks)
+generate_member_getter(char *, disk_conf, type)
+generate_member_getter(char *, disk_conf, path)
 
 int
 add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -303,9 +342,9 @@ err:
 	return -1;
 }
 
-generate_list_accessor(iso_conf, isoes)
-generate_member_accessor(char *, iso_conf, type)
-generate_member_accessor(char *, iso_conf, path)
+generate_list_getter(iso_conf, isoes)
+generate_member_getter(char *, iso_conf, type)
+generate_member_getter(char *, iso_conf, path)
 
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
@@ -334,10 +373,10 @@ err:
 	return -1;
 }
 
-generate_list_accessor(net_conf, nets)
-generate_member_accessor(char *, net_conf, type)
-generate_member_accessor(char *, net_conf, bridge)
-generate_member_accessor(char *, net_conf, tap)
+generate_list_getter(net_conf, nets)
+generate_member_getter(char *, net_conf, type)
+generate_member_getter(char *, net_conf, bridge)
+generate_member_getter(char *, net_conf, tap)
 
 int
 add_bhyveload_env(struct vm_conf *conf, const char *env)
@@ -357,8 +396,8 @@ add_bhyveload_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-generate_list_accessor(bhyveload_env, bhyveload_envs)
-generate_member_accessor(char *, bhyveload_env, env)
+generate_list_getter(bhyveload_env, bhyveload_envs)
+generate_member_getter(char *, bhyveload_env, env)
 
 int
 add_bhyve_env(struct vm_conf *conf, const char *env)
@@ -378,8 +417,8 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-generate_list_accessor(bhyve_env, bhyve_envs)
-generate_member_accessor(char *, bhyve_env, env)
+generate_list_getter(bhyve_env, bhyve_envs)
+generate_member_getter(char *, bhyve_env, env)
 
 int
 add_cpu_pin(struct vm_conf *conf, int vcpu, int hostcpu)
@@ -399,9 +438,9 @@ add_cpu_pin(struct vm_conf *conf, int vcpu, int hostcpu)
 	return 0;
 }
 
-generate_list_accessor(cpu_pin, cpu_pins)
-generate_member_accessor(int, cpu_pin, vcpu)
-generate_member_accessor(int, cpu_pin, hostcpu)
+generate_list_getter(cpu_pin, cpu_pins)
+generate_member_getter(int, cpu_pin, vcpu)
+generate_member_getter(int, cpu_pin, hostcpu)
 
 struct net_conf *
 copy_net_conf(const struct net_conf *nc)
@@ -443,186 +482,19 @@ set_string(char **var, const char *value)
 	return 0;
 }
 
-unsigned int
-get_id(struct vm_conf *c)
-{
-	return c->id;
-}
-
-
-int
-set_name(struct vm_conf *conf, const char *name)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->name, name);
-}
-
-char *
-get_name(struct vm_conf *c)
-{
-	return c->name;
-}
-
-int
-set_loadcmd(struct vm_conf *conf, const char *cmd)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->loadcmd, cmd);
-}
-
-char *
-get_loadcmd(struct vm_conf *conf)
-{
-	return conf->loadcmd;
-}
-
-int
-set_installcmd(struct vm_conf *conf, const char *cmd)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->installcmd, cmd);
-}
-
-char *
-get_installcmd(struct vm_conf *conf)
-{
-	return conf->installcmd;
-}
-
-int
-set_err_logfile(struct vm_conf *conf, const char *name)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->err_logfile, name);
-}
-
-char *
-get_err_logfile(struct vm_conf *conf)
-{
-	return conf->err_logfile;
-}
-
-int
-set_loader(struct vm_conf *conf, const char *loader)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->loader, loader);
-}
-
-char *
-get_loader(struct vm_conf *conf)
-{
-	return conf->loader;
-}
-
-int
-set_bhyveload_loader(struct vm_conf *conf, const char *loader)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->bhyveload_loader, loader);
-}
-
-char *
-get_bhyveload_loader(struct vm_conf *conf)
-{
-	return conf->bhyveload_loader;
-}
-
-int
-set_loader_timeout(struct vm_conf *conf, int timeout)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->loader_timeout = timeout;
-	return 0;
-}
-
-int
-get_loader_timeout(struct vm_conf *conf)
-{
-	return conf->loader_timeout;
-}
-
-int
-set_stop_timeout(struct vm_conf *conf, int timeout)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->stop_timeout = timeout;
-	return 0;
-}
-
-int
-get_stop_timeout(struct vm_conf *conf)
-{
-	return conf->stop_timeout;
-}
-
-int
-set_grub_run_partition(struct vm_conf *conf, const char *partition)
-{
-	if (conf == NULL)
-		return 0;
-
-	return set_string(&conf->grub_run_partition, partition);
-}
-
-char *
-get_grub_run_partition(struct vm_conf *conf)
-{
-	return conf->grub_run_partition;
-}
-
-int
-set_debug_port(struct vm_conf *conf, const char *port)
-{
-	if (conf == NULL)
-		return 0;
-
-	return set_string(&conf->debug_port, port);
-}
-
-char *
-get_debug_port(struct vm_conf *conf)
-{
-	return conf->debug_port;
-}
-
-int
-set_memory_size(struct vm_conf *conf, const char *memory)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->memory, memory);
-}
-
-char *
-get_memory(struct vm_conf *conf)
-{
-	return conf->memory;
-}
-
-int
-set_comport(struct vm_conf *conf, const char *com)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->comport, com);
-}
-
-char *
-get_comport(struct vm_conf *conf)
-{
-	return conf->comport;
-}
+generate_getter(unsigned int, id)
+generate_string_accessor(name)
+generate_string_accessor(loadcmd)
+generate_string_accessor(installcmd)
+generate_string_accessor(err_logfile)
+generate_string_accessor(loader)
+generate_string_accessor(bhyveload_loader)
+generate_number_accessor(int, loader_timeout)
+generate_number_accessor(int, stop_timeout)
+generate_string_accessor(grub_run_partition)
+generate_string_accessor(debug_port)
+generate_string_accessor(memory)
+generate_string_accessor(comport)
 
 int
 set_ncpu(struct vm_conf *conf, int ncpu)
@@ -651,165 +523,17 @@ set_cpu_topology(struct vm_conf *conf, int ncpu[3])
 	return 0;
 }
 
-int
-get_ncpu(struct vm_conf *conf)
-{
-	return conf->ncpu;
-}
-
-int
-set_owner(struct vm_conf *conf, uid_t owner)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->owner = owner;
-	return 0;
-}
-
-uid_t
-get_owner(struct vm_conf *conf)
-{
-	return conf->owner;
-}
-
-int
-set_group(struct vm_conf *conf, gid_t group)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->group = group;
-	return 0;
-}
-
-gid_t
-get_group(struct vm_conf *conf)
-{
-	return conf->group;
-}
-
-int
-set_boot(struct vm_conf *conf, enum BOOT boot)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->boot = boot;
-	return 0;
-}
-
-enum BOOT
-get_boot(struct vm_conf *conf)
-{
-	return conf->boot;
-}
-
-int
-set_hostbridge(struct vm_conf *conf, enum HOSTBRIDGE_TYPE type)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->hostbridge = type;
-	return 0;
-}
-
-enum HOSTBRIDGE_TYPE
-get_hostbridge(struct vm_conf *conf)
-{
-	return conf->hostbridge;
-}
-
-int
-set_backend(struct vm_conf *conf, char *backend)
-{
-	if (conf == NULL)
-		return 0;
-
-	return set_string(&conf->backend, backend);
-}
-
-char *
-get_backend(struct vm_conf *conf)
-{
-	return conf->backend;
-}
-
-int
-set_keymap(struct vm_conf *conf, const char *keymap)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->keymap, keymap);
-}
-
-char *
-get_keymap(struct vm_conf *conf)
-{
-	return conf->keymap;
-}
-
-int
-set_boot_delay(struct vm_conf *conf, int delay)
-{
-	if (conf == NULL)
-		return 0;
-
-	conf->boot_delay = delay;
-	return 0;
-}
-
-int
-get_boot_delay(struct vm_conf *conf)
-{
-	return conf->boot_delay;
-}
-
-int
-set_reboot_on_change(struct vm_conf *conf, bool enable)
-{
-	if (conf == NULL)
-		return 0;
-	conf->reboot_on_change = enable;
-	return 0;
-}
-
-bool
-is_reboot_on_change(struct vm_conf *conf)
-{
-	return conf->reboot_on_change;
-}
-
-int
-set_single_user(struct vm_conf *conf, bool single)
-{
-	if (conf == NULL)
-		return 0;
-	conf->single_user = single;
-	return 0;
-}
-
-bool
-is_single_user(struct vm_conf *conf)
-{
-	return conf->single_user;
-}
-
-int
-set_install(struct vm_conf *conf, bool install)
-{
-	if (conf == NULL)
-		return 0;
-	conf->install = install;
-	return 0;
-}
-
-bool
-is_install(struct vm_conf *conf)
-{
-	return conf->install;
-}
+generate_getter(int, ncpu)
+generate_number_accessor(uid_t, owner)
+generate_number_accessor(gid_t, group)
+generate_number_accessor(enum BOOT, boot)
+generate_number_accessor(enum HOSTBRIDGE_TYPE, hostbridge)
+generate_string_accessor(backend)
+generate_string_accessor(keymap)
+generate_number_accessor(int, boot_delay)
+generate_bool_accessor(reboot_on_change)
+generate_bool_accessor(single_user)
+generate_bool_accessor(install)
 
 int
 set_fbuf_enable(struct fbuf *fb, bool enable)
@@ -936,137 +660,18 @@ get_fbuf_password(struct vm_conf *conf)
 	return conf->fbuf->password;
 }
 
-int
-set_mouse(struct vm_conf *conf, bool use)
-{
-	conf->mouse = use;
-	return 0;
-}
+generate_bool_accessor(mouse)
+generate_bool_accessor(wired_memory)
+generate_bool_accessor(utctime)
+generate_string_accessor(tpm_dev)
+generate_string_accessor(tpm_type)
+generate_string_accessor(tpm_version)
 
-bool
-is_mouse(struct vm_conf *conf)
-{
-	return conf->mouse;
-}
-
-int
-set_wired_memory(struct vm_conf *conf, bool val)
-{
-	if (conf == NULL)
-		return 0;
-	conf->wired_memory = val;
-	return 0;
-}
-
-bool
-is_wired_memory(struct vm_conf *conf)
-{
-	return conf->wired_memory;
-}
-
-int
-set_utctime(struct vm_conf *conf, bool val)
-{
-	if (conf == NULL)
-		return 0;
-	conf->utctime = val;
-	return 0;
-}
-
-bool
-is_utctime(struct vm_conf *conf)
-{
-	return conf->utctime;
-}
-
-int
-set_tpm_dev(struct vm_conf *conf, const char *tpm)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->tpm_dev, tpm);
-}
-
-int
-set_tpm_type(struct vm_conf *conf, const char *tt)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->tpm_type, tt);
-}
-
-int
-set_tpm_version(struct vm_conf *conf, const char *tpmver)
-{
-	if (conf == NULL)
-		return 0;
-	return set_string(&conf->tpm_version, tpmver);
-}
-
-char *
-get_tpm_dev(struct vm_conf *c)
-{
-	return c->tpm_dev;
-}
-
-char *
-get_tpm_type(struct vm_conf *c)
-{
-	return c->tpm_type;
-}
-
-char *
-get_tpm_version(struct vm_conf *c)
-{
-	return c->tpm_version;
-}
-
-int
-get_infd(struct vm *vm)
-{
-	return vm->infd;
-}
-
-int
-get_outfd(struct vm *vm)
-{
-	return vm->outfd;
-}
-
-int
-get_errfd(struct vm *vm)
-{
-	return vm->errfd;
-}
-
-int
-get_logfd(struct vm *vm)
-{
-	return vm->logfd;
-}
-
-void
-set_infd(struct vm *vm, int fd)
-{
-	vm->infd = fd;
-}
-
-void
-set_outfd(struct vm *vm, int fd)
-{
-	vm->outfd = fd;
-}
-void
-set_errfd(struct vm *vm, int fd)
-{
-	vm->errfd = fd;
-}
-
-void
-set_logfd(struct vm *vm, int fd)
-{
-	vm->logfd = fd;
-}
+generate_vm_accessor(int, infd)
+generate_vm_accessor(int, outfd)
+generate_vm_accessor(int, errfd)
+generate_vm_accessor(int, logfd)
+generate_vm_accessor(enum STATE, state)
 
 char *
 get_assigned_comport(struct vm *vm)
@@ -1078,18 +683,6 @@ void
 set_pid(struct vm *vm, pid_t pid)
 {
 	vm->pid = pid;
-}
-
-void
-set_state(struct vm *vm, enum STATE st)
-{
-	vm->state = st;
-}
-
-enum STATE
-get_state(struct vm *vm)
-{
-	return vm->state;
 }
 
 struct vm_conf *

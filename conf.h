@@ -167,9 +167,9 @@ void free_disk_conf(struct disk_conf *);
 void free_iso_conf(struct iso_conf *);
 void free_net_conf(struct net_conf *);
 void free_vm_conf(struct vm_conf *);
-void free_bhyveload_env(struct bhyveload_env *);
-void free_bhyve_env(struct bhyve_env *);
-void free_cpu_pin(struct cpu_pin *);
+#define free_bhyveload_env(p)  free(p)
+#define free_bhyve_env(p)  free(p)
+#define free_cpu_pin(p)   free(p)
 void free_fbuf(struct fbuf *);
 void clear_passthru_conf(struct vm_conf *);
 void clear_disk_conf(struct vm_conf *);
@@ -188,7 +188,7 @@ int add_bhyve_env(struct vm_conf *, const char *);
 int add_cpu_pin(struct vm_conf *, int, int);
 struct net_conf *copy_net_conf(const struct net_conf *);
 int set_name(struct vm_conf *, const char *);
-int set_memory_size(struct vm_conf *, const char *);
+int set_memory(struct vm_conf *, const char *);
 int set_ncpu(struct vm_conf *, int);
 int set_cpu_topology(struct vm_conf *, int[3]);
 int set_loadcmd(struct vm_conf *, const char *);
@@ -204,7 +204,7 @@ int set_owner(struct vm_conf *, uid_t);
 int set_group(struct vm_conf *, gid_t);
 int set_boot(struct vm_conf *, enum BOOT);
 int set_hostbridge(struct vm_conf *, enum HOSTBRIDGE_TYPE);
-int set_backend(struct vm_conf *, char *);
+int set_backend(struct vm_conf *, const char *);
 int set_boot_delay(struct vm_conf *, int);
 int set_comport(struct vm_conf *, const char *);
 int set_reboot_on_change(struct vm_conf *, bool);
