@@ -1478,7 +1478,11 @@ compare_fstat(int fd, struct stat *old)
 #undef CMP_FIELD
 }
 
-#define END_UP(var, type) STAILQ_NEXT(STAILQ_LAST(var, type, next), next) = NULL
+#define END_UP(var, type) do { \
+		struct type *p = STAILQ_LAST(var, type, next);	\
+		if (p)						\
+			STAILQ_NEXT(p, next) = NULL;		\
+	} while (0)
 
 static int
 parse(struct cffile *file)
