@@ -1,3 +1,4 @@
+* 2.5	
 	- Add 'tpm' parameter.
 	  (6ceff31c48e0c6f5a4e5aca18a575bf94469f063)
 	- Re-work 'err_logfile' parameter.
