@@ -1554,7 +1554,7 @@ main(int argc, char *argv[])
 	}
 
 	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
-		ERR("cannot bind %s\n", gl_conf->cmd_sock_path);
+		ERR("cannot bind %s\n", gl_conf->cmd_socket_path);
 		return 1;
 	}
 
@@ -1571,7 +1571,7 @@ main(int argc, char *argv[])
 	else
 		event_loop();
 
-	unlink(gl_conf->cmd_sock_path);
+	unlink(gl_conf->cmd_socket_path);
 	close(cmd_sock);
 
 	stop_virtual_machines();

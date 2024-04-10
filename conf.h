@@ -15,7 +15,7 @@ struct global_conf {
 	char *plugin_dir;
 	char *vars_dir;
 	char *pid_path;
-	char *cmd_sock_path;
+	char *cmd_socket_path;
 	char *unix_domain_socket_mode;
 	int nmdm_offset;
 	int foreground;

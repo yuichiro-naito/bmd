@@ -172,7 +172,7 @@ send_recv(nvlist_t *cmd)
 	uint32_t sz;
 
 	if ((s = connect_to_server(gl_conf)) < 0) {
-		printf("cannot connect to %s\n", gl_conf->cmd_sock_path);
+		printf("cannot connect to %s\n", gl_conf->cmd_socket_path);
 		return NULL;
 	}
 

@@ -12,15 +12,15 @@ static char gl0_config_file[] = LOCALBASE "/etc/bmd.conf";
 static char gl0_plugin_dir[] = LOCALBASE "/libexec/bmd";
 static char gl0_vars_dir[] = LOCALBASE "/var/cache/bmd";
 static char gl0_pid_path[] = "/var/run/bmd.pid";
-static char gl0_cmd_sock_path[] = "/var/run/bmd.sock";
-static char gl0_cmd_sock_mode[] = "0600";
+static char gl0_cmd_socket_path[] = "/var/run/bmd.sock";
+static char gl0_cmd_socket_mode[] = "0600";
 static struct global_conf gl_conf0 = {
 	.config_file = gl0_config_file,
 	.plugin_dir = gl0_plugin_dir,
 	.vars_dir = gl0_vars_dir,
 	.pid_path = gl0_pid_path,
-	.cmd_sock_path = gl0_cmd_sock_path,
-	.unix_domain_socket_mode = gl0_cmd_sock_mode,
+	.cmd_socket_path = gl0_cmd_socket_path,
+	.unix_domain_socket_mode = gl0_cmd_socket_mode,
 	.nmdm_offset = DEFAULT_NMDM_OFFSET,
 	.foreground = 0
 };
@@ -34,7 +34,7 @@ free_global_conf(struct global_conf *gc)
 	free(gc->pid_path);
 	free(gc->plugin_dir);
 	free(gc->vars_dir);
-	free(gc->cmd_sock_path);
+	free(gc->cmd_socket_path);
 	free(gc->unix_domain_socket_mode);
 	free(gc);
 }
@@ -62,7 +62,7 @@ init_gl_conf(void)
 	COPY_ATTR_STRING(pid_path);
 	COPY_ATTR_STRING(plugin_dir);
 	COPY_ATTR_STRING(vars_dir);
-	COPY_ATTR_STRING(cmd_sock_path);
+	COPY_ATTR_STRING(cmd_socket_path);
 	COPY_ATTR_STRING(unix_domain_socket_mode);
 	COPY_ATTR_INT(nmdm_offset);
 	COPY_ATTR_INT(foreground);
@@ -95,7 +95,7 @@ merge_global_conf(struct global_conf *gc)
 	REPLACE_STR(pid_path);
 	REPLACE_STR(plugin_dir);
 	REPLACE_STR(vars_dir);
-	REPLACE_STR(cmd_sock_path);
+	REPLACE_STR(cmd_socket_path);
 	REPLACE_STR(unix_domain_socket_mode);
 	REPLACE_INT(nmdm_offset);
 #undef REPLACE_INT

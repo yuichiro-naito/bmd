@@ -1052,7 +1052,7 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 			if (strcmp(key, "cmd_socket_mode") == 0)
 				t = &gc->unix_domain_socket_mode;
 			else if (strcmp(key, "cmd_socket_path") == 0)
-				t = &gc->cmd_sock_path;
+				t = &gc->cmd_socket_path;
 			else
 				goto unknown;
 			break;

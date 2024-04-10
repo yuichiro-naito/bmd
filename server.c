@@ -279,7 +279,7 @@ connect_to_server(const struct global_conf *gc)
 	hints.ai_family = AF_LOCAL;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if (getaddrinfo(gc->cmd_sock_path, NULL, &hints, &r))
+	if (getaddrinfo(gc->cmd_socket_path, NULL, &hints, &r))
 		return -1;
 
 	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
@@ -312,7 +312,7 @@ create_command_server(const struct global_conf *gc)
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 
-	if (getaddrinfo(gc->cmd_sock_path, NULL, &hints, &r))
+	if (getaddrinfo(gc->cmd_socket_path, NULL, &hints, &r))
 		return -1;
 
 	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
@@ -329,13 +329,13 @@ create_command_server(const struct global_conf *gc)
 			goto err;
 
 	if (gc->unix_domain_socket_mode == NULL ||
-	    stat(gc->cmd_sock_path, &st) < 0 ||
+	    stat(gc->cmd_socket_path, &st) < 0 ||
 	    (set = setmode(gc->unix_domain_socket_mode)) == NULL) {
 		freeaddrinfo(r);
 		return s;
 	}
 
-	if (chmod(gc->cmd_sock_path, getmode(set, st.st_mode)) < 0)
+	if (chmod(gc->cmd_socket_path, getmode(set, st.st_mode)) < 0)
 		goto err;
 
 	freeaddrinfo(r);
