@@ -167,7 +167,7 @@ ret:
 static nvlist_t *
 send_recv(nvlist_t *cmd)
 {
-	int s, fd, rc;
+	int s, fd = -1, rc;
 	nvlist_t *res = NULL;
 	uint32_t sz;
 
