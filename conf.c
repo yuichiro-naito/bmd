@@ -779,6 +779,7 @@ create_vm_conf(const char *vm_name)
 	return ret;
 err:
 	ERR("failed to create VM config! (%s)\n", strerror(errno));
+	free(local);
 	free(ret);
 	free(backend);
 	free(fbuf);

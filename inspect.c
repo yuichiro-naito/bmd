@@ -139,10 +139,13 @@ mount_iso(struct inspection *ins)
 
 	/* XXX: The last .iov_len will be a bit longer. */
 	if (snprintf(IOV_LAST_ENTRY(iov).iov_base, IOV_LAST_ENTRY(iov).iov_len,
-	    "/dev/md%d", (unsigned)ins->md_unit) < 0)
-		return -1;
+	    "/dev/md%d", (unsigned)ins->md_unit) < 0) {
+		rc = -1;
+		goto ret;
+	}
 
 	rc = nmount(iov, nitems(iov), MNT_RDONLY);
+ret:
 	for (i = 0; i < nitems(iov); i++)
 		free(iov[i].iov_base);
 
