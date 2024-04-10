@@ -345,6 +345,13 @@ compare_disk_info(const void *l, const void *r, void *thunk __unused)
 	a = *(const struct disk_info *const *)l;
 	b = *(const struct disk_info *const *)r;
 
+	if (a == NULL && b == NULL)
+		return 0;
+	if (a == NULL)
+		return 1;
+	if (b == NULL)
+		return -1;
+
 	if (a->disk_name == NULL && b->disk_name == NULL)
 		return 0;
 	if (a->disk_name == NULL)
