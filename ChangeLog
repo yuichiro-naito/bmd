@@ -1,3 +1,5 @@
+	- Add 'tpm' parameter.
+	  (6ceff31c48e0c6f5a4e5aca18a575bf94469f063)
 	- Re-work 'err_logfile' parameter.
 	  (a0078d199ac42a06f0caedfbe6189471b0595bac)
 	- Change the 'cmd_socket_mode' default value to '0600'.
