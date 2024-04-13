@@ -524,6 +524,9 @@ set_cpu_topology(struct vm_conf *conf, int ncpu[3])
 }
 
 generate_getter(int, ncpu)
+generate_getter(int, ncpu_sockets)
+generate_getter(int, ncpu_cores)
+generate_getter(int, ncpu_threads)
 generate_number_accessor(uid_t, owner)
 generate_number_accessor(gid_t, group)
 generate_number_accessor(enum BOOT, boot)
