@@ -277,7 +277,7 @@ parse_disk(struct vm_conf *conf, char *val)
 {
 	size_t n;
 	const char *const *p;
-	static const char *const types[] = { "ahci-hd", "virtio-blk", "nvme" };
+	static const char *const types[] = { "ahci","ahci-hd", "virtio-blk", "nvme" };
 
 	ARRAY_FOREACH (p, types) {
 		n = strlen(*p);
