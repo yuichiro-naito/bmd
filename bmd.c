@@ -1613,6 +1613,16 @@ read_stdin(struct vm *vm)
 	return size;
 }
 
+static struct vm_entry *running_vm;
+
+static void
+sigint_handler(int sig __unused)
+{
+	cleanup_virtual_machine(running_vm);
+	call_plugins(running_vm);
+	remove_taps(VM_PTR(running_vm));
+}
+
 int
 direct_run(const char *name, bool install, bool single)
 {
@@ -1659,6 +1669,9 @@ direct_run(const char *name, bool install, bool single)
 		remove_taps(VM_PTR(vm_ent));
 		goto err;
 	}
+
+	running_vm = vm_ent;
+	signal(SIGINT, sigint_handler);
 
 	if (VM_START(vm_ent) < 0)
 		goto err;
