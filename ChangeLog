@@ -1,4 +1,6 @@
 * 2.5
+	- Add 'ahci' disk type.
+	  (9cbbe06c0d8f4455e896b482866321b0335d2ea8)
 	- Add 'tpm' parameter.
 	  (6ceff31c48e0c6f5a4e5aca18a575bf94469f063)
 	- Re-work 'err_logfile' parameter.
