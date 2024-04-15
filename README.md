@@ -210,7 +210,7 @@ Following keys are available for bmd.
 
 ```
 global {
-	$imgpath = /dev/zpol/zpool/images;
+	$imgpath = /dev/zvol/zpool/images;
 	$isopath = /zpool/iso;
 }
 ```
