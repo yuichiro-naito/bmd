@@ -83,5 +83,7 @@ get_tpm_type;
 get_tpm_version;
 plugin_wait_for_process;
 plugin_set_timer;
+plugin_start_virtualmachine;
+plugin_stop_virtualmachine;
 split_args;
 };
