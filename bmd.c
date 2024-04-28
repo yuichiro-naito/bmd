@@ -248,6 +248,19 @@ plugin_set_timer(int second, plugin_call_back cb, void *data)
 	return 0;
 }
 
+int
+plugin_start_virtualmachine(struct vm *v)
+{
+	return start_virtual_machine((struct vm_entry*)v);
+}
+
+int
+plugin_stop_virtualmachine(struct vm *v)
+{
+	stop_virtual_machine((struct vm_entry*)v);
+	return 0;
+}
+
 static int
 send_fd(int sock, int fd)
 {
