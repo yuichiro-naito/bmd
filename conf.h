@@ -229,7 +229,7 @@ int set_tpm_type(struct vm_conf *, const char *);
 int set_tpm_version(struct vm_conf *, const char *);
 
 struct fbuf *create_fbuf(void);
-struct vm_conf *create_vm_conf(const char *vm_);
+struct vm_conf *create_vm_conf(const char *);
 int finalize_vm_conf(struct vm_conf *);
 int dump_vm_conf(struct vm_conf *, FILE *);
 
