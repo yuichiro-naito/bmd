@@ -192,20 +192,24 @@ struct vm_method {
   old config to new one. The first argument of 'on_reload_config' is the
   new config and the second is the old one.
 
-  `prehook` is used for external configurations such as firewall, routing, etc.
-  `prehook` will be called twice, before loading and running bhyve.
+  `prestart` is used for external configurations such as firewall, routing, etc.
+  `prestart` will be called before starting the VM.
 
-  `prehook` has to run in the short term, because the bmd is implemented
-  as an event machine. If 'prehook' runs for a long time, the bmd will
+  `prestart` has to run in the short term, because the bmd is implemented
+  as an event machine. If 'prestart' runs for a long time, the bmd will
   be blocked all the operations from the client during that time. To get avoid
-  blocking, `prehook` should fork a child process and wait for it.
+  blocking, `prestart` should fork a child process and wait for it.
 
-  Returning a positive number from the 'prehook' function will delay
+  Returning a positive number from the 'prestart' function will delay
   invoking the loader and bhyve until the `plugin_start_virtual_machine`
   function is called. The `plugin_wait_for_process` function can be used for
-  this purpose. Returning zero from the 'prehook' function will invoke
+  this purpose. Returning zero from the 'prestart' function will invoke
   the loader and bhyve soon. Returning a negative number means an error occured
   in the function.
+
+  `poststop` is used for clean up the external configurations for the VM.
+  `poststop` has to run in the short term as same as 'prestart'. During
+  the child process is running, the VM state keeps 'TERMINATING' state.
 
  */
 typedef struct plugin_desc {
@@ -218,7 +222,8 @@ typedef struct plugin_desc {
 	struct vm_method *method;
 	void (*on_reload_config)(nvlist_t *, nvlist_t *);
 	struct loader_method *loader_method;
-	int (*prehook)(struct vm *, nvlist_t *);
+	int (*prestart)(struct vm *, nvlist_t *);
+	int (*poststop)(struct vm *, nvlist_t *);
 } PLUGIN_DESC;
 
 extern PLUGIN_DESC plugin_desc;
