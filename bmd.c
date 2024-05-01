@@ -556,6 +556,42 @@ reason_string(int status)
 }
 
 static int
+call_prestart_plugins(struct vm_entry *vm_ent)
+{
+	int rc, ret = INT_MIN;
+	bool called = false;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->ent->desc.prestart) {
+			rc = (pd->ent->desc.prestart)(VM_PTR(vm_ent),
+						      pd->pl_conf);
+			called = true;
+			if (rc > ret)
+				ret = rc;
+		}
+	return called ? ret : 0;
+}
+
+static int
+call_poststop_plugins(struct vm_entry *vm_ent)
+{
+	int rc, ret = INT_MIN;
+	bool called = false;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->ent->desc.poststop) {
+			rc = (pd->ent->desc.poststop)(VM_PTR(vm_ent),
+						      pd->pl_conf);
+			called = true;
+			if (rc > ret)
+				ret = rc;
+		}
+	return called ? ret : 0;
+}
+
+static int
 on_vm_exit(int ident __unused, void *data)
 {
 	int status;
@@ -574,12 +610,13 @@ on_vm_exit(int ident __unused, void *data)
 			ERR("failed loading vm %s (status:%d)\n",
 			    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
 			VM_LD_CLEANUP(vm_ent);
+			if (call_poststop_plugins(vm_ent) > 0)
+				return 0;
 			stop_virtual_machine(vm_ent);
 		}
 		break;
 	case RESTART:
 		stop_virtual_machine(vm_ent);
-		VM_STATE(vm_ent) = TERMINATE;
 		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 		break;
 	case RUN:
@@ -600,14 +637,16 @@ on_vm_exit(int ident __unused, void *data)
 		/* FALLTHROUGH */
 	case PRELOAD:
 	case PRERUN:
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
 		stop_virtual_machine(vm_ent);
 		VM_CONF(vm_ent)->install = false;
 		break;
 	case REMOVE:
 		INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
 		stop_virtual_machine(vm_ent);
-		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
-		free_vm_entry(vm_ent);
 		break;
 	case TERMINATE:
 		break;
@@ -1363,6 +1402,8 @@ start_virtual_machine(struct vm_entry *vm_ent)
 			remove_taps(VM_PTR(vm_ent));
 			return -1;
 		}
+		if (call_prestart_plugins(vm_ent) > 0)
+			return 0;
 		rc = load_virtual_machine(vm_ent);
 		if (rc <= -2)
 			goto force_kill;
@@ -1457,9 +1498,14 @@ start_virtual_machines(void)
 static void
 stop_virtual_machine(struct vm_entry *vm_ent)
 {
+	enum STATE st = VM_STATE(vm_ent);
 	stop_waiting_for(vm_output_and_timers, vm_ent);
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
+	if (st == REMOVE) {
+		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+		free_vm_entry(vm_ent);
+	}
 }
 
 struct vm_entry *
@@ -1671,9 +1717,12 @@ stop_virtual_machines(void)
 		if (ev.udata == NULL)
 			continue;
 		event = ev.udata;
-		if (event->type == EVENT &&
-		    event->kev.filter == EVFILT_PROC)
+		if (event->kev.filter == EVFILT_PROC) {
+			if (event->type == EVENT &&
+			    call_poststop_plugins(vm_ent) > 0)
+				continue;
 			count--;
+		}
 		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
 		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
 			ERR("%s\n", "callback failed");
