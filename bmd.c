@@ -609,7 +609,8 @@ on_vm_exit(int ident __unused, void *data)
 		} else {
 			ERR("failed loading vm %s (status:%d)\n",
 			    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
-			VM_LD_CLEANUP(vm_ent);
+			if (VM_LD_METHOD(vm_ent))
+				VM_LD_CLEANUP(vm_ent);
 			if (call_poststop_plugins(vm_ent) > 0)
 				return 0;
 			stop_virtual_machine(vm_ent);
@@ -1412,7 +1413,8 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		/* FALLTHROUGH */
 	}
 
-	VM_LD_CLEANUP(vm_ent);
+	if (VM_LD_METHOD(vm_ent))
+		VM_LD_CLEANUP(vm_ent);
 
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
