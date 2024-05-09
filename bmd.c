@@ -1403,8 +1403,12 @@ start_virtual_machine(struct vm_entry *vm_ent)
 			remove_taps(VM_PTR(vm_ent));
 			return -1;
 		}
+		VM_STATE(vm_ent) = PRELOAD;
 		if (call_prestart_plugins(vm_ent) > 0)
 			return 0;
+	}
+	if (VM_STATE(vm_ent) == TERMINATE ||
+	    VM_STATE(vm_ent) == PRELOAD) {
 		rc = load_virtual_machine(vm_ent);
 		if (rc <= -2)
 			goto force_kill;
