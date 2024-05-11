@@ -500,7 +500,7 @@ on_exit_open_comport(int ident __unused, void *data)
 {
 	int status;
 	struct com_port *cp = data;
-	struct sock_buf *sb = cp->sb;
+	struct sock_buf *s, *sb = cp->sb;
 	nvlist_t *res = cp->res;
 
 	while (waitpid(cp->pid, &status, 0) < 0)
@@ -510,6 +510,18 @@ on_exit_open_comport(int ident __unused, void *data)
 		cp->fd = -1;
 
 	close(cp->sock);
+
+	/* check if sock_buf is already closed. */
+	LIST_FOREACH (s, &sock_list, next)
+		if (s == sb)
+			break;
+	if (s == NULL) {
+		nvlist_destroy(res);
+		if (cp->fd >= 0)
+			close(cp->fd);
+		free(cp);
+		return 0;
+	}
 
 	sb->res_fd = cp->fd;
 
@@ -539,7 +551,7 @@ static int
 delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 {
 	pid_t pid;
-	int fd, socks[2];
+	int socks[2];
 	struct com_port *cp;
 	struct kevent kev[2];
 	static event_call_back cb[2] = {on_read_open_comport, on_exit_open_comport};
@@ -562,8 +574,7 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 
 	if (pid == 0) {
 		close(socks[0]);
-		fd = open_comport(comport);
-		send_fd(socks[1], fd);
+		send_fd(socks[1], open_comport(comport));
 		recv_ack(socks[1]);
 		close(socks[1]);
 		exit(0);
