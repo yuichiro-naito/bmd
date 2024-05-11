@@ -42,7 +42,8 @@ free_global_conf(struct global_conf *gc)
 void
 free_gl_conf(void)
 {
-	free_global_conf(gl_conf);
+	if (gl_conf != &gl_conf0)
+		free_global_conf(gl_conf);
 	gl_conf = &gl_conf0;
 }
 
