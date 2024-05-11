@@ -175,6 +175,13 @@ int direct_run(const char *, bool, bool);
 int load_config_file(struct vm_conf_list *, bool);
 int compare_vm_conf_entry(struct vm_conf_entry *, struct vm_conf_entry *);
 
+int send_fd(int, int);
+int recv_fd(int);
+int send_ack(int);
+int recv_ack(int);
+int register_events(struct kevent *, event_call_back *, void **, int);
+int set_sock_buf_wait_flags(struct sock_buf *, short, short);
+
 /* implemented in control.c */
 int control(int, char *[]);
 struct vm_conf_entry *lookup_vm_conf(const char *);

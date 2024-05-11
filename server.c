@@ -3,12 +3,14 @@
 #include <sys/ucred.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 
 #include <netinet/in.h>
 
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -460,9 +462,8 @@ open_comport(const char *comport)
 
 	if ((fn = get_peer_comport(comport)) == NULL)
 		return -1;
-	while ((fd = open(fn, O_RDWR)) < 0)
-		if (errno != EINTR)
-			goto err;
+	if ((fd = open(fn, O_RDWR)) < 0)
+		goto err;
 	if (flock(fd, LOCK_EX | LOCK_NB) < 0)
 		goto err2;
 
@@ -473,6 +474,125 @@ err2:
 err:
 	free(fn);
 	return -1;
+}
+
+struct com_port {
+	int fd;
+	int sock;
+	pid_t pid;
+	nvlist_t *res;
+	struct sock_buf *sb;
+};
+
+static int
+on_read_open_comport(int ident, void *data)
+{
+	struct com_port *cp = data;
+
+	cp->fd = recv_fd(ident);
+	send_ack(ident);
+
+	return 0;
+}
+
+static int
+on_exit_open_comport(int ident __unused, void *data)
+{
+	int status;
+	struct com_port *cp = data;
+	struct sock_buf *sb = cp->sb;
+	nvlist_t *res = cp->res;
+
+	while (waitpid(cp->pid, &status, 0) < 0)
+		if (errno != EINTR)
+			break;
+	if (! WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		cp->fd = -1;
+
+	close(cp->sock);
+
+	sb->res_fd = cp->fd;
+
+	sb->res_buf = nvlist_pack(res, &sb->res_size);
+	if (cp->sb->res_buf == NULL) {
+		nvlist_destroy(res);
+		res = nvlist_create(0);
+		nvlist_add_bool(res, "error", true);
+		nvlist_add_string(res, "reason", "nvlist_pack error");
+		sb->res_buf = nvlist_pack(res, &sb->res_size);
+		if (sb->res_buf == NULL) {
+			nvlist_destroy(res);
+			free(cp);
+			return -1;
+		}
+	}
+	sb->res_bytes = 0;
+	nvlist_destroy(res);
+	free(cp);
+	clear_sock_buf(sb);
+	set_sock_buf_wait_flags(sb, EV_DISABLE, EV_ENABLE);
+
+	return 0;
+}
+
+static int
+delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
+{
+	pid_t pid;
+	int fd, socks[2];
+	struct com_port *cp;
+	struct kevent kev[2];
+	static event_call_back cb[2] = {on_read_open_comport, on_exit_open_comport};
+	void *data[2];
+
+	if ((cp = malloc(sizeof(*cp))) == NULL)
+		return -1;
+
+	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0) {
+		free(cp);
+		return -1;
+	}
+
+	if ((pid = fork()) < 0) {
+		close(socks[0]);
+		close(socks[1]);
+		free(cp);
+		return -1;
+	}
+
+	if (pid == 0) {
+		close(socks[0]);
+		fd = open_comport(comport);
+		send_fd(socks[1], fd);
+		recv_ack(socks[1]);
+		close(socks[1]);
+		exit(0);
+	}
+
+	close(socks[1]);
+	cp->pid = pid;
+	cp->res = res;
+	cp->sock = socks[0];
+	cp->sb = sb;
+	EV_SET(&kev[0], socks[0], EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0,
+	       NULL);
+	EV_SET(&kev[1], pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0,
+	       NULL);
+	data[0] = cp;
+	data[1] = cp;
+
+	if (register_events(kev, cb, data, 2) < 0) {
+		ERR("failed to open comport (%s)\n", strerror(errno));
+		kill(pid, SIGKILL);
+		while (waitpid(pid, NULL, 0) < 0)
+			if (errno != EINTR)
+				break;
+		free(cp);
+		close(socks[0]);
+		return -1;
+	}
+
+	return 0;
 }
 
 static int
@@ -501,13 +621,12 @@ check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
  *  -  1 = install
  */
 static nvlist_t *
-boot0_command(int s __unused, const nvlist_t *nv, int style,
+boot0_command(struct sock_buf *s __unused, const nvlist_t *nv, int style,
     struct xucred *ucred)
 {
-	const char *name, *reason, *comport;
+	const char *name, *reason;
 	struct vm_entry *vm_ent = NULL;
 	nvlist_t *res;
-	int fd;
 	bool error = false;
 
 	if (style < 0) {
@@ -557,31 +676,28 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	else if (vm_ent && ((comport = VM_ASCOMPORT(vm_ent)) ||
-		       (comport = VM_CONF(vm_ent)->comport)) &&
-	    (fd = open_comport(comport)) >= 0)
-		nvlist_add_number(res, FD_KEY, fd);
 	return res;
 }
 
 static nvlist_t *
-boot_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+boot_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	return boot0_command(s, nv, 0, ucred);
 }
 
 static nvlist_t *
-install_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+install_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	return boot0_command(s, nv, 1, ucred);
 }
 
 static nvlist_t *
-showcomport_command(int s __unused, const nvlist_t *nv,  struct xucred *ucred)
+showcomport_command(struct sock_buf *s, const nvlist_t *nv,
+		    struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
-	int fd;
+	int rc = -1;
 	nvlist_t *res;
 	bool error = false;
 	char *comport;
@@ -598,11 +714,15 @@ showcomport_command(int s __unused, const nvlist_t *nv,  struct xucred *ucred)
 
 	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
 
-	if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
+	if (VM_STATE(vm_ent) == PRELOAD || VM_STATE(vm_ent) == LOAD ||
+	    VM_STATE(vm_ent) == RUN) {
 		chown_comport(comport, ucred);
 
-		if ((fd = open_comport(comport)) >= 0)
-			nvlist_add_number(res, FD_KEY, fd);
+		if ((rc = delayed_open_comport(s, comport, res)) < 0) {
+			error = true;
+			reason = "failed to open comport";
+			goto ret;
+		}
 	}
 
 	nvlist_add_string(res, "comport", comport ? comport : "(null)");
@@ -611,11 +731,11 @@ ret:
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
-	return res;
+	return rc == 0 ? NULL : res;
 }
 
 static nvlist_t *
-showvgaport_command(int s __unused, const nvlist_t *nv __unused,
+showvgaport_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
     struct xucred *ucred)
 {
 	const char *name, *reason;
@@ -650,7 +770,8 @@ ret:
 }
 
 static nvlist_t *
-list_command(int s __unused, const nvlist_t *nv __unused, struct xucred *ucred)
+list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
+	     struct xucred *ucred)
 {
 	size_t i, count = 0;
 	const char *reason;
@@ -709,8 +830,8 @@ ret:
 }
 
 static nvlist_t *
-vm_down_command(int s __unused, const nvlist_t *nv __unused, int how,
-    struct xucred *ucred)
+vm_down_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
+		int how, struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -760,24 +881,25 @@ ret:
 }
 
 static nvlist_t *
-shutdown_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+shutdown_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	return vm_down_command(s, nv, 0, ucred);
 }
 
 static nvlist_t *
-reset_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+reset_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	return vm_down_command(s, nv, 1, ucred);
 }
 
 static nvlist_t *
-poweroff_command(int s, const nvlist_t *nv,  struct xucred *ucred)
+poweroff_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
 {
 	return vm_down_command(s, nv, 2, ucred);
 }
 
-typedef nvlist_t *(*cfunc)(int s, const nvlist_t *nv, struct xucred *ucred);
+typedef nvlist_t *(*cfunc)(struct sock_buf *s, const nvlist_t *nv,
+			   struct xucred *ucred);
 
 struct command_entry {
 	const char *name;
@@ -834,7 +956,11 @@ recv_command(struct sock_buf *sb)
 	if ((func = get_command_function(cmd)) == NULL)
 		goto err;
 
-	res = (*func)(sb->fd, nv, &sb->peer);
+	res = (*func)(sb, nv, &sb->peer);
+	if (res == NULL) {
+		nvlist_destroy(nv);
+		return 1;
+	}
 
 	sb->res_fd = nvlist_exists_number(res, FD_KEY) ?
 		nvlist_take_number(res, FD_KEY) : -1;
