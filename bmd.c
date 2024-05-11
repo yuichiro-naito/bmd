@@ -179,7 +179,7 @@ register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 #define register_event(b, c, d) register_event0(EVENT, (b), (c), (d))
 #define register_plugin_event(b, c, d) register_event0(PLUGIN, (b), (c), (d))
 
-static int
+int
 register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
 {
 	int i;
@@ -261,7 +261,7 @@ plugin_stop_virtualmachine(struct vm *v)
 	return 0;
 }
 
-static int
+int
 send_fd(int sock, int fd)
 {
 	int rc;
@@ -298,7 +298,7 @@ send_fd(int sock, int fd)
 	return rc;
 }
 
-static int
+int
 recv_fd(int sock)
 {
 	int rc, fd;
@@ -341,7 +341,7 @@ err:
 
 }
 
-static int
+int
 send_ack(int sock)
 {
 	int rc;
@@ -354,7 +354,7 @@ send_ack(int sock)
 	return rc;
 }
 
-static int
+int
 recv_ack(int sock)
 {
 	int rc;
@@ -672,7 +672,7 @@ wait_for_vm(struct vm_entry *vm_ent)
 	return 0;
 }
 
-static int
+int
 set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 {
 	int i = 0;

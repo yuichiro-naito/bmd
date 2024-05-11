@@ -402,12 +402,56 @@ end:
 }
 
 /*
+ * attach console
+ */
+static int
+do_console(const char *name)
+{
+	int fd, ret = 0;
+	nvlist_t *cmd, *res = NULL;
+
+	cmd = nvlist_create(0);
+	nvlist_add_string(cmd, "command", "showcomport");
+	nvlist_add_string(cmd, "name", name);
+
+	if ((res = send_recv(cmd)) == NULL) {
+		ret = 1;
+		goto end;
+	}
+
+	if (nvlist_get_bool(res, "error")) {
+		ret = 1;
+		printf("%s\n", nvlist_get_string(res, "reason"));
+		goto end;
+	}
+
+	if (nvlist_exists_number(res, FD_KEY)) {
+		fd = nvlist_take_number(res, FD_KEY);
+		if (attach_console(fd) < 0) {
+			fprintf(stderr, "failed to setup console\n");
+			ret = 1;
+		}
+		close(fd);
+	} else {
+		fprintf(stderr, "failed to open console\n");
+		ret = 1;
+	}
+
+end:
+	nvlist_destroy(cmd);
+	nvlist_destroy(res);
+	free_global_vars();
+	free_gl_conf();
+	return ret;
+}
+
+/*
  * boot_style= 0: showcomport, 1: boot, 2: install
  */
 static int
 do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
 {
-	int fd, ret = 0;
+	int ret = 0;
 	nvlist_t *cmd, *res = NULL;
 	const char *comport = NULL;
 	const static char *command[] = {"showcomport", "boot", "install"};
@@ -436,19 +480,8 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 	if (show)
 		printf("%s\n", comport ? comport : "no com port");
 
-	if (nvlist_exists_number(res, FD_KEY)) {
-		fd = nvlist_take_number(res, FD_KEY);
-		if (console && attach_console(fd) < 0) {
-			fprintf(stderr, "failed to setup console\n");
-			ret = 1;
-		}
-		close(fd);
-	} else {
-		if (console) {
-			fprintf(stderr, "failed to open console\n");
-			ret = 1;
-		}
-	}
+	if (console)
+		do_console(name);
 
 end:
 	nvlist_destroy(cmd);
@@ -583,7 +616,7 @@ control(int argc, char *argv[])
 		if (strcmp(argv[1], "inspect") == 0)
 			return do_inspect(argv[2]);
 		if (strcmp(argv[1], "console") == 0)
-			return do_boot_console(argv[2], 0, true, false);
+			return do_console(argv[2]);
 		if (strcmp(argv[1], "showcomport") == 0)
 			return do_boot_console(argv[2], 0, false, true);
 	}
