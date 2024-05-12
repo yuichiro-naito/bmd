@@ -26,16 +26,49 @@
 
 static struct sock_list sock_list = LIST_HEAD_INITIALIZER();
 
+/**
+   Note: Don't use a pointer to refer to the sock_buf structure. Use
+   sock_buf_id instead. The same pointer value will often be reused after
+   freeing and reallocating the strsucture. We can't know if the sock_buf is
+   freed and re-allocated or keeps existing, from the pointer value.
+   For the same reason, Don't use a pointer to refer to the com_opener
+   structure. Use com_opener_id instead.
+ */
+LIST_HEAD(com_opener_head, com_opener);
+struct com_opener {
+	LIST_ENTRY(com_opener) next;
+	com_opener_id id;
+	int fd;
+	int sock;
+	sock_buf_id sid;
+	pid_t pid;
+	nvlist_t *res;
+};
+static struct com_opener_head com_opener_list = LIST_HEAD_INITIALIZER();
+
+static struct sock_buf *
+lookup_sock_buf(sock_buf_id id)
+{
+	struct sock_buf *p;
+	LIST_FOREACH (p, &sock_list, next)
+		if (p->id == id)
+			return p;
+	return NULL;
+}
+
 struct sock_buf *
 create_sock_buf(int fd)
 {
 	struct sock_buf *r;
 	socklen_t sz;
+	static sock_buf_id id = 0;
 
 	if ((r = calloc(1, sizeof(*r))) == NULL)
 		return NULL;
+	r->id = id++;
 	r->fd = fd;
 	time(&r->event_time);
+	r->cid = -1;
 
 	sz = sizeof(r->peer);
 	if  (getsockopt(fd, SOL_LOCAL, LOCAL_PEERCRED, &r->peer, &sz) < 0)
@@ -46,12 +79,32 @@ create_sock_buf(int fd)
 	return r;
 }
 
+static void
+destroy_com_opener(struct com_opener *cp)
+{
+	struct sock_buf *sb;
+
+	LIST_REMOVE(cp, next);
+	if ((sb = lookup_sock_buf(cp->sid)) != NULL)
+		sb->cid = -1;
+	free(cp);
+}
+
+static void
+stop_com_opener(struct com_opener *cp)
+{
+	kill(cp->pid, SIGTERM);
+}
 void
 destroy_sock_buf(struct sock_buf *p)
 {
+	struct com_opener *cp;
+
 	if (p == NULL)
 		return;
 	LIST_REMOVE(p, next);
+	if (p->cid != -1 && (cp = lookup_com_opener(p->cid)))
+		stop_com_opener(cp);
 	close(p->fd);
 	if (p->res_fd != -1)
 		close(p->res_fd);
@@ -90,8 +143,12 @@ close_timeout_sock_buf(int timeout)
 	time_t now = time(NULL);
 
 	LIST_FOREACH_SAFE (p, &sock_list, next, n)
-		if (p->event_time + timeout <= now)
-			destroy_sock_buf(p);
+		if (p->event_time + timeout <= now) {
+			if (p->cid == -1)
+				destroy_sock_buf(p);
+			else
+				p->event_time = now;
+		}
 }
 
 void
@@ -476,18 +533,34 @@ err:
 	return -1;
 }
 
-struct com_port {
-	int fd;
-	int sock;
-	pid_t pid;
-	nvlist_t *res;
-	struct sock_buf *sb;
-};
+struct com_opener *
+lookup_com_opener(com_opener_id id)
+{
+	struct com_opener *p;
+	LIST_FOREACH (p, &com_opener_list, next)
+		if (p->id == id)
+			return p;
+	return NULL;
+}
+
+static struct com_opener *
+create_com_opener(sock_buf_id sid)
+{
+	struct com_opener *cp;
+	static com_opener_id id = 0;
+
+	if ((cp = malloc(sizeof(*cp))) == NULL)
+		return NULL;
+	cp->id = id++;
+	cp->sid = sid;
+	LIST_INSERT_HEAD(&com_opener_list, cp, next);
+	return cp;
+}
 
 static int
 on_read_open_comport(int ident, void *data)
 {
-	struct com_port *cp = data;
+	struct com_opener *cp = data;
 
 	cp->fd = recv_fd(ident);
 	send_ack(ident);
@@ -499,8 +572,8 @@ static int
 on_exit_open_comport(int ident __unused, void *data)
 {
 	int status;
-	struct com_port *cp = data;
-	struct sock_buf *s, *sb = cp->sb;
+	struct com_opener *cp = data;
+	struct sock_buf *sb;
 	nvlist_t *res = cp->res;
 
 	while (waitpid(cp->pid, &status, 0) < 0)
@@ -512,21 +585,17 @@ on_exit_open_comport(int ident __unused, void *data)
 	close(cp->sock);
 
 	/* check if sock_buf is already closed. */
-	LIST_FOREACH (s, &sock_list, next)
-		if (s == sb)
-			break;
-	if (s == NULL) {
+	if ((sb = lookup_sock_buf(cp->sid)) == NULL) {
 		nvlist_destroy(res);
 		if (cp->fd >= 0)
 			close(cp->fd);
-		free(cp);
+		destroy_com_opener(cp);
 		return 0;
 	}
-
 	sb->res_fd = cp->fd;
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
-	if (cp->sb->res_buf == NULL) {
+	if (sb->res_buf == NULL) {
 		nvlist_destroy(res);
 		res = nvlist_create(0);
 		nvlist_add_bool(res, "error", true);
@@ -534,13 +603,13 @@ on_exit_open_comport(int ident __unused, void *data)
 		sb->res_buf = nvlist_pack(res, &sb->res_size);
 		if (sb->res_buf == NULL) {
 			nvlist_destroy(res);
-			free(cp);
+			destroy_com_opener(cp);
 			return -1;
 		}
 	}
 	sb->res_bytes = 0;
 	nvlist_destroy(res);
-	free(cp);
+	destroy_com_opener(cp);
 	clear_sock_buf(sb);
 	set_sock_buf_wait_flags(sb, EV_DISABLE, EV_ENABLE);
 
@@ -552,27 +621,31 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 {
 	pid_t pid;
 	int socks[2];
-	struct com_port *cp;
+	struct com_opener *cp;
 	struct kevent kev[2];
 	static event_call_back cb[2] = {on_read_open_comport, on_exit_open_comport};
 	void *data[2];
+	sigset_t nmask;
 
-	if ((cp = malloc(sizeof(*cp))) == NULL)
+	if ((cp = create_com_opener(sb->id)) == NULL)
 		return -1;
 
 	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0) {
-		free(cp);
+		destroy_com_opener(cp);
 		return -1;
 	}
 
 	if ((pid = fork()) < 0) {
 		close(socks[0]);
 		close(socks[1]);
-		free(cp);
+		destroy_com_opener(cp);
 		return -1;
 	}
 
 	if (pid == 0) {
+		sigemptyset(&nmask);
+		sigaddset(&nmask, SIGTERM);
+		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
 		close(socks[0]);
 		send_fd(socks[1], open_comport(comport));
 		recv_ack(socks[1]);
@@ -584,7 +657,7 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 	cp->pid = pid;
 	cp->res = res;
 	cp->sock = socks[0];
-	cp->sb = sb;
+	cp->sid = sb->id;
 	EV_SET(&kev[0], socks[0], EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0,
 	       NULL);
 	EV_SET(&kev[1], pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0,
@@ -598,11 +671,12 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 		while (waitpid(pid, NULL, 0) < 0)
 			if (errno != EINTR)
 				break;
-		free(cp);
+		destroy_com_opener(cp);
 		close(socks[0]);
 		return -1;
 	}
 
+	sb->cid = cp->id;
 	return 0;
 }
 
