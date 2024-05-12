@@ -127,9 +127,11 @@ struct event {
 /*
   Socker buffer.
  */
+typedef unsigned int  sock_buf_id;
 LIST_HEAD(sock_list, sock_buf);
 struct sock_buf {
 	LIST_ENTRY(sock_buf) next;
+	sock_buf_id id;
 	int fd;
 	int read_state;
 	size_t buf_size;
@@ -144,6 +146,7 @@ struct sock_buf {
 	char *res_buf;
 	time_t event_time;
 	struct xucred peer;
+	long cid;
 };
 
 extern struct global_conf *gl_conf;
