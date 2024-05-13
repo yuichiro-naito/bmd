@@ -647,8 +647,8 @@ exec_bhyve(struct vm *vm)
 				fprintf(fp, "-s\n%d,%s,%s\n", pcid++, nc->type,
 					nc->tap);
 			else if (nc->vale)
-				fprintf(fp, "-s\n%d,%s:%s\n", pcid++, nc->vale,
-					nc->vale_port);
+				fprintf(fp, "-s\n%d,%s,%s:%s\n", pcid++,
+					nc->type, nc->vale, nc->vale_port);
 		}
 		STAILQ_FOREACH (pc, &conf->passthrues, next)
 			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);
