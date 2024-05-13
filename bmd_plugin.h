@@ -87,6 +87,8 @@ struct net_conf *next_net_conf(struct net_conf *);
 char *get_net_conf_type(struct net_conf *);
 char *get_net_conf_bridge(struct net_conf *);
 char *get_net_conf_tap(struct net_conf *);
+char *get_net_conf_vale(struct net_conf *);
+char *get_net_conf_vale_port(struct net_conf *);
 struct bhyveload_env *get_bhyveload_env(struct vm_conf *);
 struct bhyveload_env *next_bhyveload_env(struct bhyveload_env *);
 char *get_bhyveload_env_env(struct bhyveload_env *);
