@@ -85,5 +85,6 @@ plugin_wait_for_process;
 plugin_set_timer;
 plugin_start_virtualmachine;
 plugin_stop_virtualmachine;
+plugin_cleanup_virtualmachine;
 split_args;
 };
