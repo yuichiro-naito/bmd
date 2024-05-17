@@ -17,6 +17,11 @@ Bmd creates and destroys tap interfaces automatically
 and also assigns to the bridges.
 Uses need to specify which bridge interfaces are used for each VM.
 
+If you prefer to use vale(4) switches for outer network connectivity,
+they must also be created and attached to a physical nic
+while the system starts. `/etc/rc.local` may help you.
+Bmd doesn't create tap interfaces in case of vale(4) use.
+
 Bmd doesn't manage disk images, neither.
 Most of administrators have their own disk management policy and tools.
 So, it is better that disk images are created to follow the policy.
@@ -182,7 +187,7 @@ Following keys are available.
 | name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs or CPU topology (sockets:cores:threads) | no | 1 |
 | cpu_pin | Pin guest's vCPU to host CPU | no | (none) |
-| network | bridge name(s)<br>e.g. bridge0 e1000:bridge1 | no | (none) |
+| network | bridge or vale name(s)<br>e.g. bridge0 e1000:vale1 | no | (none) |
 | owner | owner of VM | no | same as the file owner in which the vm section is written |
 | passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |
 | reboot_on_change | set "yes" to force ACPI reboot if VM config file is changed when bmd reloads it| no | no |
