@@ -42,9 +42,16 @@ struct plugin_entry {
   Plugin data is for each plugin and virtual machine.
  */
 SLIST_HEAD(plugin_data_list, plugin_data);
+struct callback_result {
+	bool called;
+	int state;
+};
 struct plugin_data {
 	struct plugin_entry *ent;
 	nvlist_t *pl_conf;
+#define prestart_result results[0]
+#define poststop_result results[1]
+	struct callback_result results[2];
 	SLIST_ENTRY(plugin_data) next;
 };
 

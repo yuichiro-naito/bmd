@@ -248,16 +248,98 @@ plugin_set_timer(int second, plugin_call_back cb, void *data)
 	return 0;
 }
 
-int
-plugin_start_virtualmachine(struct vm *v)
+static struct plugin_data *
+lookup_plugin_data(PLUGIN_DESC *desc, struct vm_entry *vm_ent)
 {
-	return start_virtual_machine((struct vm_entry*)v);
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (strcmp(pd->ent->desc.name, desc->name) == 0 &&
+		    (pd->ent->desc.prestart == desc->prestart ||
+		     pd->ent->desc.poststop == desc->poststop))
+			break;
+	return pd;
+}
+
+static void
+init_plugin_results(struct vm_entry *vm_ent)
+{
+	unsigned int i;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		for (i = 0; i < nitems(pd->results); i++)
+			memset(&pd->results[i], 0, sizeof(pd->results[i]));
+}
+
+static int
+get_plugin_state(struct vm_entry *vm_ent, unsigned int i)
+{
+	int rc = 0;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->results[i].called) {
+			if (pd->prestart_result.state == 0)
+				continue;
+			if (pd->prestart_result.state > 0)
+				return 1;
+			if (pd->prestart_result.state < 0)
+				rc = -1;
+		}
+	return rc;
+}
+
+
+static int
+get_prestart_state(struct vm_entry *vm_ent)
+{
+	return get_plugin_state(vm_ent, 0);
+}
+
+static int
+get_poststop_state(struct vm_entry *vm_ent)
+{
+	return get_plugin_state(vm_ent, 1);
 }
 
 int
-plugin_stop_virtualmachine(struct vm *v)
+plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 {
-	stop_virtual_machine((struct vm_entry*)v);
+	int st;
+	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct plugin_data *pd;
+
+	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
+		return -1;
+
+	pd->prestart_result.state = 0;
+
+	if ((st = get_prestart_state(vm_ent)) > 0)
+		return 0;
+
+	if (st == 0)
+		return start_virtual_machine(vm_ent);
+
+	stop_virtual_machine(vm_ent);
+	return 0;
+}
+
+int
+plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
+{
+	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct plugin_data *pd;
+
+	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
+		return -1;
+
+	pd->prestart_result.state = -1;
+
+	if (get_prestart_state(vm_ent) > 0)
+		return 0;
+
+	stop_virtual_machine(vm_ent);
 	return 0;
 }
 
@@ -566,6 +648,8 @@ call_prestart_plugins(struct vm_entry *vm_ent)
 		if (pd->ent->desc.prestart) {
 			rc = (pd->ent->desc.prestart)(VM_PTR(vm_ent),
 						      pd->pl_conf);
+			pd->prestart_result.called = true;
+			pd->prestart_result.state = rc;
 			called = true;
 			if (rc > ret)
 				ret = rc;
@@ -584,6 +668,8 @@ call_poststop_plugins(struct vm_entry *vm_ent)
 		if (pd->ent->desc.poststop) {
 			rc = (pd->ent->desc.poststop)(VM_PTR(vm_ent),
 						      pd->pl_conf);
+			pd->poststop_result.called = true;
+			pd->poststop_result.state = rc;
 			called = true;
 			if (rc > ret)
 				ret = rc;
@@ -1347,6 +1433,24 @@ cleanup_virtual_machine(struct vm_entry *vm_ent)
 	VM_STATE(vm_ent) = TERMINATE;
 }
 
+int
+plugin_cleanup_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
+{
+	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct plugin_data *pd;
+
+	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
+		return -1;
+
+	pd->poststop_result.state = 0;
+
+	if (get_poststop_state(vm_ent) > 0)
+		return 0;
+
+	cleanup_virtual_machine(vm_ent);
+	return 0;
+}
+
 static int
 load_virtual_machine(struct vm_entry *vm_ent)
 {
@@ -1397,6 +1501,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	}
 
 	if (VM_STATE(vm_ent) == TERMINATE) {
+		init_plugin_results(vm_ent);
 		if (assign_taps(VM_PTR(vm_ent)) < 0)
 			return -1;
 		if (activate_taps(VM_PTR(vm_ent)) < 0) {

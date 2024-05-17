@@ -211,6 +211,11 @@ struct vm_method {
   `poststop` has to run in the short term as same as 'prestart'. During
   the child process is running, the VM state keeps 'TERMINATING' state.
 
+  Returning a positive number from the 'poststop' function will delay
+  cleanup the VM resources until the `plugin_cleanup_virtual_machine`
+  function is called. Returning zero or a negative number will cleanup
+  the VM resources soon.
+
  */
 typedef struct plugin_desc {
 	int version;
@@ -233,8 +238,9 @@ extern PLUGIN_DESC plugin_desc;
  */
 int plugin_wait_for_process(pid_t, plugin_call_back, void *);
 int plugin_set_timer(int, plugin_call_back, void *);
-int plugin_start_virtualmachine(struct vm *);
-int plugin_stop_virtualmachine(struct vm *);
+int plugin_start_virtualmachine(PLUGIN_DESC *, struct vm *);
+int plugin_stop_virtualmachine(PLUGIN_DESC *, struct vm *);
+int plugin_cleanup_virtualmachine(PLUGIN_DESC *, struct vm *);
 int register_vm_method(struct vm_method *);
 int register_loader_method(struct loader_method *);
 
