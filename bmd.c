@@ -594,8 +594,8 @@ on_timer(int ident __unused, void *data)
 		VM_POWEROFF(vm_ent);
 		break;
 	case RUN:
-	case PRELOAD:
-	case PRERUN:
+	case PRESTART:
+	case POSTSTOP:
 		/* ignore timer */
 		break;
 	}
@@ -644,6 +644,8 @@ call_prestart_plugins(struct vm_entry *vm_ent)
 	bool called = false;
 	struct plugin_data *pd;
 
+	VM_STATE(vm_ent) = PRESTART;
+
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.prestart) {
 			rc = (pd->ent->desc.prestart)(VM_PTR(vm_ent),
@@ -663,6 +665,8 @@ call_poststop_plugins(struct vm_entry *vm_ent)
 	int rc, ret = INT_MIN;
 	bool called = false;
 	struct plugin_data *pd;
+
+	VM_STATE(vm_ent) = POSTSTOP;
 
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.poststop) {
@@ -712,7 +716,7 @@ on_vm_exit(int ident __unused, void *data)
 		    (VM_CONF(vm_ent)->boot == ALWAYS ||
 		     (strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 		      WEXITSTATUS(status) == 0))) {
-			VM_STATE(vm_ent) = PRELOAD;
+			VM_STATE(vm_ent) = PRESTART;
 			start_virtual_machine(vm_ent);
 			break;
 		}
@@ -723,8 +727,8 @@ on_vm_exit(int ident __unused, void *data)
 		     (rs == NULL ? "" : rs));
 		free(rs);
 		/* FALLTHROUGH */
-	case PRELOAD:
-	case PRERUN:
+	case PRESTART:
+	case POSTSTOP:
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
 		stop_virtual_machine(vm_ent);
@@ -735,6 +739,8 @@ on_vm_exit(int ident __unused, void *data)
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
 		stop_virtual_machine(vm_ent);
+		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+		free_vm_entry(vm_ent);
 		break;
 	case TERMINATE:
 		break;
@@ -1509,12 +1515,11 @@ start_virtual_machine(struct vm_entry *vm_ent)
 			remove_taps(VM_PTR(vm_ent));
 			return -1;
 		}
-		VM_STATE(vm_ent) = PRELOAD;
 		if (call_prestart_plugins(vm_ent) > 0)
 			return 0;
 	}
 	if (VM_STATE(vm_ent) == TERMINATE ||
-	    VM_STATE(vm_ent) == PRELOAD) {
+	    VM_STATE(vm_ent) == PRESTART) {
 		rc = load_virtual_machine(vm_ent);
 		if (rc <= -2)
 			goto force_kill;
@@ -1610,14 +1615,9 @@ start_virtual_machines(void)
 static void
 stop_virtual_machine(struct vm_entry *vm_ent)
 {
-	enum STATE st = VM_STATE(vm_ent);
 	stop_waiting_for(vm_output_and_timers, vm_ent);
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
-	if (st == REMOVE) {
-		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
-		free_vm_entry(vm_ent);
-	}
 }
 
 struct vm_entry *

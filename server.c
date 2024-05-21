@@ -799,7 +799,7 @@ showcomport_command(struct sock_buf *s, const nvlist_t *nv,
 
 	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
 
-	if (VM_STATE(vm_ent) == PRELOAD || VM_STATE(vm_ent) == LOAD ||
+	if (VM_STATE(vm_ent) == PRESTART || VM_STATE(vm_ent) == LOAD ||
 	    VM_STATE(vm_ent) == RUN) {
 		chown_comport(comport, ucred);
 
@@ -866,7 +866,8 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 	bool error = false;
 	struct passwd *pwd;
 	const static char *state_string[] = { "STOP", "LOAD", "RUN",
-		"TERMINATING", "TERMINATING", "REBOOTING" };
+					      "TERMINATING", "TERMINATING", "REBOOTING",
+					      "PRESTART", "POSTSTOP"};
 
 	res = nvlist_create(0);
 
