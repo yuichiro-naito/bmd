@@ -35,8 +35,8 @@ enum STATE {
 	STOP,	   // send SIGTERM to stop bhyve
 	REMOVE,	   // send SIGTERM to stop bhyve and remove vm_entry
 	RESTART,   // send SIGTERM and need rebooting
-	PRELOAD,   // before executing a loader
-	PRERUN     // before executing bhyve
+	PRESTART,  // before starting VM
+	POSTSTOP   // after stopping VM
 };
 
 #define DISK_CONF_FOREACH(dc, conf)	   \
