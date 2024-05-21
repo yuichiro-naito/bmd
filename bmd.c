@@ -712,6 +712,7 @@ on_vm_exit(int ident __unused, void *data)
 		    (VM_CONF(vm_ent)->boot == ALWAYS ||
 		     (strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 		      WEXITSTATUS(status) == 0))) {
+			VM_STATE(vm_ent) = PRELOAD;
 			start_virtual_machine(vm_ent);
 			break;
 		}
