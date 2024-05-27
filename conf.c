@@ -1,6 +1,7 @@
 #include <sys/param.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "log.h"
@@ -827,6 +828,140 @@ finalize_vm_conf(struct vm_conf *conf)
 
 	if (conf->fbuf->enable < 0)
 		conf->fbuf->enable = false;
+
+	return 0;
+}
+
+static int
+vputenv(const char *fmt, ...)
+{
+	int rc;
+	char *s;
+	va_list ap;
+
+	va_start(ap, fmt);
+	rc = vasprintf(&s, fmt, ap);
+	va_end(ap);
+	if (rc < 0)
+		return -1;
+
+	if (putenv(s) < 0) {
+		free(s);
+		return -1;
+	}
+
+	return 0;
+}
+
+static char *
+capitalize(char *buf, size_t bufsize, const char *str)
+{
+	unsigned int i;
+	size_t len = strlen(str) + 1;
+
+	for (i = 0; i < MIN(bufsize, len) - 1; i++)
+		buf[i] = toupper(str[i]);
+	buf[i] = '\0';
+	return buf;
+}
+
+int
+vm_conf_export_env(struct vm_conf *conf)
+{
+	int i;
+	struct disk_conf *dc;
+	struct iso_conf *ic;
+	struct net_conf *nc;
+	struct passthru_conf *pc;
+	struct bhyveload_env *be;
+	struct bhyve_env *ev;
+	struct cpu_pin *cp;
+	struct fbuf *fb;
+	const static char *btype[] = { "no", "yes", "oneshot", "install",
+				       "always", "reboot" };
+	const static char *hostbridge_str[] = {"none", "intel", "amd"};
+	const static char *bool_str[] ={"false", "true"};
+	char buf[32];
+
+#define ENV_PREFIX      "VM_"
+#define VPUTSTR(v)   vputenv(ENV_PREFIX"%s=%s", capitalize(buf, sizeof(buf), #v), conf->v)
+#define VPUTINT(v)   vputenv(ENV_PREFIX"%s=%d", capitalize(buf, sizeof(buf), #v), conf->v)
+#define VPUTBOOL(v)   vputenv(ENV_PREFIX"%s=%s", capitalize(buf, sizeof(buf), #v), bool_str[conf->v])
+
+	VPUTSTR(name);
+	VPUTINT(owner);
+	VPUTINT(group);
+	VPUTINT(ncpu);
+	VPUTINT(ncpu_pins);
+	i = 1;
+	if ((cp = STAILQ_FIRST(&conf->cpu_pins)))
+		vputenv(ENV_PREFIX"CPU_PIN%d=%d:%d", i++, cp->vcpu, cp->hostcpu);
+	VPUTSTR(memory);
+	VPUTBOOL(wired_memory);
+	VPUTBOOL(utctime);
+	VPUTBOOL(reboot_on_change);
+	VPUTBOOL(single_user);
+	VPUTBOOL(install);
+	VPUTSTR(comport);
+	VPUTSTR(debug_port);
+	vputenv(ENV_PREFIX"BOOT=%s", btype[conf->boot]);
+	VPUTINT(boot_delay);
+	VPUTINT(loader_timeout);
+	VPUTINT(stop_timeout);
+	VPUTSTR(loader);
+	VPUTSTR(bhyveload_loader);
+	VPUTINT(nbhyveload_envs);
+	i = 1;
+	STAILQ_FOREACH (be, &conf->bhyveload_envs, next)
+		vputenv(ENV_PREFIX"BHYVE_LOADENV%d=%s", i++, be->env);
+	VPUTINT(nbhyve_envs);
+	i = 1;
+	STAILQ_FOREACH (ev, &conf->bhyve_envs, next)
+		vputenv(ENV_PREFIX"BHYVE_ENV%d=%s", i++, ev->env);
+	VPUTSTR(loadcmd);
+	VPUTSTR(installcmd);
+	VPUTSTR(err_logfile);
+	vputenv(ENV_PREFIX"HOSTBRIDGE=%s", hostbridge_str[conf->hostbridge]);
+
+	VPUTINT(npassthrues);
+	i = 1;
+	STAILQ_FOREACH (pc, &conf->passthrues, next)
+		vputenv(ENV_PREFIX"PASSTHRUES%d=%s", i++, pc->devid);
+
+	if (conf->tpm_dev) {
+		VPUTSTR(tpm_dev);
+		VPUTSTR(tpm_version);
+	}
+
+	VPUTINT(ndisks);
+	i = 1;
+	STAILQ_FOREACH (dc, &conf->disks, next) {
+		vputenv(ENV_PREFIX"DISK%d_TYPE=%s", i, dc->type);
+		vputenv(ENV_PREFIX"DISK%d_PATH=%s", i++, dc->path);
+	}
+	VPUTINT(nisoes);
+	i = 1;
+	STAILQ_FOREACH (ic, &conf->isoes, next) {
+		vputenv(ENV_PREFIX"ISO%d_TYPE=%s", i, ic->type);
+		vputenv(ENV_PREFIX"ISO%d_PATH=%s", i++, ic->path);
+	}
+	VPUTINT(nnets);
+	i = 1;
+	STAILQ_FOREACH (nc, &conf->nets, next) {
+		vputenv(ENV_PREFIX"NETWORK%d_TYPE=%s", i, nc->type);
+		vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i++, nc->bridge);
+	}
+	fb = conf->fbuf;
+	vputenv(ENV_PREFIX"GRAPHICS=%s", i, bool_str[fb->enable]);
+	if (fb->enable) {
+		vputenv(ENV_PREFIX"GRAPHICS_LISTEN=%s", fb->ipaddr);
+		vputenv(ENV_PREFIX"GRAPHICS_PASSWORD=%s", fb->password);
+		vputenv(ENV_PREFIX"GRAPHICS_RES=%dx%d", fb->width, fb->height);
+		vputenv(ENV_PREFIX"GRAPHICS_VGA=%s", fb->vgaconf);
+		vputenv(ENV_PREFIX"GRAPHICS_WAIT=%s", bool_str[fb->wait]);
+		vputenv(ENV_PREFIX"XHCI_MOUSE=%s", conf->mouse);
+		VPUTSTR(keymap);
+	}
 
 	return 0;
 }

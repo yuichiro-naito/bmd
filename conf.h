@@ -247,5 +247,7 @@ void free_global_vars(void);
 void free_id_list(void);
 
 int set_string(char **, const char *);
+int vm_conf_export_env(struct vm_conf *);
+
 
 #endif
