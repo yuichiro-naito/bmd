@@ -491,6 +491,8 @@ assign_taps(struct vm *vm)
 
 	i = 0;
 	STAILQ_FOREACH (nc, &vm->taps, next) {
+		if (nc->bridge == NULL)
+			continue;
 		if (asprintf(&desc, "vm-%s-%d", conf->name, i++) < 0)
 			continue;
 		if (create_tap(s, &nc->tap) < 0 ||
@@ -640,9 +642,14 @@ exec_bhyve(struct vm *vm)
 		STAILQ_FOREACH (ic, &conf->isoes, next)
 			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
 				ic->path);
-		STAILQ_FOREACH (nc, &vm->taps, next)
-			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, nc->type,
-				nc->tap);
+		STAILQ_FOREACH (nc, &vm->taps, next) {
+			if (nc->tap)
+				fprintf(fp, "-s\n%d,%s,%s\n", pcid++, nc->type,
+					nc->tap);
+			else if (nc->vale)
+				fprintf(fp, "-s\n%d,%s,%s:%s\n", pcid++,
+					nc->type, nc->vale, nc->vale_port);
+		}
 		STAILQ_FOREACH (pc, &conf->passthrues, next)
 			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);
 		if (conf->fbuf->enable) {

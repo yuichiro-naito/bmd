@@ -181,6 +181,8 @@ free_net_conf(struct net_conf *c)
 	free(c->type);
 	free(c->bridge);
 	free(c->tap);
+	free(c->vale);
+	free(c->vale_port);
 	free(c);
 }
 
@@ -349,18 +351,27 @@ generate_member_getter(char *, iso_conf, path)
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
 {
+	bool is_vale;
 	struct net_conf *t;
 	char *y, *b;
 	if (conf == NULL)
 		return 0;
 
-	t = malloc(sizeof(struct net_conf));
+	is_vale = (strncmp(bridge, "vale", 4) == 0);
+
+	t = calloc(1, sizeof(struct net_conf));
 	y = strdup(type);
 	b = strdup(bridge);
 	if (t == NULL || y == NULL || b == NULL)
 		goto err;
+	if (is_vale) {
+		if (asprintf(&t->vale_port, "vm%dp%d", conf->id,
+			     conf->nnets) < 0)
+			goto err;
+		t->vale = b;
+	} else
+		t->bridge = b;
 	t->type = y;
-	t->bridge = b;
 	t->tap = NULL;
 
 	STAILQ_INSERT_TAIL(&conf->nets, t, next);
@@ -377,6 +388,8 @@ generate_list_getter(net_conf, nets)
 generate_member_getter(char *, net_conf, type)
 generate_member_getter(char *, net_conf, bridge)
 generate_member_getter(char *, net_conf, tap)
+generate_member_getter(char *, net_conf, vale)
+generate_member_getter(char *, net_conf, vale_port)
 
 int
 add_bhyveload_env(struct vm_conf *conf, const char *env)
@@ -446,25 +459,36 @@ struct net_conf *
 copy_net_conf(const struct net_conf *nc)
 {
 	struct net_conf *ret;
-	char *y, *b, *t;
+	char *y, *b, *t, *v, *vp;
 
+#define DUPLICATE_STRING(str) (str) ? strdup(str) : NULL
+#define CHECK_DUP_ERR(src, dst)  (src != NULL && dst == NULL)
 	ret = malloc(sizeof(struct net_conf));
 	y = strdup(nc->type);
-	b = strdup(nc->bridge);
-	t = (nc->tap) ? strdup(nc->tap) : NULL;
-	if (ret == NULL || y == NULL || b == NULL ||
-	    (nc->tap != NULL && t == NULL))
+	b = DUPLICATE_STRING(nc->bridge);
+	t = DUPLICATE_STRING(nc->tap);
+	v = DUPLICATE_STRING(nc->vale);
+	vp = DUPLICATE_STRING(nc->vale_port);
+	if (ret == NULL || y == NULL || CHECK_DUP_ERR(nc->bridge, b) ||
+	    CHECK_DUP_ERR(nc->tap, t) || CHECK_DUP_ERR(nc->vale, v) ||
+	    CHECK_DUP_ERR(nc->vale_port, vp))
 		goto err;
+#undef CHECK_DUP_ERR
+#undef DUPLICATE_STRING
 
 	ret->type = y;
 	ret->bridge = b;
 	ret->tap = t;
+	ret->vale = v;
+	ret->vale_port = vp;
 	STAILQ_NEXT(ret, next) = NULL;
 	return ret;
 err:
 	free(t);
 	free(b);
 	free(y);
+	free(v);
+	free(vp);
 	free(ret);
 	return NULL;
 }
@@ -895,7 +919,10 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	i = 0;
 	STAILQ_FOREACH (nc, &conf->nets, next) {
 		snprintf(buf, sizeof(buf), "net%d", i++);
-		fprintf(fp, lfmt, buf, nc->type, nc->bridge);
+		if (nc->bridge)
+			fprintf(fp, lfmt, buf, nc->type, nc->bridge);
+		else if (nc->vale)
+			fprintf(fp, lfmt, buf, nc->type, nc->vale);
 	}
 	fb = conf->fbuf;
 	if (fb->enable) {
@@ -984,6 +1011,7 @@ compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 
 	CMP_STR(type);
 	CMP_STR(bridge);
+	CMP_STR(vale);
 	/*
 	 * We don't need to compare tap.
 	 * Because it is not written in the vm config file.

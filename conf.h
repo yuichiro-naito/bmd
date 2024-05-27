@@ -43,6 +43,8 @@ struct net_conf {
 	char *type;
 	char *bridge;
 	char *tap;
+	char *vale;
+	char *vale_port;
 };
 
 struct fbuf {

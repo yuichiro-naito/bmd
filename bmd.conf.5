@@ -1,4 +1,4 @@
-.Dd Apr 8, 2024
+.Dd May 15, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -244,8 +244,18 @@ the default type
 .Qq virtio-net .
 .Ar Bridge
 is a bridge name that a tap interface
-to be added. e.g.
+to be added. If a
+.Ar bridge
+name starts with
+.Sq vale ,
+the network interface will be joined to the
+.Xr vale 4
+switch and no tap interface will be assigned. The vale port is named
+.Qq vm${ID}p${nic_id} .
+e.g.
 .Qq bridge1
+or
+.Qq vale1 .
 .It Cm owner = Ar user_name Op : Ar group_name ;
 Owner of VM. The owner is permitted to control the VM via
 .Xr bmdctl 8 .
