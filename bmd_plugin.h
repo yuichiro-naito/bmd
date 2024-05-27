@@ -141,6 +141,7 @@ char *get_keymap(struct vm_conf *);
 char *get_tpm_dev(struct vm_conf *);
 char *get_tpm_type(struct vm_conf *);
 char *get_tpm_version(struct vm_conf *);
+int vm_conf_export_env(struct vm_conf *);
 
 char **split_args(char *);
 
@@ -243,5 +244,4 @@ int plugin_stop_virtualmachine(PLUGIN_DESC *, struct vm *);
 int plugin_cleanup_virtualmachine(PLUGIN_DESC *, struct vm *);
 int register_vm_method(struct vm_method *);
 int register_loader_method(struct loader_method *);
-
 #endif
