@@ -7,6 +7,7 @@
 #include "log.h"
 #include "conf.h"
 #include "bmd_plugin.h"
+#include "bmd.h"
 
 #define CMP(a,b)    ((a) < (b) ? -1 : ((a) == (b) ? 0 : 1))
 #define CMP_RETURN(a,b)  if ((a) != (b)) return (a) < (b) ? -1 : 1
@@ -882,19 +883,26 @@ vm_conf_export_env(struct vm_conf *conf)
 	const static char *hostbridge_str[] = {"none", "intel", "amd"};
 	const static char *bool_str[] ={"false", "true"};
 	char buf[32];
+	struct vm_entry *vm_ent;
+	struct vm *vm;
+
+	if ((vm_ent = lookup_vm_by_name(conf->name)) == NULL)
+	    return -1;
+	vm = VM_PTR(vm_ent);
 
 #define ENV_PREFIX      "VM_"
 #define VPUTSTR(v)   vputenv(ENV_PREFIX"%s=%s", capitalize(buf, sizeof(buf), #v), conf->v)
 #define VPUTINT(v)   vputenv(ENV_PREFIX"%s=%d", capitalize(buf, sizeof(buf), #v), conf->v)
 #define VPUTBOOL(v)   vputenv(ENV_PREFIX"%s=%s", capitalize(buf, sizeof(buf), #v), bool_str[conf->v])
 
+	VPUTINT(id);
 	VPUTSTR(name);
 	VPUTINT(owner);
 	VPUTINT(group);
 	VPUTINT(ncpu);
 	VPUTINT(ncpu_pins);
 	i = 1;
-	if ((cp = STAILQ_FIRST(&conf->cpu_pins)))
+	STAILQ_FOREACH(cp, &conf->cpu_pins, next)
 		vputenv(ENV_PREFIX"CPU_PIN%d=%d:%d", i++, cp->vcpu, cp->hostcpu);
 	VPUTSTR(memory);
 	VPUTBOOL(wired_memory);
@@ -902,7 +910,7 @@ vm_conf_export_env(struct vm_conf *conf)
 	VPUTBOOL(reboot_on_change);
 	VPUTBOOL(single_user);
 	VPUTBOOL(install);
-	VPUTSTR(comport);
+	vputenv(ENV_PREFIX"COMPORT=%s", vm->assigned_comport);
 	VPUTSTR(debug_port);
 	vputenv(ENV_PREFIX"BOOT=%s", btype[conf->boot]);
 	VPUTINT(boot_delay);
@@ -945,14 +953,15 @@ vm_conf_export_env(struct vm_conf *conf)
 		vputenv(ENV_PREFIX"ISO%d_TYPE=%s", i, ic->type);
 		vputenv(ENV_PREFIX"ISO%d_PATH=%s", i++, ic->path);
 	}
-	VPUTINT(nnets);
+	vputenv(ENV_PREFIX"NNETWORKS=%d", conf->nnets);
 	i = 1;
-	STAILQ_FOREACH (nc, &conf->nets, next) {
+	STAILQ_FOREACH (nc, &vm->taps, next) {
 		vputenv(ENV_PREFIX"NETWORK%d_TYPE=%s", i, nc->type);
+		vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->tap);
 		vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i++, nc->bridge);
 	}
 	fb = conf->fbuf;
-	vputenv(ENV_PREFIX"GRAPHICS=%s", i, bool_str[fb->enable]);
+	vputenv(ENV_PREFIX"GRAPHICS=%s", bool_str[fb->enable]);
 	if (fb->enable) {
 		vputenv(ENV_PREFIX"GRAPHICS_LISTEN=%s", fb->ipaddr);
 		vputenv(ENV_PREFIX"GRAPHICS_PASSWORD=%s", fb->password);
