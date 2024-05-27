@@ -187,7 +187,7 @@ Following keys are available.
 | name | Virtual machine name| no | vm section name |
 | ncpu | number of CPUs or CPU topology (sockets:cores:threads) | no | 1 |
 | cpu_pin | Pin guest's vCPU to host CPU | no | (none) |
-| network | bridge or vale name(s)<br>e.g. bridge0 e1000:vale1 | no | (none) |
+| network | bridge or vale name(s)<br>e.g. bridge0 vale1 | no | (none) |
 | owner | owner of VM | no | same as the file owner in which the vm section is written |
 | passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |
 | reboot_on_change | set "yes" to force ACPI reboot if VM config file is changed when bmd reloads it| no | no |
