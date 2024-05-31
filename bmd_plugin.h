@@ -181,6 +181,8 @@ struct vm_method {
       parse_config: a function called while parsing VM configuratin (*1)
   on_reload_config: copy plugin data while reloading VM configuration (*1)
            prehook: a function called before executing loader and bhyve (*1)
+          prestart: a function called before starting VM.
+          poststop: a function called after stopping VM.
 
   *1: The nvlist_t pointer and struct vm pointer is available while VM is
       existing, unless VM is removed from the config file nor VM configuration
@@ -206,11 +208,11 @@ struct vm_method {
   function is called. The `plugin_wait_for_process` function can be used for
   this purpose. Returning zero from the 'prestart' function will invoke
   the loader and bhyve soon. Returning a negative number means an error occured
-  in the function.
+  in the function. The VM will not start by the error.
 
   `poststop` is used for clean up the external configurations for the VM.
   `poststop` has to run in the short term as same as 'prestart'. During
-  the child process is running, the VM state keeps 'TERMINATING' state.
+  the child process is running, the VM state keeps 'POSTSTOP' state.
 
   Returning a positive number from the 'poststop' function will delay
   cleanup the VM resources until the `plugin_cleanup_virtual_machine`
