@@ -52,7 +52,7 @@ add_to_bridge(int s, const char *bridge, const char *tap)
 	struct ifdrv ifd;
 	struct ifbreq req;
 
-	if (tap == NULL)
+	if (tap == NULL || strcasecmp(bridge, "none") == 0)
 		return 0;
 
 	memset(&ifd, 0, sizeof(ifd));
