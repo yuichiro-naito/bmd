@@ -958,7 +958,11 @@ vm_conf_export_env(struct vm_conf *conf)
 	STAILQ_FOREACH (nc, &vm->taps, next) {
 		vputenv(ENV_PREFIX"NETWORK%d_TYPE=%s", i, nc->type);
 		vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->tap);
-		vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i++, nc->bridge);
+		if (nc->bridge)
+			vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i, nc->bridge);
+		else if (nc->vale)
+			vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i, nc->vale);
+		i++;
 	}
 	fb = conf->fbuf;
 	vputenv(ENV_PREFIX"GRAPHICS=%s", bool_str[fb->enable]);
