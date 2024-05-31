@@ -29,8 +29,8 @@ static struct sock_list sock_list = LIST_HEAD_INITIALIZER();
 /**
    Note: Don't use a pointer to refer to the sock_buf structure. Use
    sock_buf_id instead. The same pointer value will often be reused after
-   freeing and reallocating the strsucture. We can't know if the sock_buf is
-   freed and re-allocated or keeps existing, from the pointer value.
+   freeing and reallocating the structure. From the pointer value, We can't
+   know if the sock_buf is freed and re-allocated or keeps existing.
    For the same reason, Don't use a pointer to refer to the com_opener
    structure. Use com_opener_id instead.
  */
