@@ -444,6 +444,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 	}
 
 	if (compare_vm_conf_entry(ret, VM_CONF_ENT(vm_ent)) != 0) {
+		copy_plugin_data(ret, VM_CONF_ENT(vm_ent));
 		LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
