@@ -246,4 +246,6 @@ int plugin_stop_virtualmachine(PLUGIN_DESC *, struct vm *);
 int plugin_cleanup_virtualmachine(PLUGIN_DESC *, struct vm *);
 int register_vm_method(struct vm_method *);
 int register_loader_method(struct loader_method *);
+int plugin_errlog(PLUGIN_DESC *, const char *, ...);
+
 #endif
