@@ -1632,7 +1632,7 @@ lookup_vm_by_name(const char *name)
 	return NULL;
 }
 
-static void
+void
 copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 {
 	struct plugin_data *da, *db;
