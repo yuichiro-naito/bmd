@@ -272,6 +272,18 @@ init_plugin_results(struct vm_entry *vm_ent)
 			memset(&pd->results[i], 0, sizeof(pd->results[i]));
 }
 
+static struct plugin_entry *
+get_prestart_error(struct vm_entry *vm_ent)
+{
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->results[0].called)
+			if (pd->prestart_result.state < 0)
+				return pd->ent;
+	return NULL;
+}
+
 static int
 get_plugin_state(struct vm_entry *vm_ent, unsigned int i)
 {
@@ -289,7 +301,6 @@ get_plugin_state(struct vm_entry *vm_ent, unsigned int i)
 		}
 	return rc;
 }
-
 
 static int
 get_prestart_state(struct vm_entry *vm_ent)
@@ -309,6 +320,7 @@ plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	int st;
 	struct vm_entry *vm_ent = (struct vm_entry*)v;
 	struct plugin_data *pd;
+	struct plugin_entry *pe;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
 		return -1;
@@ -321,6 +333,10 @@ plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	if (st == 0)
 		return start_virtual_machine(vm_ent);
 
+	pe = get_prestart_error(vm_ent);
+	ERR("%s: plugin '%s' prevents starting VM", VM_CONF(vm_ent)->name,
+	    pe->desc_name);
+
 	stop_virtual_machine(vm_ent);
 	return 0;
 }
@@ -330,6 +346,7 @@ plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 {
 	struct vm_entry *vm_ent = (struct vm_entry*)v;
 	struct plugin_data *pd;
+	struct plugin_entry *pe;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
 		return -1;
@@ -339,7 +356,25 @@ plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	if (get_prestart_state(vm_ent) > 0)
 		return 0;
 
+	pe = get_prestart_error(vm_ent);
+	ERR("%s: plugin '%s' prevents starting VM", VM_CONF(vm_ent)->name,
+	    pe->desc_name);
+
 	stop_virtual_machine(vm_ent);
+	return 0;
+}
+
+int
+plugin_errlog(PLUGIN_DESC *desc, const char *fmt, ...)
+{
+	va_list ap;
+	char *s;
+	va_start(ap, fmt);
+	if (vasprintf(&s, fmt, ap) >= 0) {
+		ERR("%s: %s\n", desc->name, s);
+		free(s);
+	}
+	va_end(ap);
 	return 0;
 }
 
