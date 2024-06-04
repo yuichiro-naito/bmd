@@ -272,16 +272,17 @@ init_plugin_results(struct vm_entry *vm_ent)
 			memset(&pd->results[i], 0, sizeof(pd->results[i]));
 }
 
-static struct plugin_entry *
-get_prestart_error(struct vm_entry *vm_ent)
+static void
+print_prestart_error(struct vm_entry *vm_ent)
 {
 	struct plugin_data *pd;
 
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
-		if (pd->results[0].called)
-			if (pd->prestart_result.state < 0)
-				return pd->ent;
-	return NULL;
+		if (pd->results[0].called &&
+		    pd->prestart_result.state < 0)
+			ERR("%s: plugin '%s' prevents starting VM",
+			    VM_CONF(vm_ent)->name,
+			    pd->ent->desc_name);
 }
 
 static int
@@ -320,7 +321,6 @@ plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	int st;
 	struct vm_entry *vm_ent = (struct vm_entry*)v;
 	struct plugin_data *pd;
-	struct plugin_entry *pe;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
 		return -1;
@@ -333,10 +333,7 @@ plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	if (st == 0)
 		return start_virtual_machine(vm_ent);
 
-	pe = get_prestart_error(vm_ent);
-	ERR("%s: plugin '%s' prevents starting VM", VM_CONF(vm_ent)->name,
-	    pe->desc_name);
-
+	print_prestart_error(vm_ent);
 	stop_virtual_machine(vm_ent);
 	return 0;
 }
@@ -346,7 +343,6 @@ plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 {
 	struct vm_entry *vm_ent = (struct vm_entry*)v;
 	struct plugin_data *pd;
-	struct plugin_entry *pe;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
 		return -1;
@@ -356,10 +352,7 @@ plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	if (get_prestart_state(vm_ent) > 0)
 		return 0;
 
-	pe = get_prestart_error(vm_ent);
-	ERR("%s: plugin '%s' prevents starting VM", VM_CONF(vm_ent)->name,
-	    pe->desc_name);
-
+	print_prestart_error(vm_ent);
 	stop_virtual_machine(vm_ent);
 	return 0;
 }
@@ -1532,8 +1525,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
 
-	if (VM_METHOD(vm_ent) == NULL ||
-	    set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
+	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
 		ERR("no backend for vm %s\n", name);
 		return -1;
 	}
