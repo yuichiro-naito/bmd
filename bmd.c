@@ -1543,8 +1543,13 @@ start_virtual_machine(struct vm_entry *vm_ent)
 			remove_taps(VM_PTR(vm_ent));
 			return -1;
 		}
-		if (call_prestart_plugins(vm_ent) > 0)
+		if ((rc = call_prestart_plugins(vm_ent)) > 0)
 			return 0;
+		if (rc < 0) {
+			ERR("%s\n", "failed to call prestart plugins");
+			remove_taps(VM_PTR(vm_ent));
+			return -1;
+		}
 	}
 	if (VM_STATE(vm_ent) == TERMINATE ||
 	    VM_STATE(vm_ent) == PRESTART) {
@@ -2094,6 +2099,11 @@ direct_run(const char *name, bool install, bool single)
 		return 1;
 	}
 
+	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
+		ERR("no backend for vm %s\n", name);
+		return -1;
+	}
+
 	if (assign_comport(vm_ent) < 0) {
 		ERR("failed to assign comport for vm %s\n", name);
 		goto err;
@@ -2110,7 +2120,7 @@ direct_run(const char *name, bool install, bool single)
 	running_vm = vm_ent;
 	signal(SIGINT, sigint_handler);
 
-	if (VM_START(vm_ent) < 0)
+	if (load_virtual_machine(vm_ent) < 0)
 		goto err;
 	i = 0;
 	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
@@ -2151,6 +2161,9 @@ wait:
 		VM_POWEROFF(vm_ent);
 		goto err;
 	}
+
+	if (VM_LD_METHOD(vm_ent))
+		VM_LD_CLEANUP(vm_ent);
 
 	if (VM_STATE(vm_ent) == LOAD) {
 		if (VM_START(vm_ent) < 0)
