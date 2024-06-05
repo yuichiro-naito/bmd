@@ -2112,16 +2112,15 @@ direct_run(const char *name, bool install, bool single)
 	if (assign_taps(VM_PTR(vm_ent)) < 0)
 		goto err;
 
-	if (activate_taps(VM_PTR(vm_ent)) < 0) {
-		remove_taps(VM_PTR(vm_ent));
+	if (activate_taps(VM_PTR(vm_ent)) < 0)
 		goto err;
-	}
 
 	running_vm = vm_ent;
 	signal(SIGINT, sigint_handler);
 
-	if (load_virtual_machine(vm_ent) < 0)
+	if (VM_LD_METHOD(vm_ent) && VM_LD_LOAD(vm_ent) < 0)
 		goto err;
+
 	i = 0;
 	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
 	       NOTE_EXIT, 0, vm_ent);
