@@ -184,7 +184,7 @@ struct vm_method {
           prestart: a function called before starting VM.
           poststop: a function called after stopping VM.
 
-  *1: The nvlist_t pointer and struct vm pointer is available while VM is
+  *1: The nvlist_t pointer and struct vm pointer are available while VM is
       existing, unless VM is removed from the config file nor VM configuration
       is reloaded.
 
@@ -205,10 +205,13 @@ struct vm_method {
 
   Returning a positive number from the 'prestart' function will delay
   invoking the loader and bhyve until the `plugin_start_virtual_machine`
-  function is called. The `plugin_wait_for_process` function can be used for
-  this purpose. Returning zero from the 'prestart' function will invoke
-  the loader and bhyve soon. Returning a negative number means an error occured
-  in the function. The VM will not start by the error.
+  function is called. The `plugin_wait_for_process` function will wait for the
+  child process termination and the callback function has to wait(2) and call
+  the `plugin_start_virtual_machine` function if it succeeded, or call the
+  `plugin_stop_virtual_machine` function if it failed.
+  Returning zero from the 'prestart' function will invoke the loader and bhyve
+  soon. Returning a negative number means an error occured in the function.
+  The VM will not start by the error.
 
   `poststop` is used for clean up the external configurations for the VM.
   `poststop` has to run in the short term as same as 'prestart'. During
