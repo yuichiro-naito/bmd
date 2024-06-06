@@ -2074,7 +2074,12 @@ direct_run(const char *name, bool install, bool single)
 
 	LOG_OPEN_PERROR();
 
+#if __FreeBSD_version >= 1400088 || \
+	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
+#else
 	if ((eventq = kqueue()) < 0) {
+#endif
 		ERR("%s\n", "cannot open kqueue");
 		return 1;
 	}
