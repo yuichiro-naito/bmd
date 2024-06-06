@@ -62,9 +62,29 @@ static int timer_id = 0;
  */
 static int sigterm = 0;
 
+/*
+  Direct run mode
+ */
+static bool direct_run_mode = false;
+
 static int reload_virtual_machines(void);
 static void stop_virtual_machine(struct vm_entry *);
 static void free_vm_entry(struct vm_entry *);
+
+static int
+create_eventq(void)
+{
+#if __FreeBSD_version >= 1400088 || \
+	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
+#else
+	if ((eventq = kqueue()) < 0) {
+#endif
+		ERR("%s\n", "cannot open kqueue");
+		return -1;
+	}
+	return 0;
+}
 
 static int
 kevent_set(struct kevent *kev, int n)
@@ -1482,7 +1502,7 @@ plugin_cleanup_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 	if (get_poststop_state(vm_ent) > 0)
 		return 0;
 
-	cleanup_virtual_machine(vm_ent);
+	stop_virtual_machine(vm_ent);
 	return 0;
 }
 
@@ -1651,6 +1671,8 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 	stop_waiting_for(vm_output_and_timers, vm_ent);
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
+	if (direct_run_mode)
+		sigterm++;
 }
 
 struct vm_entry *
@@ -1979,18 +2001,9 @@ main(int argc, char *argv[])
 	    0)
 		WARN("%s\n", "cannot protect from OOM killer");
 
-	if (load_config_file(&vm_conf_list, true) < 0)
+	if (load_config_file(&vm_conf_list, true) < 0 ||
+	    create_eventq() < 0)
 		return 1;
-
-#if __FreeBSD_version >= 1400088 || \
-	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
-	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
-#else
-	if ((eventq = kqueue()) < 0) {
-#endif
-		ERR("%s\n", "cannot open kqueue");
-		return 1;
-	}
 
 	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
 		ERR("cannot bind %s\n", gl_conf->cmd_socket_path);
@@ -2027,62 +2040,21 @@ main(int argc, char *argv[])
 	return 0;
 }
 
-static int
-read_stdin(struct vm *vm)
-{
-	int n, rc;
-	ssize_t size;
-	char buf[4 * 1024];
-
-	while ((size = read(0, buf, sizeof(buf))) < 0)
-		if (errno != EINTR && errno != EAGAIN)
-			break;
-	if (size == 0)
-		return 0;
-	if (size > 0 && vm->infd != -1) {
-		n = 0;
-		while (n < size) {
-			if ((rc = write(vm->infd, buf + n, size - n)) < 0)
-				if (errno != EINTR && errno != EAGAIN)
-					break;
-			if (rc > 0)
-				n += rc;
-		}
-	}
-
-	return size;
-}
-
-static struct vm_entry *running_vm;
-
-static void
-sigint_handler(int sig __unused)
-{
-	cleanup_virtual_machine(running_vm);
-	call_plugins(running_vm);
-	remove_taps(VM_PTR(running_vm));
-}
-
 int
 direct_run(const char *name, bool install, bool single)
 {
-	int i, status;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
-	struct kevent ev, ev2[3];
-
+	struct kevent sigev[3];
+	static event_call_back cb[3] = {on_sigterm, on_sigterm, on_sighup};
+	static void *data[3] = {NULL, NULL, NULL};
 	LOG_OPEN_PERROR();
 
-#if __FreeBSD_version >= 1400088 || \
-	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
-	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
-#else
-	if ((eventq = kqueue()) < 0) {
-#endif
-		ERR("%s\n", "cannot open kqueue");
+	direct_run_mode = true;
+
+	if (create_eventq() < 0)
 		return 1;
-	}
 
 	conf_ent = lookup_vm_conf(name);
 	if (conf_ent == NULL) {
@@ -2094,6 +2066,7 @@ direct_run(const char *name, bool install, bool single)
 	free(conf->comport);
 	conf->comport = strdup("stdio");
 	conf->install = install;
+	conf->boot = ONESHOT;
 	set_single_user(conf, single);
 
 	vm_ent = create_vm_entry(conf_ent);
@@ -2102,92 +2075,35 @@ direct_run(const char *name, bool install, bool single)
 		return 1;
 	}
 
-	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
-		ERR("no backend for vm %s\n", name);
-		return -1;
-	}
+	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 
-	if (assign_comport(vm_ent) < 0) {
-		ERR("failed to assign comport for vm %s\n", name);
-		goto err;
-	}
+	if (register_events(sigev, cb, data, 3) < 0)
+		return 1;
 
-	if (assign_taps(VM_PTR(vm_ent)) < 0)
+	if (start_virtual_machine(vm_ent) < 0)
 		goto err;
 
-	if (activate_taps(VM_PTR(vm_ent)) < 0)
-		goto err;
+	event_loop();
 
-	running_vm = vm_ent;
-	signal(SIGINT, sigint_handler);
-
-	if (VM_LD_METHOD(vm_ent) && VM_LD_LOAD(vm_ent) < 0)
-		goto err;
-
-	i = 0;
-	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
-	       NOTE_EXIT, 0, vm_ent);
-	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0)
-		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
-		       NOTE_SECONDS, VM_CONF(vm_ent)->loader_timeout, vm_ent);
-	if (VM_INFD(vm_ent) != -1)
-		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
-	if (kevent_set(ev2, i) < 0) {
-		ERR("failed to wait process (%s)\n", strerror(errno));
-		VM_POWEROFF(vm_ent);
-		goto err;
-	}
-	call_plugins(vm_ent);
-
-wait:
-	if (kevent_get(&ev, 1, NULL) < 0) {
-		ERR("kevent failure (%s)\n", strerror(errno));
-		VM_POWEROFF(vm_ent);
-		goto err;
-	}
-
-	switch (ev.filter) {
-	case EVFILT_READ:
-		read_stdin(VM_PTR(vm_ent));
-		goto wait;
-	case EVFILT_PROC:
-		if (waitpid(ev.ident, &status, 0) < 0)
-			goto err;
-		if ((pid_t)ev.ident != VM_PID(vm_ent))
-			goto wait;
-		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-			break;
-		goto err;
-	case EVFILT_TIMER:
-	default:
-		VM_POWEROFF(vm_ent);
-		goto err;
-	}
-
-	if (VM_LD_METHOD(vm_ent))
-		VM_LD_CLEANUP(vm_ent);
-
-	if (VM_STATE(vm_ent) == LOAD) {
-		if (VM_START(vm_ent) < 0)
-			goto err;
-		call_plugins(vm_ent);
-		if (waitpid(VM_PID(vm_ent), &status, 0) < 0)
-			goto err;
-	}
-
-	cleanup_virtual_machine(vm_ent);
-	call_plugins(vm_ent);
-	remove_taps(VM_PTR(vm_ent));
 	free_vm_entry(vm_ent);
+	free_events();
 	remove_plugins();
 	free_id_list();
+	close(eventq);
+	free_global_vars();
+	free_gl_conf();
 	return 0;
 err:
-	cleanup_virtual_machine(vm_ent);
-	call_plugins(vm_ent);
+	stop_virtual_machine(vm_ent);
 	free_vm_entry(vm_ent);
+	free_events();
 	remove_plugins();
 	free_id_list();
+	close(eventq);
+	free_global_vars();
+	free_gl_conf();
 	return 1;
 }
 
