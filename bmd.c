@@ -1810,9 +1810,6 @@ event_loop(void)
 	int n, do_remove;
 	struct timespec *to, timeout;
 
-	if (wait_for_cmd_sock(cmd_sock) < 0)
-		return -1;
-
 	while (sigterm == 0) {
 		to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
 		if ((n = kevent_get(&ev, 1, to)) < 0) {
@@ -2008,7 +2005,8 @@ main(int argc, char *argv[])
 
 	INFO("%s\n", "start daemon");
 
-	if (start_virtual_machines() < 0)
+	if (start_virtual_machines() < 0 ||
+	    wait_for_cmd_sock(cmd_sock) < 0)
 		ERR("%s\n", "failed to start virtual machines");
 	else
 		event_loop();
