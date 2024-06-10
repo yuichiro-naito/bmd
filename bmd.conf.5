@@ -128,7 +128,10 @@ Set
 .Qq yes
 to use frame buffer device. The default is
 .Qq no .
-.It Cm graphics_listen = Ar port_num;
+.It Cm graphics_listen = Ar address;
+Vnc listen address. The default value is
+.Qq 0.0.0.0 .
+.It Cm graphics_port = Ar port_num;
 Vnc port number. The default value is
 .Qq 5900 .
 .It Cm graphics_password = Ar password;
