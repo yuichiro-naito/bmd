@@ -278,6 +278,7 @@ add_passthru_conf(struct vm_conf *conf, const char *devid)
 
 	STAILQ_INSERT_TAIL(&conf->passthrues, p, next);
 	conf->npassthrues++;
+	set_wired_memory(conf, true);
 	return 0;
 err:
 	free(d);

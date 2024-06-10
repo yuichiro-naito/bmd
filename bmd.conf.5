@@ -272,7 +272,11 @@ Setting owner is permitted if the file owner is root privileged user or the
 .Ar user_name
 is as same as the file owner.
 .It Cm passthru = (+=) Ar bus/slot/function;
-PCI passthrough device id. e.g. 1/0/130
+PCI passthrough device id. e.g.
+.Dq 1/0/130 .
+This implicitly sets
+.Sq wired_memory
+to true.
 .It Cm reboot_on_change = Ar yes | no;
 Set
 .Qq yes
