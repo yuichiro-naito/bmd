@@ -957,7 +957,10 @@ vm_conf_export_env(struct vm_conf *conf)
 	i = 1;
 	STAILQ_FOREACH (nc, &vm->taps, next) {
 		vputenv(ENV_PREFIX"NETWORK%d_TYPE=%s", i, nc->type);
-		vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->tap);
+		if (nc->tap)
+			vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->tap);
+		else if (nc->vale_port)
+			vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->vale_port);
 		if (nc->bridge)
 			vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i, nc->bridge);
 		else if (nc->vale)
