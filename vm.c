@@ -351,23 +351,16 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 }
 
 static int
-csm_load(struct vm *vm __unused, nvlist_t *pl_conf __unused)
+csm_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	return (vm->bootrom = strdup(UEFI_CSM_FIRMWARE)) ? 1 : -1;
+	return set_bootrom(vm, UEFI_CSM_FIRMWARE) == 0 ? 1 : -1;
 }
 
 static int
 uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	char *p = strdup(UEFI_FIRMWARE);
-
-	if (p == NULL || copy_uefi_vars(vm) < 0) {
-		free(p);
-		return -1;
-	}
-
-	vm->bootrom = p;
-	return 1;
+	return (set_bootrom(vm, UEFI_FIRMWARE) < 0 || copy_uefi_vars(vm) < 0) ?
+		-1 : 1;
 }
 
 static int
