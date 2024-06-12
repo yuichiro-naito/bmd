@@ -715,6 +715,12 @@ set_pid(struct vm *vm, pid_t pid)
 	vm->pid = pid;
 }
 
+int
+set_bootrom(struct vm *vm, const char *rom)
+{
+	return set_string(&vm->bootrom, rom);
+}
+
 struct vm_conf *
 vm_get_conf(struct vm *vm)
 {

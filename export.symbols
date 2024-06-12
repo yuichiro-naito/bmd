@@ -11,6 +11,7 @@ get_assigned_comport;
 get_state;
 set_state;
 set_pid;
+set_bootrom;
 vm_get_conf;
 get_passthru_conf;
 next_passthru_conf;

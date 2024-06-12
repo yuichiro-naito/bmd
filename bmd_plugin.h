@@ -71,6 +71,7 @@ char *get_assigned_comport(struct vm *);
 enum STATE get_state(struct vm *);
 void set_state(struct vm *, enum STATE);
 void set_pid(struct vm *, pid_t);
+int set_bootrom(struct vm *, const char *);
 struct vm_conf *vm_get_conf(struct vm *);
 struct passthru_conf *get_passthru_conf(struct vm_conf *);
 struct passthru_conf *next_passthru_conf(struct passthru_conf *);
