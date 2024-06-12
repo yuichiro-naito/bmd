@@ -35,7 +35,7 @@ redirect_to_com(struct vm *vm, bool redirect_stdin)
 	int fd, flag;
 	const char *com;
 
-	if ((com = vm->assigned_comport) == NULL)
+	if ((com = get_assigned_comport(vm)) == NULL)
 		com = "/dev/null";
 
 	flag = (redirect_stdin) ? O_RDWR : O_WRONLY;
@@ -267,13 +267,13 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	int ifd[2];
 	pid_t pid;
-	struct vm_conf *conf = vm->conf;
+	struct vm_conf *conf = vm_get_conf(vm);
 	size_t len;
 	char *cmd;
-	bool doredirect = (vm->assigned_comport == NULL) ||
-	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
+	bool doredirect = (get_assigned_comport(vm) == NULL) ||
+		(strcasecmp(get_assigned_comport(vm), "stdio") != 0);
 
-	if (write_mapfile(vm->conf, &vm->mapfile) < 0)
+	if (write_mapfile(conf, &vm->mapfile) < 0)
 		return -1;
 
 	cmd = create_load_command(conf, &len);
@@ -286,15 +286,15 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 
 	pid = fork();
 	if (pid > 0) {
-		vm->pid = pid;
-		vm->state = LOAD;
+		set_pid(vm, pid);
+		set_state(vm, LOAD);
 		if (cmd != NULL) {
 			close(ifd[1]);
-			vm->infd = ifd[0];
+			set_infd(vm, ifd[0]);
 		} else
-			vm->infd = -1;
-		vm->outfd = -1;
-		vm->errfd = -1;
+			set_infd(vm, -1);
+		set_outfd(vm, -1);
+		set_errfd(vm, -1);
 		if (cmd != NULL) {
 			write(ifd[0], cmd, len + 1);
 			free(cmd);
