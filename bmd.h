@@ -153,7 +153,7 @@ struct sock_buf {
 	char *res_buf;
 	time_t event_time;
 	struct xucred peer;
-	long cid;
+	long cid;         /* com_opener_id. set -1 if no opener is assigned. */
 };
 
 extern struct global_conf *gl_conf;
