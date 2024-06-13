@@ -721,6 +721,43 @@ set_bootrom(struct vm *vm, const char *rom)
 	return set_string(&vm->bootrom, rom);
 }
 
+const char *
+get_mapfile(struct vm *vm)
+{
+	return vm->mapfile;
+}
+
+int
+set_mapfile(struct vm *vm, const char *mapfile)
+{
+	return set_string(&vm->mapfile, mapfile);
+}
+
+const char *
+get_varsdir(void)
+{
+	return gl_conf->vars_dir;
+}
+
+const char *
+get_varsfile(struct vm *vm)
+{
+	return vm->varsfile;
+}
+
+int
+set_varsfile(struct vm *vm, const char *varsfile)
+{
+	return set_string(&vm->varsfile, varsfile);
+}
+
+void
+free_mapfile(struct vm *vm)
+{
+	free(vm->mapfile);
+	vm->mapfile = NULL;
+}
+
 struct vm_conf *
 vm_get_conf(struct vm *vm)
 {
