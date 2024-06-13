@@ -47,7 +47,7 @@ enum STATE {
 #define ISO_CONF_FOREACH(ic, conf)	  \
 	for ((ic) = get_iso_conf((conf)); \
 	     (ic) != NULL;		  \
-	     (ic) = next_net_conf((ic)))
+	     (ic) = next_iso_conf((ic)))
 
 #define NET_CONF_FOREACH(nc, conf)	  \
 	for ((nc) = get_net_conf((conf)); \
@@ -72,6 +72,12 @@ enum STATE get_state(struct vm *);
 void set_state(struct vm *, enum STATE);
 void set_pid(struct vm *, pid_t);
 int set_bootrom(struct vm *, const char *);
+const char *get_mapfile(struct vm *);
+int set_mapfile(struct vm *, const char *);
+const char *get_varsdir(void);
+const char *get_varsfile(struct vm *);
+int set_varsfile(struct vm *, const char *);
+void free_mapfile(struct vm *);
 struct vm_conf *vm_get_conf(struct vm *);
 struct passthru_conf *get_passthru_conf(struct vm_conf *);
 struct passthru_conf *next_passthru_conf(struct passthru_conf *);

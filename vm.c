@@ -70,7 +70,7 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", conf->name, getpid()) < 0)
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", get_name(conf), getpid()) < 0)
 		return -1;
 
 	fd = mkstemp(fn);
@@ -80,10 +80,6 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 		return -1;
 	}
 
-	if (*mapfile) {
-		unlink(*mapfile);
-		free(*mapfile);
-	}
 	*mapfile = fn;
 
 	if ((fp = fdopen(fd, "w+")) == NULL) {
@@ -92,12 +88,12 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	}
 
 	i = 0;
-	STAILQ_FOREACH (dc, &conf->disks, next)
+	DISK_CONF_FOREACH (dc, conf)
 		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
 			goto err;
 
 	i = 0;
-	STAILQ_FOREACH (ic, &conf->isoes, next)
+	ISO_CONF_FOREACH (ic, conf)
 		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
 			goto err;
 
@@ -117,21 +113,26 @@ err2:
 static int
 copy_uefi_vars(struct vm *vm)
 {
-	char *fn;
-	int out, in;
+	char *p;
+	int out, in, rc;
 	ssize_t n;
 	off_t len = 0;
 	struct stat st;
-	const char *origin = UEFI_FIRMWARE_VARS;
-	extern struct global_conf *gl_conf;
+	const char *fn, *origin = UEFI_FIRMWARE_VARS;
+	struct vm_conf *conf = vm_get_conf(vm);
 
-	fn = vm->varsfile;
-	if (fn == NULL && asprintf(&fn, "%s/%s.vars", gl_conf->vars_dir,
-				   vm->conf->name) < 0)
-		return -1;
+	if ((fn = get_varsfile(vm)) == NULL) {
+		if (asprintf(&p, "%s/%s.vars", get_varsdir(),
+			     get_name(conf)) < 0)
+			return -1;
+		rc = set_varsfile(vm, p);
+		free(p);
+		if (rc < 0)
+			return -1;
+		fn = get_varsfile(vm);
+	}
 
-	vm->varsfile = fn;
-	if (vm->conf->install == false && is_file(fn))
+	if (is_install(conf) == false && is_file(fn))
 		return 0;
 
 	while ((in = open(origin, O_RDONLY)) < 0)
@@ -187,21 +188,21 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	const char **p, *repl[] = { "kopenbsd ", "knetbsd " };
 	size_t len = 0;
 	char *cmd = NULL;
-	char *t = (conf->install) ? conf->installcmd : conf->loadcmd;
+	char *t = (is_install(conf)) ? get_installcmd(conf) : get_loadcmd(conf);
 	if (t == NULL)
 		goto end;
 
 	if (strcasecmp(t, "auto") == 0) {
 		if ((cmd = inspect(conf)) == NULL) {
 			ERR("%s inspection failed for VM %s\n",
-			    conf->install ? "installcmd" : "loadcmd", conf->name);
+			    is_install(conf) ? "installcmd" : "loadcmd", get_name(conf));
 			goto end;
 		}
 		len = strlen(cmd);
 		goto end;
 	}
 
-	if (conf->single_user)
+	if (is_single_user(conf))
 		ARRAY_FOREACH (p, repl) {
 			len = strlen(*p);
 			if (strncmp(t, *p, len) == 0) {
@@ -255,26 +256,35 @@ split_args(char *buf)
 static void
 grub_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	if (vm->mapfile) {
-		unlink(vm->mapfile);
-		free(vm->mapfile);
-		vm->mapfile = NULL;
+	const char *fn;
+
+	if ((fn = get_mapfile(vm)) != NULL) {
+		unlink(fn);
+		free_mapfile(vm);
 	}
 }
 
 static int
 grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	int ifd[2];
+	int ifd[2], rc;
 	pid_t pid;
 	struct vm_conf *conf = vm_get_conf(vm);
 	size_t len;
-	char *cmd;
+	char *cmd, *mapfile = NULL;
 	bool doredirect = (get_assigned_comport(vm) == NULL) ||
 		(strcasecmp(get_assigned_comport(vm), "stdio") != 0);
 
-	if (write_mapfile(conf, &vm->mapfile) < 0)
+	if (write_mapfile(conf, &mapfile) < 0)
 		return -1;
+	if (mapfile != NULL) {
+		if (get_mapfile(vm))
+			unlink(get_mapfile(vm));
+		rc = set_mapfile(vm, mapfile);
+		free(mapfile);
+		if (rc < 0)
+			return -1;
+	}
 
 	cmd = create_load_command(conf, &len);
 
@@ -319,18 +329,18 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 
 		setenv("TERM", "vt100", 1);
 		fprintf(fp, LOCALBASE"/sbin/grub-bhyve\n");
-		if (conf->wired_memory == true)
+		if (is_wired_memory(conf))
 			fprintf(fp, "-S\n");
 		fprintf(fp, "-r\n");
-		if (conf->install)
+		if (is_install(conf))
 			fprintf(fp, "cd0\n");
-		else if (conf->grub_run_partition)
-			fprintf(fp, "hd0,%s\n", conf->grub_run_partition);
+		else if (get_grub_run_partition(conf))
+			fprintf(fp, "hd0,%s\n", get_grub_run_partition(conf));
 		else
 			fprintf(fp, "hd0,1\n");
-		fprintf(fp, "-M\n%s\n", conf->memory);
-		fprintf(fp, "-m\n%s\n", vm->mapfile);
-		fprintf(fp, "%s\n", conf->name);
+		fprintf(fp, "-M\n%s\n", get_memory(conf));
+		fprintf(fp, "-m\n%s\n", get_mapfile(vm));
+		fprintf(fp, "%s\n", get_name(conf));
 		funlockfile(fp);
 		fclose(fp);
 

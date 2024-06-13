@@ -29,7 +29,7 @@ create_inspection(struct vm_conf *conf)
 	if (ins == NULL)
 		return NULL;
 	ins->md_unit = -1;
-	ins->single_user = conf->single_user;
+	ins->single_user = is_single_user(conf);
         if (asprintf(&ins->mount_point,
 		     "/tmp/bmd.ins.%d.XXXXXX", getpid()) < 0 ||
 	    mkdtemp(ins->mount_point) == NULL)
@@ -217,7 +217,7 @@ is_directory(int df, struct dirent *e)
 }
 
 bool
-is_file(char *path)
+is_file(const char *path)
 {
 	struct stat s;
 	return (stat(path, &s) == 0 && S_ISREG(s.st_mode));
@@ -315,7 +315,7 @@ inspect_iso_image(struct inspection *ins)
 {
 	struct iso_conf *ic;
 
-	ic = STAILQ_FIRST(&ins->conf->isoes);
+	ic = get_iso_conf(ins->conf);
 	if (ic == NULL)
 		return -1;
 
@@ -499,7 +499,7 @@ inspect_disk_image(struct inspection *ins)
 {
 	struct disk_conf *dc;
 
-	dc = STAILQ_FIRST(&ins->conf->disks);
+	dc = get_disk_conf(ins->conf);
 	if (dc == NULL)
 		return -1;
 	ins->disk_path = dc->path;
@@ -543,7 +543,7 @@ inspect(struct vm_conf *conf)
 	if (ins == NULL)
 		return rc;
 
-	if (conf->install) {
+	if (is_install(conf)) {
 		if (inspect_iso_image(ins) == 0) {
 			rc = ins->install_cmd;
 			ins->install_cmd = NULL;
