@@ -80,6 +80,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_CONF(v)          ((v)->vm.conf)
 #define VM_CONF_ENT(v)      ((struct vm_conf_entry *)((v)->vm.conf))
 #define VM_NEWCONF(v)       ((v)->new_conf)
+#define VM_TMPCONF(v)       ((v)->tmp_conf)
 #define VM_METHOD(v)        ((v)->vm_method)
 #define VM_LD_METHOD(v)     ((v)->loader_method)
 #define VM_PLCONF(v)        ((v)->pl_conf)
@@ -111,7 +112,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 SLIST_HEAD(vm_list, vm_entry);
 struct vm_entry {
 	struct vm vm;
-	struct vm_conf *new_conf;
+	struct vm_conf *tmp_conf, *new_conf;
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_method *vm_method;
 	struct loader_method *loader_method;

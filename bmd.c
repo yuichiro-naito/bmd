@@ -1710,9 +1710,9 @@ reload_virtual_machines(void)
 	if (load_config_file(&new_list, false) < 0)
 		return -1;
 
-	/* make sure new_conf is NULL */
+	/* make sure tmp_conf is NULL */
 	SLIST_FOREACH (vm_ent, &vm_list, next)
-		VM_NEWCONF(vm_ent) = NULL;
+		VM_TMPCONF(vm_ent) = NULL;
 
 	LIST_FOREACH (conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
@@ -1720,7 +1720,7 @@ reload_virtual_machines(void)
 		if (vm_ent == NULL) {
 			if ((vm_ent = create_vm_entry(conf_ent)) == NULL)
 				return -1;
-			VM_NEWCONF(vm_ent) = conf;
+			VM_TMPCONF(vm_ent) = conf;
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
@@ -1738,7 +1738,7 @@ reload_virtual_machines(void)
 			VM_LOGFD(vm_ent) = open_err_logfile(conf);
 		}
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
-		VM_NEWCONF(vm_ent) = conf;
+		VM_TMPCONF(vm_ent) = conf;
 		if (conf->boot != NO && conf->reboot_on_change &&
 		    compare_vm_conf_entry(conf_ent, VM_CONF_ENT(vm_ent)) != 0) {
 			switch (VM_STATE(vm_ent)) {
@@ -1759,7 +1759,7 @@ reload_virtual_machines(void)
 			}
 			continue;
 		}
-		if (VM_NEWCONF(vm_ent)->boot == VM_CONF(vm_ent)->boot)
+		if (VM_TMPCONF(vm_ent)->boot == VM_CONF(vm_ent)->boot)
 			continue;
 		switch (conf->boot) {
 		case NO:
@@ -1787,7 +1787,7 @@ reload_virtual_machines(void)
 	}
 
 	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
-		if (VM_NEWCONF(vm_ent) == NULL) {
+		if (VM_TMPCONF(vm_ent) == NULL) {
 			switch (VM_STATE(vm_ent)) {
 			case LOAD:
 			case RUN:
@@ -1811,8 +1811,8 @@ reload_virtual_machines(void)
 				free_vm_entry(vm_ent);
 			}
 		} else {
-			VM_CONF(vm_ent) = VM_NEWCONF(vm_ent);
-			VM_NEWCONF(vm_ent) = NULL;
+			VM_CONF(vm_ent) = VM_TMPCONF(vm_ent);
+			VM_TMPCONF(vm_ent) = NULL;
 		}
 
 	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
