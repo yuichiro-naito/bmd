@@ -1251,6 +1251,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	free(VM_VARSFILE(vm_ent));
 	free(VM_ASCOMPORT(vm_ent));
 	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
+	free_vm_conf_entry(VM_NEWCONF(vm_ent));
 	free(vm_ent);
 }
 
@@ -1279,6 +1280,8 @@ free_plugin_data(struct plugin_data_list *head)
 void
 free_vm_conf_entry(struct vm_conf_entry *conf_ent)
 {
+	if (conf_ent == NULL)
+		return;
 	free_plugin_data(&conf_ent->pl_data);
 	free_vm_conf(&conf_ent->conf);
 }
@@ -1542,8 +1545,17 @@ int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
 	int rc;
-	struct vm_conf *conf = VM_CONF(vm_ent);
-	char *name = conf->name;
+	struct vm_conf *conf;
+	char *name;
+
+	if (VM_NEWCONF(vm_ent) != NULL) {
+		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
+		VM_CONF(vm_ent) = &VM_NEWCONF(vm_ent)->conf;
+		VM_NEWCONF(vm_ent) = NULL;
+	}
+
+	conf = VM_CONF(vm_ent);
+	name = conf->name;
 
 	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
 		ERR("no backend for vm %s\n", name);
@@ -1703,14 +1715,14 @@ static int
 reload_virtual_machines(void)
 {
 	struct vm_conf *conf;
-	struct vm_conf_entry *conf_ent, *cen;
+	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent, *vmn;
 	struct vm_conf_list new_list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_file(&new_list, false) < 0)
 		return -1;
 
-	/* make sure tmp_conf is NULL */
+	/* make sure tmp_conf_ent is NULL */
 	SLIST_FOREACH (vm_ent, &vm_list, next)
 		VM_TMPCONF(vm_ent) = NULL;
 
@@ -1720,7 +1732,7 @@ reload_virtual_machines(void)
 		if (vm_ent == NULL) {
 			if ((vm_ent = create_vm_entry(conf_ent)) == NULL)
 				return -1;
-			VM_TMPCONF(vm_ent) = conf;
+			VM_TMPCONF(vm_ent) = conf_ent;
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
@@ -1738,7 +1750,7 @@ reload_virtual_machines(void)
 			VM_LOGFD(vm_ent) = open_err_logfile(conf);
 		}
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
-		VM_TMPCONF(vm_ent) = conf;
+		VM_TMPCONF(vm_ent) = conf_ent;
 		if (conf->boot != NO && conf->reboot_on_change &&
 		    compare_vm_conf_entry(conf_ent, VM_CONF_ENT(vm_ent)) != 0) {
 			switch (VM_STATE(vm_ent)) {
@@ -1759,7 +1771,7 @@ reload_virtual_machines(void)
 			}
 			continue;
 		}
-		if (VM_TMPCONF(vm_ent)->boot == VM_CONF(vm_ent)->boot)
+		if (VM_TMPCONF(vm_ent)->conf.boot == VM_CONF(vm_ent)->boot)
 			continue;
 		switch (conf->boot) {
 		case NO:
@@ -1775,7 +1787,7 @@ reload_virtual_machines(void)
 		case ALWAYS:
 		case YES:
 			if (VM_STATE(vm_ent) == TERMINATE) {
-				VM_CONF(vm_ent) = conf;
+				VM_NEWCONF(vm_ent) = conf_ent;
 				start_virtual_machine(vm_ent);
 			} else if (VM_STATE(vm_ent) == STOP)
 				VM_STATE(vm_ent) = RESTART;
@@ -1811,14 +1823,18 @@ reload_virtual_machines(void)
 				free_vm_entry(vm_ent);
 			}
 		} else {
-			VM_CONF(vm_ent) = VM_TMPCONF(vm_ent);
+			if (VM_CONF_ENT(vm_ent) == VM_TMPCONF(vm_ent)) {
+				/* tmp_conf_ent is created just before
+				   in this function. */
+				VM_TMPCONF(vm_ent) = NULL;
+				continue;
+			}
+			free_vm_conf_entry(VM_NEWCONF(vm_ent));
+			VM_NEWCONF(vm_ent) = VM_TMPCONF(vm_ent);
 			VM_TMPCONF(vm_ent) = NULL;
 		}
 
-	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
-		free_vm_conf_entry(conf_ent);
 	LIST_INIT(&vm_conf_list);
-
 	LIST_CONCAT(&vm_conf_list, &new_list, vm_conf_entry, next);
 
 	return 0;
