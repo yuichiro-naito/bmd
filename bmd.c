@@ -238,6 +238,18 @@ err:
 	return -1;
 }
 
+static int
+count_plugin_events(void)
+{
+	int n = 0;
+	struct event *ev;
+
+	LIST_FOREACH (ev, &event_list, next)
+		if (ev->type == PLUGIN)
+			n++;
+	return n;
+}
+
 int
 plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 {
@@ -1891,18 +1903,14 @@ stop_virtual_machines(void)
 		}
 	}
 
-	while (count > 0) {
+	while (count_plugin_events() + count > 0) {
 		if (kevent_get(&ev, 1, NULL) < 0)
 			return -1;
 		if (ev.udata == NULL)
 			continue;
 		event = ev.udata;
-		if (event->kev.filter == EVFILT_PROC) {
-			if (event->type == EVENT &&
-			    call_poststop_plugins(vm_ent) > 0)
-				continue;
+		if (event->type == EVENT && event->kev.filter == EVFILT_PROC)
 			count--;
-		}
 		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
 		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
 			ERR("%s\n", "callback failed");
