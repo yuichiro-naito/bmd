@@ -7,6 +7,7 @@
 #include <sys/nv.h>
 
 #include <stdbool.h>
+#include <syslog.h>
 
 struct passthru_conf;
 struct disk_conf;
@@ -256,6 +257,12 @@ int plugin_stop_virtualmachine(PLUGIN_DESC *, struct vm *);
 int plugin_cleanup_virtualmachine(PLUGIN_DESC *, struct vm *);
 int register_vm_method(struct vm_method *);
 int register_loader_method(struct loader_method *);
-int plugin_errlog(PLUGIN_DESC *, const char *, ...);
+int plugin_logger(int, PLUGIN_DESC *, const char *, ...);
+#define plugin_infolog(desc, fmt, ...) \
+	plugin_logger(LOG_INFO, desc, fmt, __VA_ARGS__)
+#define plugin_warnlog(desc, fmt, ...) \
+	plugin_logger(LOG_WARN, desc, fmt, __VA_ARGS__)
+#define plugin_errlog(desc, fmt, ...) \
+	plugin_logger(LOG_ERR, desc, fmt, __VA_ARGS__)
 
 #endif

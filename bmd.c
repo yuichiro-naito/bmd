@@ -390,13 +390,13 @@ plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 }
 
 int
-plugin_errlog(PLUGIN_DESC *desc, const char *fmt, ...)
+plugin_logger(int priority, PLUGIN_DESC *desc, const char *fmt, ...)
 {
 	va_list ap;
 	char *s;
 	va_start(ap, fmt);
 	if (vasprintf(&s, fmt, ap) >= 0) {
-		ERR("%s: %s\n", desc->name, s);
+		LOGGER(priority, "%s: %s\n", desc->name, s);
 		free(s);
 	}
 	va_end(ap);
