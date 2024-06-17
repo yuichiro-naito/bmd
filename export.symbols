@@ -93,7 +93,7 @@ plugin_set_timer;
 plugin_start_virtualmachine;
 plugin_stop_virtualmachine;
 plugin_cleanup_virtualmachine;
-plugin_errlog;
+plugin_logger;
 split_args;
 vm_conf_export_env;
 };
