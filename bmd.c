@@ -239,13 +239,13 @@ err:
 }
 
 static int
-count_plugin_events(void)
+count_plugin_process_events(void)
 {
 	int n = 0;
 	struct event *ev;
 
 	LIST_FOREACH (ev, &event_list, next)
-		if (ev->type == PLUGIN)
+		if (ev->type == PLUGIN && ev->kev.filter == EVFILT_PROC)
 			n++;
 	return n;
 }
@@ -1903,7 +1903,7 @@ stop_virtual_machines(void)
 		}
 	}
 
-	while (count_plugin_events() + count > 0) {
+	while (count_plugin_process_events() + count > 0) {
 		if (kevent_get(&ev, 1, NULL) < 0)
 			return -1;
 		if (ev.udata == NULL)
