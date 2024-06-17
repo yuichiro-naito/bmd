@@ -312,7 +312,7 @@ print_prestart_error(struct vm_entry *vm_ent)
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->results[0].called &&
 		    pd->prestart_result.state < 0)
-			ERR("%s: plugin '%s' prevents starting VM",
+			ERR("%s: plugin '%s' prevents from starting VM",
 			    VM_CONF(vm_ent)->name,
 			    pd->ent->desc_name);
 }
