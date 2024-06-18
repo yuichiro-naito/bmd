@@ -368,12 +368,12 @@ Following subcommands are available.
 
 | subcommand | parameter | description |
 |:-----------|:----------|:------------|
-| boot [-c]<br>start [-c] | VM name | boot VM and [-c] takes console via `cu -l` |
-| install [-c] | VM name | boot VM from ISO and [-c] takes console via `cu -l`.|
+| boot [-c]<br>start [-c] | VM name | boot VM and [-c] takes console via `bmd console` |
+| install [-c] | VM name | boot VM from ISO and [-c] takes console via `bmd console`.|
 | shutdown<br>stop | VM name | ACPI shutdown VM |
 | poweroff | VM name | force to power off VM<br>***Warning: damage to disk image*** |
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
-| console | VM name | get comport console and emulate `cu -l` |
+| console | VM name | open the comport device and emulate `cu -l` |
 | showcomport | VM name | show current comport device to see which is assigned automatically |
 | showvgaport | VM name | show current vnc listen address and port number |
 | showconfig | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
