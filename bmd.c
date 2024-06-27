@@ -1226,6 +1226,9 @@ call_plugins(struct vm_entry *vm_ent)
 {
 	struct plugin_data *pd;
 
+	if (VM_PID(vm_ent) == -1)
+		return;
+
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.on_status_change)
 			(pd->ent->desc.on_status_change)(VM_PTR(vm_ent),
@@ -1574,6 +1577,15 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
+	if (VM_STATE(vm_ent) == REMOVE) {
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
+		stop_virtual_machine(vm_ent);
+		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+		free_vm_entry(vm_ent);
+		return 0;
+	}
+
 	if (assign_comport(vm_ent) < 0) {
 		ERR("failed to assign comport for vm %s\n", name);
 		return -1;
@@ -1697,6 +1709,7 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 	call_plugins(vm_ent);
 	if (direct_run_mode)
 		sigterm++;
+	VM_PID(vm_ent) = -1;
 }
 
 struct vm_entry *
@@ -1823,6 +1836,8 @@ reload_virtual_machines(void)
 			case STOP:
 			case REMOVE:
 			case RESTART:
+			case PRESTART:
+			case POSTSTOP:
 				VM_STATE(vm_ent) = REMOVE;
 				/* remove vm_conf_entry from the list
 				   to keep it until actually freed. */
