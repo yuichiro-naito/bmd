@@ -342,21 +342,9 @@ ${state} is one of followings.
 
   bhyve starts to run
 
-* STOP
-
-  bmd stops bhyve
-
 * TERMINATE
 
   bhyve terminated
-
-* REMOVE
-
-  bmd detects that VM config file is deleted.
-
-* RESTART
-
-  bmd restarts VM
 
 The sequence dialog is shown below.
 
