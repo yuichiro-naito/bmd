@@ -324,10 +324,13 @@ NetBSD and OpenBSD disk and iso images for now, and requires `loader=grub;`.
 
 ## hook command plugin
 
-Bmd invokes hook command when VM status is changed.
-The command line is as following.
+Bmd invokes a prestart command before invoking VM and waits for its
+termination. If the prestart command fails, the VM won't boot.
+After VM termination, bmd invokes a poststop command and waits for its
+termination. Bmd also invokes a hook command when VM status is changed.
+The command line is as follows.
 
-`${hookcmd} ${vm name} ${state}`
+`${prestart|poststop|hookcmd} ${vm name} ${state}`
 
 ${state} is one of followings.
 
@@ -354,6 +357,28 @@ ${state} is one of followings.
 * RESTART
 
   bmd restarts VM
+
+The sequence dialog is shown below.
+
+```mermaid
+sequenceDiagram
+  bmd->>+prestart: invoke
+  prestart-->>-bmd: done
+  loop if reboot
+    bmd->>+bhyveload: invoke
+    bmd->>+hookcmd: invoke with LOAD state
+    hookcmd-->>-bmd: done
+    bhyveload-->>-bmd: done
+    bmd->>+bhyve: invoke
+    bmd->>+hookcmd: invoke with RUN state
+    hookcmd-->>-bmd: done
+    bhyve-->>-bmd: done
+  end
+  bmd->>+poststop: invoke
+  poststop-->-bmd: done
+  bmd->>+hookcmd: invoke with TERMINATE state
+  hookcmd-->>-bmd: done
+```
 
 ## avahi plugin
 
