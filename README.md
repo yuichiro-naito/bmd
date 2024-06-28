@@ -209,6 +209,18 @@ Following keys are available for bmd.
 | nmdm_offset | basic offset of auto assigned nmdm | no | 200 |
 | pid_file | file to write bmd's pid | no | /var/run/bmd.pid |
 
+## Reloading configurations
+
+Sending a HUP signal to the bmd triggers reloading VM configuration file(s).
+Each configuration will be applied when the VM restarts. Until restarting the
+VM, the old configuration will be kept. Please note that restarting the VM has
+2 ways. One is the VM reboots spontaneously. This is a case `reboot` command
+is executed in the VM. This case won't invoke a `poststop` command (described
+below) so the new `poststop` command in the reloaded configuration will be
+invoked after the VM terminates. Another one is the VM is stopped by the
+`bmdctl stop` command. In this case, the old `poststop` command will be invoked
+and the new configuration will be applied when the VM starts again.
+
 ## Example configurations
 
 ### Global Variables
