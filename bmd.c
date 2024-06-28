@@ -786,9 +786,6 @@ on_vm_exit(int ident __unused, void *data)
 		INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
 		     (rs == NULL ? "" : rs));
 		free(rs);
-		/* FALLTHROUGH */
-	case PRESTART:
-	case POSTSTOP:
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
 		stop_virtual_machine(vm_ent);
@@ -801,6 +798,11 @@ on_vm_exit(int ident __unused, void *data)
 		stop_virtual_machine(vm_ent);
 		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 		free_vm_entry(vm_ent);
+		break;
+	case PRESTART:
+	case POSTSTOP:
+		ERR("vm %s terminates in an unexpected state: %d\n",
+		    VM_CONF(vm_ent)->name, VM_STATE(vm_ent));
 		break;
 	case TERMINATE:
 		break;
