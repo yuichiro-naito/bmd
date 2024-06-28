@@ -346,7 +346,9 @@ ${state} is one of followings.
 
   bhyve terminated
 
-The sequence dialog is shown below.
+The sequence dialog is shown below. If `grub-bhyve` is used for the VM,
+replace `bhyveload` with `grub-bhyve`. If `uefi` is used, invoking `bhyveload`
+and hookcmd with LOAD state are skipped.
 
 ```mermaid
 sequenceDiagram
