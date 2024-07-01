@@ -104,6 +104,9 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 			VM_##fd(v) = -1;   \
 		}                          \
 	} while (0)
+#define VM_SET_RESTART(v)   ((v)->restart) = true
+#define VM_CLEAR_RESTART(v) ((v)->restart) = false
+#define VM_ISSET_RESTART(v) ((v)->restart)
 
 /*
   Entry of vm list.
@@ -117,6 +120,7 @@ struct vm_entry {
 	struct vm_method *vm_method;
 	struct loader_method *loader_method;
 	nvlist_t *pl_conf;
+	bool   restart;
 };
 
 /*

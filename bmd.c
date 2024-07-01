@@ -767,8 +767,10 @@ on_vm_exit(int ident __unused, void *data)
 		}
 		break;
 	case RESTART:
+		VM_SET_RESTART(vm_ent);
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
 		stop_virtual_machine(vm_ent);
-		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 		break;
 	case RUN:
 		if (VM_CONF(vm_ent)->install == false &&
@@ -1712,6 +1714,10 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 	if (direct_run_mode)
 		sigterm++;
 	VM_PID(vm_ent) = -1;
+	if (VM_ISSET_RESTART(vm_ent)) {
+		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
+		VM_CLEAR_RESTART(vm_ent);
+	}
 }
 
 struct vm_entry *
