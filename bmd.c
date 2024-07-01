@@ -1581,6 +1581,12 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
+	/*
+	  This is a case where the VM configuration is removed,
+	  while prestart plugins are running.
+	  'plugin_start_virtualmachine' calls this function,
+	  after all prestart plugins have finished.
+	 */
 	if (VM_STATE(vm_ent) == REMOVE) {
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
