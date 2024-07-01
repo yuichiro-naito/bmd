@@ -151,6 +151,7 @@ struct vm {
 	pid_t pid;
 	STAILQ_HEAD(, net_conf) taps;
 	char *mapfile;
+	char *bootrom;
 	char *varsfile;
 	char *assigned_comport;
 	int infd;
@@ -228,7 +229,7 @@ int set_tpm_type(struct vm_conf *, const char *);
 int set_tpm_version(struct vm_conf *, const char *);
 
 struct fbuf *create_fbuf(void);
-struct vm_conf *create_vm_conf(const char *vm_);
+struct vm_conf *create_vm_conf(const char *);
 int finalize_vm_conf(struct vm_conf *);
 int dump_vm_conf(struct vm_conf *, FILE *);
 
@@ -246,5 +247,7 @@ void free_global_vars(void);
 void free_id_list(void);
 
 int set_string(char **, const char *);
+int vm_conf_export_env(struct vm_conf *);
+
 
 #endif

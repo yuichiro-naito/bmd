@@ -17,6 +17,9 @@ int recv_sock_buf(struct sock_buf *);
 void clear_send_sock_buf(struct sock_buf *);
 int send_sock_buf(struct sock_buf *);
 
+typedef unsigned int com_opener_id;
+struct com_opener *lookup_com_opener(com_opener_id);
+
 int connect_to_server(const struct global_conf *);
 int create_command_server(const struct global_conf *);
 int accept_command_socket(int s0);

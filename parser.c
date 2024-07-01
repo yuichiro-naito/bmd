@@ -344,14 +344,7 @@ parse_err_logfile(struct vm_conf *conf, char *val)
 static int
 parse_loader(struct vm_conf *conf, char *val)
 {
-	const char *const *p;
-	static const char *const values[] = { "uefi", "csm", "bhyveload",
-	    "grub" };
-
-	ARRAY_FOREACH (p, values)
-		if (strcasecmp(val, *p) == 0)
-			return set_loader(conf, val);
-	return -1;
+	return loader_method_exists(val) ? set_loader(conf, val) : -1;
 }
 
 static int
@@ -596,10 +589,7 @@ parse_hostbridge(struct vm_conf *conf, char *val)
 static int
 parse_backend(struct vm_conf *conf, char *val)
 {
-	if (vm_method_exists(val) < 0)
-		return -1;
-
-	return set_backend(conf, val);
+	return vm_method_exists(val) ? set_backend(conf, val) : -1;
 }
 
 static int

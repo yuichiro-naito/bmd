@@ -25,6 +25,6 @@ struct inspection {
 
 int inspect_with_grub(struct inspection *);
 char *inspect(struct vm_conf *);
-bool is_file(char *);
+bool is_file(const char *);
 
 #endif

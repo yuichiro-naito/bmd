@@ -4,6 +4,10 @@
 struct vm;
 struct vm_conf;
 extern struct vm_method bhyve_method;
+extern struct loader_method bhyveload_method;
+extern struct loader_method grub2load_method;
+extern struct loader_method uefiload_method;
+extern struct loader_method csmload_method;
 
 /* Implemented in vm.c */
 int remove_taps(struct vm *);

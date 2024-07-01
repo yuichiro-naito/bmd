@@ -542,7 +542,7 @@ inspect_with_grub(struct inspection *ins)
 		return -1;
 
 	if (write_mapfile(ins->conf, &pp->mapfile) < 0 ||
-	    asprintf(&pp->vm_name, "ins-%s", ins->conf->name) < 0 ||
+	    asprintf(&pp->vm_name, "ins-%s", get_name(ins->conf)) < 0 ||
 	    spawn_grub(pp) < 0)
 		goto err2;
 

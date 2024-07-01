@@ -35,7 +35,7 @@ redirect_to_com(struct vm *vm, bool redirect_stdin)
 	int fd, flag;
 	const char *com;
 
-	if ((com = vm->assigned_comport) == NULL)
+	if ((com = get_assigned_comport(vm)) == NULL)
 		com = "/dev/null";
 
 	flag = (redirect_stdin) ? O_RDWR : O_WRONLY;
@@ -70,7 +70,7 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", conf->name, getpid()) < 0)
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", get_name(conf), getpid()) < 0)
 		return -1;
 
 	fd = mkstemp(fn);
@@ -80,10 +80,6 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 		return -1;
 	}
 
-	if (*mapfile) {
-		unlink(*mapfile);
-		free(*mapfile);
-	}
 	*mapfile = fn;
 
 	if ((fp = fdopen(fd, "w+")) == NULL) {
@@ -92,12 +88,12 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	}
 
 	i = 0;
-	STAILQ_FOREACH (dc, &conf->disks, next)
+	DISK_CONF_FOREACH (dc, conf)
 		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
 			goto err;
 
 	i = 0;
-	STAILQ_FOREACH (ic, &conf->isoes, next)
+	ISO_CONF_FOREACH (ic, conf)
 		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
 			goto err;
 
@@ -117,21 +113,26 @@ err2:
 static int
 copy_uefi_vars(struct vm *vm)
 {
-	char *fn;
-	int out, in;
+	char *p;
+	int out, in, rc;
 	ssize_t n;
 	off_t len = 0;
 	struct stat st;
-	const char *origin = UEFI_FIRMWARE_VARS;
-	extern struct global_conf *gl_conf;
+	const char *fn, *origin = UEFI_FIRMWARE_VARS;
+	struct vm_conf *conf = vm_get_conf(vm);
 
-	fn = vm->varsfile;
-	if (fn == NULL && asprintf(&fn, "%s/%s.vars", gl_conf->vars_dir,
-				   vm->conf->name) < 0)
-		return -1;
+	if ((fn = get_varsfile(vm)) == NULL) {
+		if (asprintf(&p, "%s/%s.vars", get_varsdir(),
+			     get_name(conf)) < 0)
+			return -1;
+		rc = set_varsfile(vm, p);
+		free(p);
+		if (rc < 0)
+			return -1;
+		fn = get_varsfile(vm);
+	}
 
-	vm->varsfile = fn;
-	if (vm->conf->install == false && is_file(fn))
+	if (is_install(conf) == false && is_file(fn))
 		return 0;
 
 	while ((in = open(origin, O_RDONLY)) < 0)
@@ -187,21 +188,21 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	const char **p, *repl[] = { "kopenbsd ", "knetbsd " };
 	size_t len = 0;
 	char *cmd = NULL;
-	char *t = (conf->install) ? conf->installcmd : conf->loadcmd;
+	char *t = (is_install(conf)) ? get_installcmd(conf) : get_loadcmd(conf);
 	if (t == NULL)
 		goto end;
 
 	if (strcasecmp(t, "auto") == 0) {
 		if ((cmd = inspect(conf)) == NULL) {
 			ERR("%s inspection failed for VM %s\n",
-			    conf->install ? "installcmd" : "loadcmd", conf->name);
+			    is_install(conf) ? "installcmd" : "loadcmd", get_name(conf));
 			goto end;
 		}
 		len = strlen(cmd);
 		goto end;
 	}
 
-	if (conf->single_user)
+	if (is_single_user(conf))
 		ARRAY_FOREACH (p, repl) {
 			len = strlen(*p);
 			if (strncmp(t, *p, len) == 0) {
@@ -252,16 +253,38 @@ split_args(char *buf)
 	return (ap0);
 }
 
-static int
-grub_load(struct vm *vm)
+static void
+grub_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	int ifd[2];
+	const char *fn;
+
+	if ((fn = get_mapfile(vm)) != NULL) {
+		unlink(fn);
+		free_mapfile(vm);
+	}
+}
+
+static int
+grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	int ifd[2], rc;
 	pid_t pid;
-	struct vm_conf *conf = vm->conf;
+	struct vm_conf *conf = vm_get_conf(vm);
 	size_t len;
-	char *cmd;
-	bool doredirect = (vm->assigned_comport == NULL) ||
-	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
+	char *cmd, *mapfile = NULL;
+	bool doredirect = (get_assigned_comport(vm) == NULL) ||
+		(strcasecmp(get_assigned_comport(vm), "stdio") != 0);
+
+	if (write_mapfile(conf, &mapfile) < 0)
+		return -1;
+	if (mapfile != NULL) {
+		if (get_mapfile(vm))
+			unlink(get_mapfile(vm));
+		rc = set_mapfile(vm, mapfile);
+		free(mapfile);
+		if (rc < 0)
+			return -1;
+	}
 
 	cmd = create_load_command(conf, &len);
 
@@ -273,15 +296,15 @@ grub_load(struct vm *vm)
 
 	pid = fork();
 	if (pid > 0) {
-		vm->pid = pid;
-		vm->state = LOAD;
+		set_pid(vm, pid);
+		set_state(vm, LOAD);
 		if (cmd != NULL) {
 			close(ifd[1]);
-			vm->infd = ifd[0];
+			set_infd(vm, ifd[0]);
 		} else
-			vm->infd = -1;
-		vm->outfd = -1;
-		vm->errfd = -1;
+			set_infd(vm, -1);
+		set_outfd(vm, -1);
+		set_errfd(vm, -1);
 		if (cmd != NULL) {
 			write(ifd[0], cmd, len + 1);
 			free(cmd);
@@ -306,18 +329,18 @@ grub_load(struct vm *vm)
 
 		setenv("TERM", "vt100", 1);
 		fprintf(fp, LOCALBASE"/sbin/grub-bhyve\n");
-		if (conf->wired_memory == true)
+		if (is_wired_memory(conf))
 			fprintf(fp, "-S\n");
 		fprintf(fp, "-r\n");
-		if (conf->install)
+		if (is_install(conf))
 			fprintf(fp, "cd0\n");
-		else if (conf->grub_run_partition)
-			fprintf(fp, "hd0,%s\n", conf->grub_run_partition);
+		else if (get_grub_run_partition(conf))
+			fprintf(fp, "hd0,%s\n", get_grub_run_partition(conf));
 		else
 			fprintf(fp, "hd0,1\n");
-		fprintf(fp, "-M\n%s\n", conf->memory);
-		fprintf(fp, "-m\n%s\n", vm->mapfile);
-		fprintf(fp, "%s\n", conf->name);
+		fprintf(fp, "-M\n%s\n", get_memory(conf));
+		fprintf(fp, "-m\n%s\n", get_mapfile(vm));
+		fprintf(fp, "%s\n", get_name(conf));
 		funlockfile(fp);
 		fclose(fp);
 
@@ -338,7 +361,20 @@ grub_load(struct vm *vm)
 }
 
 static int
-bhyve_load(struct vm *vm)
+csm_load(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	return set_bootrom(vm, UEFI_CSM_FIRMWARE) == 0 ? 1 : -1;
+}
+
+static int
+uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
+{
+	return (set_bootrom(vm, UEFI_FIRMWARE) < 0 || copy_uefi_vars(vm) < 0) ?
+		-1 : 1;
+}
+
+static int
+bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	pid_t pid;
 	int outfd[2], errfd[2];
@@ -519,7 +555,7 @@ err:
 }
 
 static int
-exec_bhyve(struct vm *vm)
+exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	struct vm_conf *conf = vm->conf;
 	struct passthru_conf *pc;
@@ -604,14 +640,12 @@ exec_bhyve(struct vm *vm)
 		if (conf->keymap != NULL)
 			fprintf(fp, "-K\n%s\n", conf->keymap);
 
-		if (strcasecmp(conf->loader, "uefi") == 0) {
-			fprintf(fp, "-l\nbootrom,%s", UEFI_FIRMWARE);
+		if (vm->bootrom != NULL) {
+			fprintf(fp, "-l\nbootrom,%s", vm->bootrom);
 			if (vm->varsfile)
 				fprintf(fp, ",%s", vm->varsfile);
 			fprintf(fp, "\n");
-
-		} else if (strcasecmp(conf->loader, "csm") == 0)
-			fprintf(fp, "-l\nbootrom,%s\n", UEFI_CSM_FIRMWARE);
+		}
 
 		if (conf->tpm_dev) {
 			if (conf->tpm_version)
@@ -745,37 +779,6 @@ acpi_poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	return kill(vm->pid, SIGTERM);
 }
 
-static int
-start_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
-{
-	struct vm_conf *conf = vm->conf;
-
-	if (vm->state == LOAD)
-		return exec_bhyve(vm);
-
-	if (strcasecmp(conf->loader, "bhyveload") == 0) {
-		if (bhyve_load(vm) < 0)
-			goto err;
-	} else if (strcasecmp(conf->loader, "grub") == 0) {
-		if (write_mapfile(vm->conf, &vm->mapfile) < 0 ||
-		    grub_load(vm) < 0)
-			goto err;
-	} else if (strcasecmp(conf->loader, "uefi") == 0) {
-		if (copy_uefi_vars(vm) < 0 || exec_bhyve(vm) < 0)
-			goto err;
-	} else if (strcasecmp(conf->loader, "csm") == 0) {
-		if (exec_bhyve(vm) < 0)
-			goto err;
-	} else {
-		ERR("unknown loader %s\n", conf->loader);
-		goto err;
-	}
-
-	return 0;
-err:
-	return -1;
-}
-
 static void
 cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
@@ -839,6 +842,26 @@ write_err_log(int fd, struct vm *vm)
 }
 
 struct vm_method bhyve_method =
-{"bhyve", start_bhyve, reset_bhyve, poweroff_bhyve, acpi_poweroff_bhyve,
+{"bhyve", exec_bhyve, reset_bhyve, poweroff_bhyve, acpi_poweroff_bhyve,
 	  cleanup_bhyve
+};
+
+struct loader_method bhyveload_method =
+{
+	"bhyveload", bhyve_load, NULL
+};
+
+struct loader_method grub2load_method =
+{
+	"grub", grub_load, grub_load_cleanup
+};
+
+struct loader_method uefiload_method =
+{
+	"uefi", uefi_load, NULL
+};
+
+struct loader_method csmload_method =
+{
+	"csm", csm_load, NULL
 };

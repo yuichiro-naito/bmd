@@ -209,6 +209,18 @@ Following keys are available for bmd.
 | nmdm_offset | basic offset of auto assigned nmdm | no | 200 |
 | pid_file | file to write bmd's pid | no | /var/run/bmd.pid |
 
+## Reloading configurations
+
+Sending a HUP signal to the bmd triggers reloading VM configuration file(s).
+Each configuration will be applied when the VM restarts. Until restarting the
+VM, the old configuration will be kept. Please note that restarting the VM has
+3 ways. One is the VM reboots spontaneously. This is a case `reboot` command
+is executed in the VM. In this case, `poststop` plugins (described below) won't
+be called so the old configuration will be kept after rebooting. Another ways
+are the VM is stopped by the `bmdctl stop` or `reboot_on_change` condition is
+satisfied. In these cases, bmd stops the VM and call `poststop` plugins and
+then the new configuration will be applied while restarting the VM.
+
 ## Example configurations
 
 ### Global Variables
@@ -324,10 +336,21 @@ NetBSD and OpenBSD disk and iso images for now, and requires `loader=grub;`.
 
 ## hook command plugin
 
-Bmd invokes hook command when VM status is changed.
-The command line is as following.
+Bmd calls the `prestart` plugin interface before starting a VM.
+Hook command plugin implements a `prestart` function that invokes a prestart
+command and waits for its termination. If the prestart command succeeds,
+the VM will boot otherwise won't.
+After VM termination, bmd calls the `poststop` plugin interface.
+Hook command plugin implements a `poststop` function that invokes a poststop
+command and waits for its termination. And then the VM state will change to
+`STOP`.
+Bmd also calls the `on_status_change` plugin interface when VM state is
+changed. Hook command plugin implements a `on_status_change` function that
+invokes a hookcmd. The hookcmd exit status will never affects anything.
 
-`${hookcmd} ${vm name} ${state}`
+The command line is as follows.
+
+`${prestart|poststop|hookcmd} ${vm name} ${state}`
 
 ${state} is one of followings.
 
@@ -339,21 +362,33 @@ ${state} is one of followings.
 
   bhyve starts to run
 
-* STOP
-
-  bmd stops bhyve
-
 * TERMINATE
 
   bhyve terminated
 
-* REMOVE
+The sequence dialog is shown below. If `grub-bhyve` is used for the VM,
+replace `bhyveload` with `grub-bhyve`. If `uefi` is used, invoking `bhyveload`
+and hookcmd with LOAD state are skipped.
 
-  bmd detects that VM config file is deleted.
-
-* RESTART
-
-  bmd restarts VM
+```mermaid
+sequenceDiagram
+  bmd->>+prestart: invoke
+  prestart-->>-bmd: done
+  loop if reboot
+    bmd->>+bhyveload: invoke
+    bmd->>+hookcmd: invoke with LOAD state
+    hookcmd-->>-bmd: done
+    bhyveload-->>-bmd: done
+    bmd->>+bhyve: invoke
+    bmd->>+hookcmd: invoke with RUN state
+    hookcmd-->>-bmd: done
+    bhyve-->>-bmd: done
+  end
+  bmd->>+poststop: invoke
+  poststop-->-bmd: done
+  bmd->>+hookcmd: invoke with TERMINATE state
+  hookcmd-->>-bmd: done
+```
 
 ## avahi plugin
 

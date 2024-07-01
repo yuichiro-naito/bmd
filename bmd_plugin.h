@@ -7,6 +7,7 @@
 #include <sys/nv.h>
 
 #include <stdbool.h>
+#include <syslog.h>
 
 struct passthru_conf;
 struct disk_conf;
@@ -34,7 +35,9 @@ enum STATE {
 	RUN,	   // bhyve is running
 	STOP,	   // send SIGTERM to stop bhyve
 	REMOVE,	   // send SIGTERM to stop bhyve and remove vm_entry
-	RESTART	   // send SIGTERM and need rebooting
+	RESTART,   // send SIGTERM and need rebooting
+	PRESTART,  // before starting VM
+	POSTSTOP   // after stopping VM
 };
 
 #define DISK_CONF_FOREACH(dc, conf)	   \
@@ -45,7 +48,7 @@ enum STATE {
 #define ISO_CONF_FOREACH(ic, conf)	  \
 	for ((ic) = get_iso_conf((conf)); \
 	     (ic) != NULL;		  \
-	     (ic) = next_net_conf((ic)))
+	     (ic) = next_iso_conf((ic)))
 
 #define NET_CONF_FOREACH(nc, conf)	  \
 	for ((nc) = get_net_conf((conf)); \
@@ -69,6 +72,13 @@ char *get_assigned_comport(struct vm *);
 enum STATE get_state(struct vm *);
 void set_state(struct vm *, enum STATE);
 void set_pid(struct vm *, pid_t);
+int set_bootrom(struct vm *, const char *);
+const char *get_mapfile(struct vm *);
+int set_mapfile(struct vm *, const char *);
+const char *get_varsdir(void);
+const char *get_varsfile(struct vm *);
+int set_varsfile(struct vm *, const char *);
+void free_mapfile(struct vm *);
 struct vm_conf *vm_get_conf(struct vm *);
 struct passthru_conf *get_passthru_conf(struct vm_conf *);
 struct passthru_conf *next_passthru_conf(struct passthru_conf *);
@@ -139,16 +149,23 @@ char *get_keymap(struct vm_conf *);
 char *get_tpm_dev(struct vm_conf *);
 char *get_tpm_type(struct vm_conf *);
 char *get_tpm_version(struct vm_conf *);
+int vm_conf_export_env(struct vm_conf *);
 
 char **split_args(char *);
 
 /*
-  Plugin call back function
+  Plugin call back function.
  */
 typedef int (*plugin_call_back)(int, void *);
 
-int plugin_wait_for_process(pid_t, plugin_call_back, void *);
-int plugin_set_timer(int, plugin_call_back, void *);
+/*
+  Plugin structures.
+ */
+struct loader_method {
+	const char *name;
+	int (*ld_load)(struct vm *, nvlist_t *);
+	void (*ld_cleanup)(struct vm *, nvlist_t *);
+};
 
 struct vm_method {
 	const char *name;
@@ -159,7 +176,7 @@ struct vm_method {
 	void (*vm_cleanup)(struct vm *, nvlist_t *);
 };
 
-#define PLUGIN_VERSION 12
+#define PLUGIN_VERSION 13
 
 /*
   Plugin Description
@@ -171,15 +188,48 @@ struct vm_method {
   on_status_change: a function called when VM state changed. (*1)
       parse_config: a function called while parsing VM configuratin (*1)
   on_reload_config: copy plugin data while reloading VM configuration (*1)
+           prehook: a function called before executing loader and bhyve (*1)
+          prestart: a function called before starting VM.
+          poststop: a function called after stopping VM.
 
-  *1: The nvlist_t pointer is available while VM is existing, unless VM is
-      removed from the config file nor VM configuration is reloaded.
-
-  When VM configuration is reloaded, 'parse_config' is called and then
-  on_reload_confg is called. Plugins have a chance to copy its data from
-  old config to new one.
+  *1: The nvlist_t pointer and struct vm pointer are available while VM is
+      existing, unless VM is removed from the config file nor VM configuration
+      is reloaded.
 
   All other pointers in arguments are local scope to the function.
+
+  When VM configuration is reloaded, 'parse_config' is called and then
+  'on_reload_confg' is called. Plugins have a chance to copy its data from
+  old config to new one. The first argument of 'on_reload_config' is the
+  new config and the second is the old one.
+
+  `prestart` is used for external configurations such as firewall, routing, etc.
+  `prestart` will be called before starting the VM.
+
+  `prestart` has to run in the short term, because the bmd is implemented
+  as an event machine. If 'prestart' runs for a long time, the bmd will
+  be blocked all the operations from the client during that time. To get avoid
+  blocking, `prestart` should fork a child process and wait for it.
+
+  Returning a positive number from the 'prestart' function will delay
+  invoking the loader and bhyve until the `plugin_start_virtual_machine`
+  function is called. The `plugin_wait_for_process` function will wait for the
+  child process termination and the callback function has to wait(2) and call
+  the `plugin_start_virtual_machine` function if it succeeded, or call the
+  `plugin_stop_virtual_machine` function if it failed.
+  Returning zero from the 'prestart' function will invoke the loader and bhyve
+  soon. Returning a negative number means an error occured in the function.
+  The VM will not start by the error.
+
+  `poststop` is used for clean up the external configurations for the VM.
+  `poststop` has to run in the short term as same as 'prestart'. During
+  the child process is running, the VM state keeps 'POSTSTOP' state.
+
+  Returning a positive number from the 'poststop' function will delay
+  cleanup the VM resources until the `plugin_cleanup_virtual_machine`
+  function is called. Returning zero or a negative number will cleanup
+  the VM resources soon.
+
  */
 typedef struct plugin_desc {
 	int version;
@@ -190,8 +240,29 @@ typedef struct plugin_desc {
 	int (*parse_config)(nvlist_t *, const char *, const char *);
 	struct vm_method *method;
 	void (*on_reload_config)(nvlist_t *, nvlist_t *);
+	struct loader_method *loader_method;
+	int (*prestart)(struct vm *, nvlist_t *);
+	int (*poststop)(struct vm *, nvlist_t *);
 } PLUGIN_DESC;
 
 extern PLUGIN_DESC plugin_desc;
+
+/*
+  Plugin utilities.
+ */
+int plugin_wait_for_process(pid_t, plugin_call_back, void *);
+int plugin_set_timer(int, plugin_call_back, void *);
+int plugin_start_virtualmachine(PLUGIN_DESC *, struct vm *);
+int plugin_stop_virtualmachine(PLUGIN_DESC *, struct vm *);
+int plugin_cleanup_virtualmachine(PLUGIN_DESC *, struct vm *);
+int register_vm_method(struct vm_method *);
+int register_loader_method(struct loader_method *);
+int plugin_logger(int, PLUGIN_DESC *, const char *, ...);
+#define plugin_infolog(desc, fmt, ...) \
+	plugin_logger(LOG_INFO, desc, fmt, __VA_ARGS__)
+#define plugin_warnlog(desc, fmt, ...) \
+	plugin_logger(LOG_WARN, desc, fmt, __VA_ARGS__)
+#define plugin_errlog(desc, fmt, ...) \
+	plugin_logger(LOG_ERR, desc, fmt, __VA_ARGS__)
 
 #endif

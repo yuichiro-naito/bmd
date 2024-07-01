@@ -62,9 +62,30 @@ static int timer_id = 0;
  */
 static int sigterm = 0;
 
+/*
+  Direct run mode
+ */
+static bool direct_run_mode = false;
+
 static int reload_virtual_machines(void);
 static void stop_virtual_machine(struct vm_entry *);
 static void free_vm_entry(struct vm_entry *);
+static int boot_virtual_machine(struct vm_entry *);
+
+static int
+create_eventq(void)
+{
+#if __FreeBSD_version >= 1400088 || \
+	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
+#else
+	if ((eventq = kqueue()) < 0) {
+#endif
+		ERR("%s\n", "cannot open kqueue");
+		return -1;
+	}
+	return 0;
+}
 
 static int
 kevent_set(struct kevent *kev, int n)
@@ -179,7 +200,7 @@ register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 #define register_event(b, c, d) register_event0(EVENT, (b), (c), (d))
 #define register_plugin_event(b, c, d) register_event0(PLUGIN, (b), (c), (d))
 
-static int
+int
 register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
 {
 	int i;
@@ -218,6 +239,18 @@ err:
 	return -1;
 }
 
+static int
+count_plugin_process_events(void)
+{
+	int n = 0;
+	struct event *ev;
+
+	LIST_FOREACH (ev, &event_list, next)
+		if (ev->type == PLUGIN && ev->kev.filter == EVFILT_PROC)
+			n++;
+	return n;
+}
+
 int
 plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 {
@@ -248,7 +281,130 @@ plugin_set_timer(int second, plugin_call_back cb, void *data)
 	return 0;
 }
 
+static struct plugin_data *
+lookup_plugin_data(PLUGIN_DESC *desc, struct vm_entry *vm_ent)
+{
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (strcmp(pd->ent->desc.name, desc->name) == 0 &&
+		    (pd->ent->desc.prestart == desc->prestart ||
+		     pd->ent->desc.poststop == desc->poststop))
+			break;
+	return pd;
+}
+
+static void
+init_plugin_results(struct vm_entry *vm_ent)
+{
+	unsigned int i;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		for (i = 0; i < nitems(pd->results); i++)
+			memset(&pd->results[i], 0, sizeof(pd->results[i]));
+}
+
+static void
+print_prestart_error(struct vm_entry *vm_ent)
+{
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->results[0].called &&
+		    pd->prestart_result.state < 0)
+			ERR("%s: plugin '%s' prevents from starting VM",
+			    VM_CONF(vm_ent)->name,
+			    pd->ent->desc_name);
+}
+
 static int
+get_plugin_state(struct vm_entry *vm_ent, unsigned int i)
+{
+	int rc = 0;
+	struct plugin_data *pd;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->results[i].called) {
+			if (pd->prestart_result.state == 0)
+				continue;
+			if (pd->prestart_result.state > 0)
+				return 1;
+			if (pd->prestart_result.state < 0)
+				rc = -1;
+		}
+	return rc;
+}
+
+static int
+get_prestart_state(struct vm_entry *vm_ent)
+{
+	return get_plugin_state(vm_ent, 0);
+}
+
+static int
+get_poststop_state(struct vm_entry *vm_ent)
+{
+	return get_plugin_state(vm_ent, 1);
+}
+
+int
+plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
+{
+	int st;
+	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct plugin_data *pd;
+
+	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
+		return -1;
+
+	pd->prestart_result.state = 0;
+
+	if ((st = get_prestart_state(vm_ent)) > 0)
+		return 0;
+
+	if (st == 0)
+		return boot_virtual_machine(vm_ent);
+
+	print_prestart_error(vm_ent);
+	stop_virtual_machine(vm_ent);
+	return 0;
+}
+
+int
+plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
+{
+	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct plugin_data *pd;
+
+	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
+		return -1;
+
+	pd->prestart_result.state = -1;
+
+	if (get_prestart_state(vm_ent) > 0)
+		return 0;
+
+	print_prestart_error(vm_ent);
+	stop_virtual_machine(vm_ent);
+	return 0;
+}
+
+int
+plugin_logger(int priority, PLUGIN_DESC *desc, const char *fmt, ...)
+{
+	va_list ap;
+	char *s;
+	va_start(ap, fmt);
+	if (vasprintf(&s, fmt, ap) >= 0) {
+		LOGGER(priority, "%s: %s\n", desc->name, s);
+		free(s);
+	}
+	va_end(ap);
+	return 0;
+}
+
+int
 send_fd(int sock, int fd)
 {
 	int rc;
@@ -285,7 +441,7 @@ send_fd(int sock, int fd)
 	return rc;
 }
 
-static int
+int
 recv_fd(int sock)
 {
 	int rc, fd;
@@ -328,7 +484,7 @@ err:
 
 }
 
-static int
+int
 send_ack(int sock)
 {
 	int rc;
@@ -341,7 +497,7 @@ send_ack(int sock)
 	return rc;
 }
 
-static int
+int
 recv_ack(int sock)
 {
 	int rc;
@@ -499,6 +655,8 @@ on_timer(int ident __unused, void *data)
 		VM_POWEROFF(vm_ent);
 		break;
 	case RUN:
+	case PRESTART:
+	case POSTSTOP:
 		/* ignore timer */
 		break;
 	}
@@ -541,6 +699,50 @@ reason_string(int status)
 }
 
 static int
+call_prestart_plugins(struct vm_entry *vm_ent)
+{
+	int rc, ret = INT_MIN;
+	bool called = false;
+	struct plugin_data *pd;
+
+	VM_STATE(vm_ent) = PRESTART;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->ent->desc.prestart) {
+			rc = (pd->ent->desc.prestart)(VM_PTR(vm_ent),
+						      pd->pl_conf);
+			pd->prestart_result.called = true;
+			pd->prestart_result.state = rc;
+			called = true;
+			if (rc > ret)
+				ret = rc;
+		}
+	return called ? ret : 0;
+}
+
+static int
+call_poststop_plugins(struct vm_entry *vm_ent)
+{
+	int rc, ret = INT_MIN;
+	bool called = false;
+	struct plugin_data *pd;
+
+	VM_STATE(vm_ent) = POSTSTOP;
+
+	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->ent->desc.poststop) {
+			rc = (pd->ent->desc.poststop)(VM_PTR(vm_ent),
+						      pd->pl_conf);
+			pd->poststop_result.called = true;
+			pd->poststop_result.state = rc;
+			called = true;
+			if (rc > ret)
+				ret = rc;
+		}
+	return called ? ret : 0;
+}
+
+static int
 on_vm_exit(int ident __unused, void *data)
 {
 	int status;
@@ -554,17 +756,22 @@ on_vm_exit(int ident __unused, void *data)
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
 			VM_CLOSE(vm_ent, INFD);
 			stop_waiting_for(vm_output, vm_ent);
-			start_virtual_machine(vm_ent);
+			boot_virtual_machine(vm_ent);
 		} else {
 			ERR("failed loading vm %s (status:%d)\n",
 			    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
+			if (VM_LD_METHOD(vm_ent))
+				VM_LD_CLEANUP(vm_ent);
+			if (call_poststop_plugins(vm_ent) > 0)
+				return 0;
 			stop_virtual_machine(vm_ent);
 		}
 		break;
 	case RESTART:
+		VM_SET_RESTART(vm_ent);
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
 		stop_virtual_machine(vm_ent);
-		VM_STATE(vm_ent) = TERMINATE;
-		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
 		break;
 	case RUN:
 		if (VM_CONF(vm_ent)->install == false &&
@@ -572,7 +779,8 @@ on_vm_exit(int ident __unused, void *data)
 		    (VM_CONF(vm_ent)->boot == ALWAYS ||
 		     (strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 		      WEXITSTATUS(status) == 0))) {
-			start_virtual_machine(vm_ent);
+			VM_STATE(vm_ent) = PRESTART;
+			boot_virtual_machine(vm_ent);
 			break;
 		}
 		/* FALLTHROUGH */
@@ -581,14 +789,23 @@ on_vm_exit(int ident __unused, void *data)
 		INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
 		     (rs == NULL ? "" : rs));
 		free(rs);
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
 		stop_virtual_machine(vm_ent);
 		VM_CONF(vm_ent)->install = false;
 		break;
 	case REMOVE:
 		INFO("vm %s is stopped\n", VM_CONF(vm_ent)->name);
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
 		stop_virtual_machine(vm_ent);
 		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 		free_vm_entry(vm_ent);
+		break;
+	case PRESTART:
+	case POSTSTOP:
+		ERR("vm %s terminates in an unexpected state: %d\n",
+		    VM_CONF(vm_ent)->name, VM_STATE(vm_ent));
 		break;
 	case TERMINATE:
 		break;
@@ -613,7 +830,7 @@ wait_for_vm(struct vm_entry *vm_ent)
 	return 0;
 }
 
-static int
+int
 set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 {
 	int i = 0;
@@ -759,6 +976,116 @@ wait_for_cmd_sock(int sock)
 	return 0;
 }
 
+static void
+free_plugin_entry(struct plugin_entry *pe)
+{
+	if (pe == NULL)
+		return;
+	if (pe->desc.method) {
+		free(pe->vm_name);
+		free(pe->desc.method);
+	}
+	if (pe->desc.loader_method) {
+		free(pe->lm_name);
+		free(pe->desc.loader_method);
+	}
+	free(pe->desc_name);
+	free(pe);
+}
+
+static int
+dummy0(struct vm *vm __unused, nvlist_t *pl_ent __unused)
+{
+	return 0;
+}
+
+static int
+dummy1(struct vm *vm __unused, nvlist_t *pl_ent __unused)
+{
+	return 1;
+}
+
+static void
+dummy2(struct vm *vm __unused, nvlist_t *pl_ent __unused)
+{
+	return;
+}
+
+#define set_default(o, m, f)   (o)->m = (o)->m ? (o)->m : (f)
+
+static struct plugin_entry *
+create_plugin_entry(struct plugin_desc *desc)
+{
+	char *dname, *vname, *lname;
+	struct plugin_entry *pe;
+	struct vm_method *vm;
+	struct loader_method *lm;
+
+	dname = strdup(desc->name);
+	pe = calloc(1, sizeof(*pe));
+	if (dname == NULL || pe == NULL)
+		goto err0;
+
+	memcpy(&pe->desc, desc, sizeof(pe->desc));
+	pe->desc.name = dname;
+	pe->desc_name = dname;
+
+	if (desc->method) {
+		vname = strdup(desc->method->name);
+		vm = malloc(sizeof(*vm));
+		if (vname == NULL || vm == NULL)
+			goto err1;
+		memcpy(vm, desc->method, sizeof(*vm));
+
+		set_default(vm, vm_start, dummy0);
+		set_default(vm, vm_reset, dummy0);
+		set_default(vm, vm_poweroff, dummy0);
+		set_default(vm, vm_acpi_poweroff, dummy0);
+		set_default(vm, vm_cleanup, dummy2);
+
+		vm->name = vname;
+		pe->vm_name = vname;
+		pe->desc.method = vm;
+	} else {
+		vname = NULL;
+		vm = NULL;
+		pe->desc.method = NULL;
+	}
+
+	if (desc->loader_method) {
+		lname = strdup(desc->loader_method->name);
+		lm = malloc(sizeof(*lm));
+		if (lname == NULL || lm == NULL)
+			goto err2;
+		memcpy(lm, desc->loader_method, sizeof(*lm));
+
+		set_default(lm, ld_load, dummy1);
+		set_default(lm, ld_cleanup, dummy2);
+
+		lm->name = lname;
+		pe->lm_name = lname;
+		pe->desc.loader_method = lm;
+	} else {
+		lname = NULL;
+		lm = NULL;
+		pe->desc.loader_method = NULL;
+	}
+
+	return pe;
+
+err2:
+	free(lname);
+	free(lm);
+err1:
+	free(vname);
+	free(vm);
+err0:
+	free(dname);
+	free(pe);
+	return NULL;
+}
+#undef set_default
+
 static int
 add_plugin(int dirfd, const char *fname)
 {
@@ -780,7 +1107,7 @@ add_plugin(int dirfd, const char *fname)
 
 	if ((desc = dlsym(hdl, "plugin_desc")) == NULL ||
 	    desc->version != PLUGIN_VERSION ||
-	    (pl_ent = calloc(1, sizeof(*pl_ent))) == NULL) {
+	    (pl_ent = create_plugin_entry(desc)) == NULL) {
 		ERR("invalid plugin %s\n", fname);
 		goto err1;
 	}
@@ -789,7 +1116,7 @@ add_plugin(int dirfd, const char *fname)
 		ERR("failed to initialize plugin %s %s\n", desc->name, fname);
 		goto err2;
 	}
-	pl_ent->desc = *desc;
+
 	pl_ent->handle = hdl;
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	INFO("load plugin %s %s\n", desc->name, fname);
@@ -806,22 +1133,64 @@ err0:
 }
 
 int
+register_vm_method(struct vm_method *vm)
+{
+	struct plugin_desc desc;
+	struct plugin_entry *pe;
+
+	memset(&desc, 0, sizeof(desc));
+	desc.name = vm->name;
+	desc.method = vm;
+	if ((pe = create_plugin_entry(&desc)) == NULL)
+		return -1;
+
+	SLIST_INSERT_HEAD(&plugin_list, pe, next);
+	return 0;
+}
+
+int
+register_loader_method(struct loader_method *lm)
+{
+	struct plugin_desc desc;
+	struct plugin_entry *pe;
+
+	memset(&desc, 0, sizeof(desc));
+	desc.name = lm->name;
+	desc.loader_method = lm;
+
+	if ((pe = create_plugin_entry(&desc)) == NULL)
+		return -1;
+
+	SLIST_INSERT_HEAD(&plugin_list, pe, next);
+	return 0;
+}
+
+int
 load_plugins(const char *plugin_dir)
 {
 	DIR *d;
 	struct dirent *ent;
+	struct plugin_desc desc;
 	struct plugin_entry *pl_ent;
 	static int loaded = 0;
 
 	if (loaded != 0)
 		return 0;
 
-	if ((pl_ent = calloc(1, sizeof(*pl_ent))) == NULL)
+	memset(&desc, 0, sizeof(desc));
+	desc.name = "bhyve";
+	desc.method = &bhyve_method;
+	desc.loader_method = &bhyveload_method;
+
+	if ((pl_ent = create_plugin_entry(&desc)) == NULL)
 		return -1;
 
-	pl_ent->desc.name = "bhyve";
-	pl_ent->desc.method = &bhyve_method;
 	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+
+	if (register_loader_method(&grub2load_method) < 0 ||
+	    register_loader_method(&uefiload_method) < 0 ||
+	    register_loader_method(&csmload_method) < 0)
+		return -1;
 
 	if ((d = opendir(plugin_dir)) == NULL) {
 		ERR("cannot open %s\n", plugin_dir);
@@ -850,7 +1219,7 @@ remove_plugins(void)
 		if (pl_ent->desc.finalize)
 			(*pl_ent->desc.finalize)();
 		dlclose(pl_ent->handle);
-		free(pl_ent);
+		free_plugin_entry(pl_ent);
 	}
 	SLIST_INIT(&plugin_list);
 
@@ -861,6 +1230,9 @@ void
 call_plugins(struct vm_entry *vm_ent)
 {
 	struct plugin_data *pd;
+
+	if (VM_PID(vm_ent) == -1)
+		return;
 
 	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.on_status_change)
@@ -895,9 +1267,11 @@ free_vm_entry(struct vm_entry *vm_ent)
 	*/
 	stop_waiting_for(vm_entry, vm_ent);
 	free(VM_MAPFILE(vm_ent));
+	free(VM_BOOTROM(vm_ent));
 	free(VM_VARSFILE(vm_ent));
 	free(VM_ASCOMPORT(vm_ent));
 	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
+	free_vm_conf_entry(VM_NEWCONF(vm_ent));
 	free(vm_ent);
 }
 
@@ -926,6 +1300,8 @@ free_plugin_data(struct plugin_data_list *head)
 void
 free_vm_conf_entry(struct vm_conf_entry *conf_ent)
 {
+	if (conf_ent == NULL)
+		return;
 	free_plugin_data(&conf_ent->pl_data);
 	free_vm_conf(&conf_ent->conf);
 }
@@ -960,21 +1336,43 @@ set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 {
 	struct plugin_data *pd;
 	struct vm_method *m;
-	char *backend = conf_ent->conf.backend;
+	const char *backend = conf_ent->conf.backend;
 
-	SLIST_FOREACH (pd, &conf_ent->pl_data, next) {
-		if ((m = pd->ent->desc.method) == NULL ||
-		    strcmp(m->name, backend) != 0)
-			continue;
-		VM_METHOD(vm_ent) = m;
-		VM_PLCONF(vm_ent) = pd->pl_conf;
-		return 0;
-	}
+	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
+		if ((m = pd->ent->desc.method) != NULL &&
+		    strcmp(m->name, backend) == 0) {
+			VM_METHOD(vm_ent) = m;
+			VM_PLCONF(vm_ent) = pd->pl_conf;
+			return 0;
+		}
 
 	return -1;
 }
 
-int
+static int
+set_loader_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
+{
+	struct plugin_data *pd;
+	struct loader_method *m;
+	const char *loader = conf_ent->conf.loader;
+
+	if (loader == NULL) {
+		VM_LD_METHOD(vm_ent) = NULL;
+		return 0;
+	}
+
+	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
+		if ((m = pd->ent->desc.loader_method) != NULL &&
+		    strcmp(m->name, loader) == 0) {
+			VM_LD_METHOD(vm_ent) = m;
+			VM_PLCONF(vm_ent) = pd->pl_conf;
+			return 0;
+		}
+
+	return -1;
+}
+
+bool
 vm_method_exists(char *name)
 {
 	struct plugin_entry *pl_ent;
@@ -982,9 +1380,23 @@ vm_method_exists(char *name)
 
 	SLIST_FOREACH (pl_ent, &plugin_list, next)
 		if ((m = pl_ent->desc.method) && strcmp(m->name, name) == 0)
-			return 0;
+			return true;
 
-	return -1;
+	return false;
+}
+
+bool
+loader_method_exists(char *name)
+{
+	struct plugin_entry *pl_ent;
+	struct loader_method *m;
+
+	SLIST_FOREACH (pl_ent, &plugin_list, next)
+		if ((m = pl_ent->desc.loader_method) &&
+		    strcmp(m->name, name) == 0)
+			return true;
+
+	return false;
 }
 
 static struct vm_entry *
@@ -994,7 +1406,8 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 
 	if ((vm_ent = calloc(1, sizeof(struct vm_entry))) == NULL)
 		return NULL;
-	if (set_vm_method(vm_ent, conf_ent) < 0) {
+	if (set_vm_method(vm_ent, conf_ent) < 0 ||
+	    set_loader_method(vm_ent, conf_ent) < 0) {
 		free(vm_ent);
 		return NULL;
 	}
@@ -1099,14 +1512,98 @@ cleanup_virtual_machine(struct vm_entry *vm_ent)
 }
 
 int
+plugin_cleanup_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
+{
+	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct plugin_data *pd;
+
+	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
+		return -1;
+
+	pd->poststop_result.state = 0;
+
+	if (get_poststop_state(vm_ent) > 0)
+		return 0;
+
+	stop_virtual_machine(vm_ent);
+	return 0;
+}
+
+static int
+load_virtual_machine(struct vm_entry *vm_ent)
+{
+	int rc;
+	struct vm_conf *conf = VM_CONF(vm_ent);
+	char *name = conf->name;
+
+	if (VM_LD_METHOD(vm_ent) == NULL)
+		return 1;
+
+	if ((rc = VM_LD_LOAD(vm_ent)) < 0) {
+		ERR("failed to load vm %s\n", name);
+		cleanup_virtual_machine(vm_ent);
+		return -1;
+	}
+	if (rc == 0) {
+		if (wait_for_vm(vm_ent) < 0 ||
+		    wait_for_vm_output(vm_ent) < 0)
+			return -2;
+		call_plugins(vm_ent);
+		if (conf->loader_timeout > 0 &&
+		    set_timer(vm_ent,
+			      conf->loader_timeout) < 0) {
+			ERR("failed to set timer for vm %s\n",
+			    name);
+			return -1;
+		}
+		return 0;
+	}
+	return rc;
+}
+
+/*
+  Start the virtual machine with new VM configuration.
+ */
+int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
+	if (VM_NEWCONF(vm_ent) != NULL) {
+		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
+		VM_CONF(vm_ent) = &VM_NEWCONF(vm_ent)->conf;
+		VM_NEWCONF(vm_ent) = NULL;
+	}
+
+	return boot_virtual_machine(vm_ent);
+}
+
+/*
+  Boot the virtual machine.
+ */
+static int
+boot_virtual_machine(struct vm_entry *vm_ent)
+{
+	int rc;
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
 
 	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
-		ERR("failed to set vm method for vm %s\n", name);
+		ERR("no backend for vm %s\n", name);
 		return -1;
+	}
+
+	/*
+	  This is a case where the VM configuration is removed,
+	  while prestart plugins are running.
+	  'plugin_start_virtualmachine' calls this function,
+	  after all prestart plugins have finished.
+	 */
+	if (VM_STATE(vm_ent) == REMOVE) {
+		if (call_poststop_plugins(vm_ent) > 0)
+			return 0;
+		stop_virtual_machine(vm_ent);
+		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+		free_vm_entry(vm_ent);
+		return 0;
 	}
 
 	if (assign_comport(vm_ent) < 0) {
@@ -1115,13 +1612,33 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	}
 
 	if (VM_STATE(vm_ent) == TERMINATE) {
+		init_plugin_results(vm_ent);
 		if (assign_taps(VM_PTR(vm_ent)) < 0)
 			return -1;
 		if (activate_taps(VM_PTR(vm_ent)) < 0) {
 			remove_taps(VM_PTR(vm_ent));
 			return -1;
 		}
+		if ((rc = call_prestart_plugins(vm_ent)) > 0)
+			return 0;
+		if (rc < 0) {
+			ERR("%s\n", "failed to call prestart plugins");
+			remove_taps(VM_PTR(vm_ent));
+			return -1;
+		}
 	}
+	if (VM_STATE(vm_ent) == TERMINATE ||
+	    VM_STATE(vm_ent) == PRESTART) {
+		rc = load_virtual_machine(vm_ent);
+		if (rc <= -2)
+			goto force_kill;
+		if (rc <= 0)
+			return rc;
+		/* FALLTHROUGH */
+	}
+
+	if (VM_LD_METHOD(vm_ent))
+		VM_LD_CLEANUP(vm_ent);
 
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
@@ -1129,32 +1646,30 @@ start_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	if (wait_for_vm(vm_ent) < 0 || wait_for_vm_output(vm_ent) < 0) {
-		ERR("failed to set kevent for vm %s\n", name);
-		/*
-		 * Force to kill bhyve.
-		 * If this error happens, we can't manage bhyve process at all.
-		 */
-		VM_POWEROFF(vm_ent);
-		waitpid(VM_PID(vm_ent), NULL, 0);
-		cleanup_virtual_machine(vm_ent);
-		return -1;
-	}
+	if (wait_for_vm(vm_ent) < 0 || wait_for_vm_output(vm_ent) < 0)
+		goto force_kill;
 
 	if (VM_STATE(vm_ent) == RUN)
 		INFO("start vm %s\n", name);
 
 	call_plugins(vm_ent);
-	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout > 0 &&
-	    set_timer(vm_ent, conf->loader_timeout) < 0) {
-		ERR("failed to set timer for vm %s\n", name);
-		return -1;
-	}
 
 	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
 		VM_LOGFD(vm_ent) = open_err_logfile(conf);
 
 	return 0;
+
+force_kill:
+	ERR("failed to set kevent for vm %s\n", name);
+	/*
+	 * Force to kill bhyve.
+	 * If this error happens,
+	 * we can't manage bhyve process at all.
+	 */
+	VM_POWEROFF(vm_ent);
+	waitpid(VM_PID(vm_ent), NULL, 0);
+	cleanup_virtual_machine(vm_ent);
+	return -1;
 }
 
 static int
@@ -1212,6 +1727,13 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 	stop_waiting_for(vm_output_and_timers, vm_ent);
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
+	if (direct_run_mode)
+		sigterm++;
+	VM_PID(vm_ent) = -1;
+	if (VM_ISSET_RESTART(vm_ent)) {
+		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
+		VM_CLEAR_RESTART(vm_ent);
+	}
 }
 
 struct vm_entry *
@@ -1225,7 +1747,7 @@ lookup_vm_by_name(const char *name)
 	return NULL;
 }
 
-static void
+void
 copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 {
 	struct plugin_data *da, *db;
@@ -1242,16 +1764,16 @@ static int
 reload_virtual_machines(void)
 {
 	struct vm_conf *conf;
-	struct vm_conf_entry *conf_ent, *cen;
+	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent, *vmn;
 	struct vm_conf_list new_list = LIST_HEAD_INITIALIZER();
 
 	if (load_config_file(&new_list, false) < 0)
 		return -1;
 
-	/* make sure new_conf is NULL */
+	/* make sure tmp_conf_ent is NULL */
 	SLIST_FOREACH (vm_ent, &vm_list, next)
-		VM_NEWCONF(vm_ent) = NULL;
+		VM_TMPCONF(vm_ent) = NULL;
 
 	LIST_FOREACH (conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
@@ -1259,7 +1781,7 @@ reload_virtual_machines(void)
 		if (vm_ent == NULL) {
 			if ((vm_ent = create_vm_entry(conf_ent)) == NULL)
 				return -1;
-			VM_NEWCONF(vm_ent) = conf;
+			VM_TMPCONF(vm_ent) = conf_ent;
 			if (conf->boot == NO)
 				continue;
 			if (conf->boot_delay > 0) {
@@ -1277,7 +1799,7 @@ reload_virtual_machines(void)
 			VM_LOGFD(vm_ent) = open_err_logfile(conf);
 		}
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
-		VM_NEWCONF(vm_ent) = conf;
+		VM_TMPCONF(vm_ent) = conf_ent;
 		if (conf->boot != NO && conf->reboot_on_change &&
 		    compare_vm_conf_entry(conf_ent, VM_CONF_ENT(vm_ent)) != 0) {
 			switch (VM_STATE(vm_ent)) {
@@ -1298,7 +1820,7 @@ reload_virtual_machines(void)
 			}
 			continue;
 		}
-		if (VM_NEWCONF(vm_ent)->boot == VM_CONF(vm_ent)->boot)
+		if (VM_TMPCONF(vm_ent)->conf.boot == VM_CONF(vm_ent)->boot)
 			continue;
 		switch (conf->boot) {
 		case NO:
@@ -1314,7 +1836,7 @@ reload_virtual_machines(void)
 		case ALWAYS:
 		case YES:
 			if (VM_STATE(vm_ent) == TERMINATE) {
-				VM_CONF(vm_ent) = conf;
+				VM_NEWCONF(vm_ent) = conf_ent;
 				start_virtual_machine(vm_ent);
 			} else if (VM_STATE(vm_ent) == STOP)
 				VM_STATE(vm_ent) = RESTART;
@@ -1326,7 +1848,7 @@ reload_virtual_machines(void)
 	}
 
 	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
-		if (VM_NEWCONF(vm_ent) == NULL) {
+		if (VM_TMPCONF(vm_ent) == NULL) {
 			switch (VM_STATE(vm_ent)) {
 			case LOAD:
 			case RUN:
@@ -1338,6 +1860,8 @@ reload_virtual_machines(void)
 			case STOP:
 			case REMOVE:
 			case RESTART:
+			case PRESTART:
+			case POSTSTOP:
 				VM_STATE(vm_ent) = REMOVE;
 				/* remove vm_conf_entry from the list
 				   to keep it until actually freed. */
@@ -1350,14 +1874,18 @@ reload_virtual_machines(void)
 				free_vm_entry(vm_ent);
 			}
 		} else {
-			VM_CONF(vm_ent) = VM_NEWCONF(vm_ent);
-			VM_NEWCONF(vm_ent) = NULL;
+			if (VM_CONF_ENT(vm_ent) == VM_TMPCONF(vm_ent)) {
+				/* tmp_conf_ent is created just before
+				   in this function. */
+				VM_TMPCONF(vm_ent) = NULL;
+				continue;
+			}
+			free_vm_conf_entry(VM_NEWCONF(vm_ent));
+			VM_NEWCONF(vm_ent) = VM_TMPCONF(vm_ent);
+			VM_TMPCONF(vm_ent) = NULL;
 		}
 
-	LIST_FOREACH_SAFE (conf_ent, &vm_conf_list, next, cen)
-		free_vm_conf_entry(conf_ent);
 	LIST_INIT(&vm_conf_list);
-
 	LIST_CONCAT(&vm_conf_list, &new_list, vm_conf_entry, next);
 
 	return 0;
@@ -1370,9 +1898,6 @@ event_loop(void)
 	struct event *event;
 	int n, do_remove;
 	struct timespec *to, timeout;
-
-	if (wait_for_cmd_sock(cmd_sock) < 0)
-		return -1;
 
 	while (sigterm == 0) {
 		to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
@@ -1417,14 +1942,13 @@ stop_virtual_machines(void)
 		}
 	}
 
-	while (count > 0) {
+	while (count_plugin_process_events() + count > 0) {
 		if (kevent_get(&ev, 1, NULL) < 0)
 			return -1;
 		if (ev.udata == NULL)
 			continue;
 		event = ev.udata;
-		if (event->type == EVENT &&
-		    event->kev.filter == EVFILT_PROC)
+		if (event->type == EVENT && event->kev.filter == EVFILT_PROC)
 			count--;
 		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
 		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
@@ -1540,18 +2064,9 @@ main(int argc, char *argv[])
 	    0)
 		WARN("%s\n", "cannot protect from OOM killer");
 
-	if (load_config_file(&vm_conf_list, true) < 0)
+	if (load_config_file(&vm_conf_list, true) < 0 ||
+	    create_eventq() < 0)
 		return 1;
-
-#if __FreeBSD_version >= 1400088 || \
-	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
-	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
-#else
-	if ((eventq = kqueue()) < 0) {
-#endif
-		ERR("%s\n", "cannot open kqueue");
-		return 1;
-	}
 
 	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
 		ERR("cannot bind %s\n", gl_conf->cmd_socket_path);
@@ -1566,7 +2081,8 @@ main(int argc, char *argv[])
 
 	INFO("%s\n", "start daemon");
 
-	if (start_virtual_machines() < 0)
+	if (start_virtual_machines() < 0 ||
+	    wait_for_cmd_sock(cmd_sock) < 0)
 		ERR("%s\n", "failed to start virtual machines");
 	else
 		event_loop();
@@ -1587,57 +2103,21 @@ main(int argc, char *argv[])
 	return 0;
 }
 
-static int
-read_stdin(struct vm *vm)
-{
-	int n, rc;
-	ssize_t size;
-	char buf[4 * 1024];
-
-	while ((size = read(0, buf, sizeof(buf))) < 0)
-		if (errno != EINTR && errno != EAGAIN)
-			break;
-	if (size == 0)
-		return 0;
-	if (size > 0 && vm->infd != -1) {
-		n = 0;
-		while (n < size) {
-			if ((rc = write(vm->infd, buf + n, size - n)) < 0)
-				if (errno != EINTR && errno != EAGAIN)
-					break;
-			if (rc > 0)
-				n += rc;
-		}
-	}
-
-	return size;
-}
-
-static struct vm_entry *running_vm;
-
-static void
-sigint_handler(int sig __unused)
-{
-	cleanup_virtual_machine(running_vm);
-	call_plugins(running_vm);
-	remove_taps(VM_PTR(running_vm));
-}
-
 int
 direct_run(const char *name, bool install, bool single)
 {
-	int i, status;
 	struct vm_conf *conf;
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
-	struct kevent ev, ev2[3];
-
+	struct kevent sigev[3];
+	static event_call_back cb[3] = {on_sigterm, on_sigterm, on_sighup};
+	static void *data[3] = {NULL, NULL, NULL};
 	LOG_OPEN_PERROR();
 
-	if ((eventq = kqueue()) < 0) {
-		ERR("%s\n", "cannot open kqueue");
+	direct_run_mode = true;
+
+	if (create_eventq() < 0)
 		return 1;
-	}
 
 	conf_ent = lookup_vm_conf(name);
 	if (conf_ent == NULL) {
@@ -1649,6 +2129,7 @@ direct_run(const char *name, bool install, bool single)
 	free(conf->comport);
 	conf->comport = strdup("stdio");
 	conf->install = install;
+	conf->boot = ONESHOT;
 	set_single_user(conf, single);
 
 	vm_ent = create_vm_entry(conf_ent);
@@ -1657,85 +2138,35 @@ direct_run(const char *name, bool install, bool single)
 		return 1;
 	}
 
-	if (assign_comport(vm_ent) < 0) {
-		ERR("failed to assign comport for vm %s\n", name);
-		goto err;
-	}
+	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 
-	if (assign_taps(VM_PTR(vm_ent)) < 0)
+	if (register_events(sigev, cb, data, 3) < 0)
+		return 1;
+
+	if (start_virtual_machine(vm_ent) < 0)
 		goto err;
 
-	if (activate_taps(VM_PTR(vm_ent)) < 0) {
-		remove_taps(VM_PTR(vm_ent));
-		goto err;
-	}
+	event_loop();
 
-	running_vm = vm_ent;
-	signal(SIGINT, sigint_handler);
-
-	if (VM_START(vm_ent) < 0)
-		goto err;
-	i = 0;
-	EV_SET(&ev2[i++], VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
-	       NOTE_EXIT, 0, vm_ent);
-	if (VM_STATE(vm_ent) == LOAD && conf->loader_timeout >= 0)
-		EV_SET(&ev2[i++], 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
-		       NOTE_SECONDS, VM_CONF(vm_ent)->loader_timeout, vm_ent);
-	if (VM_INFD(vm_ent) != -1)
-		EV_SET(&ev2[i++], 0, EVFILT_READ, EV_ADD, 0, 0, vm_ent);
-	if (kevent_set(ev2, i) < 0) {
-		ERR("failed to wait process (%s)\n", strerror(errno));
-		VM_POWEROFF(vm_ent);
-		goto err;
-	}
-	call_plugins(vm_ent);
-
-wait:
-	if (kevent_get(&ev, 1, NULL) < 0) {
-		ERR("kevent failure (%s)\n", strerror(errno));
-		VM_POWEROFF(vm_ent);
-		goto err;
-	}
-
-	switch (ev.filter) {
-	case EVFILT_READ:
-		read_stdin(VM_PTR(vm_ent));
-		goto wait;
-	case EVFILT_PROC:
-		if (waitpid(ev.ident, &status, 0) < 0)
-			goto err;
-		if ((pid_t)ev.ident != VM_PID(vm_ent))
-			goto wait;
-		if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-			break;
-		goto err;
-	case EVFILT_TIMER:
-	default:
-		VM_POWEROFF(vm_ent);
-		goto err;
-	}
-
-	if (VM_STATE(vm_ent) == LOAD) {
-		if (VM_START(vm_ent) < 0)
-			goto err;
-		call_plugins(vm_ent);
-		if (waitpid(VM_PID(vm_ent), &status, 0) < 0)
-			goto err;
-	}
-
-	cleanup_virtual_machine(vm_ent);
-	call_plugins(vm_ent);
-	remove_taps(VM_PTR(vm_ent));
 	free_vm_entry(vm_ent);
+	free_events();
 	remove_plugins();
 	free_id_list();
+	close(eventq);
+	free_global_vars();
+	free_gl_conf();
 	return 0;
 err:
-	cleanup_virtual_machine(vm_ent);
-	call_plugins(vm_ent);
+	stop_virtual_machine(vm_ent);
 	free_vm_entry(vm_ent);
+	free_events();
 	remove_plugins();
 	free_id_list();
+	close(eventq);
+	free_global_vars();
+	free_gl_conf();
 	return 1;
 }
 

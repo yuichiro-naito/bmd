@@ -13,8 +13,8 @@ test: $(TESTS)
 bmd.o: ../bmd.o
 	objcopy -N main ../bmd.o bmd.o
 
-conf_test: ../conf.o conf_test.c
-	$(CC) $(CFLAGS) -o conf_test conf_test.c ../conf.o $(LIB)
+conf_test: conf_test.c $(OBJS)
+	$(CC) $(CFLAGS) -o conf_test conf_test.c $(OBJS) $(LIB)
 
 parser_test:  parser_test.c $(OBJS)
 	$(CC) $(CFLAGS) -o parser_test parser_test.c $(OBJS) $(LIB)
