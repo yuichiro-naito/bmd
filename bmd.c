@@ -70,6 +70,7 @@ static bool direct_run_mode = false;
 static int reload_virtual_machines(void);
 static void stop_virtual_machine(struct vm_entry *);
 static void free_vm_entry(struct vm_entry *);
+static int boot_virtual_machine(struct vm_entry *);
 
 static int
 create_eventq(void)
@@ -363,7 +364,7 @@ plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 		return 0;
 
 	if (st == 0)
-		return start_virtual_machine(vm_ent);
+		return boot_virtual_machine(vm_ent);
 
 	print_prestart_error(vm_ent);
 	stop_virtual_machine(vm_ent);
@@ -755,7 +756,7 @@ on_vm_exit(int ident __unused, void *data)
 		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
 			VM_CLOSE(vm_ent, INFD);
 			stop_waiting_for(vm_output, vm_ent);
-			start_virtual_machine(vm_ent);
+			boot_virtual_machine(vm_ent);
 		} else {
 			ERR("failed loading vm %s (status:%d)\n",
 			    VM_CONF(vm_ent)->name, WEXITSTATUS(status));
@@ -779,7 +780,7 @@ on_vm_exit(int ident __unused, void *data)
 		     (strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 		      WEXITSTATUS(status) == 0))) {
 			VM_STATE(vm_ent) = PRESTART;
-			start_virtual_machine(vm_ent);
+			boot_virtual_machine(vm_ent);
 			break;
 		}
 		/* FALLTHROUGH */
@@ -1560,21 +1561,30 @@ load_virtual_machine(struct vm_entry *vm_ent)
 	return rc;
 }
 
+/*
+  Start the virtual machine with new VM configuration.
+ */
 int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
-	int rc;
-	struct vm_conf *conf;
-	char *name;
-
 	if (VM_NEWCONF(vm_ent) != NULL) {
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 		VM_CONF(vm_ent) = &VM_NEWCONF(vm_ent)->conf;
 		VM_NEWCONF(vm_ent) = NULL;
 	}
 
-	conf = VM_CONF(vm_ent);
-	name = conf->name;
+	return boot_virtual_machine(vm_ent);
+}
+
+/*
+  Boot the virtual machine.
+ */
+static int
+boot_virtual_machine(struct vm_entry *vm_ent)
+{
+	int rc;
+	struct vm_conf *conf = VM_CONF(vm_ent);
+	char *name = conf->name;
 
 	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
 		ERR("no backend for vm %s\n", name);
