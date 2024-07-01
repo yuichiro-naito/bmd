@@ -336,10 +336,18 @@ NetBSD and OpenBSD disk and iso images for now, and requires `loader=grub;`.
 
 ## hook command plugin
 
-Bmd invokes a prestart command before invoking VM and waits for its
-termination. If the prestart command fails, the VM won't boot.
-After VM termination, bmd invokes a poststop command and waits for its
-termination. Bmd also invokes a hook command when VM status is changed.
+Bmd calls the `prestart` plugin interface before starting a VM.
+Hook command plugin implements a `prestart` function that invokes a prestart
+command and waits for its termination. If the prestart command succeeds,
+the VM will boot otherwise won't.
+After VM termination, bmd calls the `poststop` plugin interface.
+Hook command plugin implements a `poststop` function that invokes a poststop
+command and waits for its termination. And then the VM state will change to
+`STOP`.
+Bmd also calls the `on_status_change` plugin interface when VM state is
+changed. Hook command plugin implements a `on_status_change` function that
+invokes a hookcmd. The hookcmd exit status will never affects anything.
+
 The command line is as follows.
 
 `${prestart|poststop|hookcmd} ${vm name} ${state}`
