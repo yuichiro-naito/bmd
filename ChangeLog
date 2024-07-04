@@ -1,4 +1,9 @@
-* 2.6
+* 3.0
+	- Introduce boot loader plugin
+	- Introduce prestart/poststop plugin interfaces.
+	- Export th VM configurations to environment variables.
+	- Allow to create a standalone tap interface.
+	- Non-block opening a nmdm device.
 	- Set 'wired_memory' true if 'passthru' is configured.
 	  (ba23700b80cd4d66680303a616e78434b5f8c66f)
 	- Add value(4) support
