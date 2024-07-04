@@ -717,7 +717,14 @@ call_prestart_plugins(struct vm_entry *vm_ent)
 			if (rc > ret)
 				ret = rc;
 		}
-	return called ? ret : 0;
+
+	if (called) {
+		if (ret < 0)
+			VM_STATE(vm_ent) = TERMINATE;
+		return ret;
+	}
+
+	return 0;
 }
 
 static int
