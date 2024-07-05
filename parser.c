@@ -145,7 +145,7 @@ parse_int(int *val, char *value)
 static char *token_to_string(struct variables *vars, struct cftokens *tokens);
 
 static int
-parse_apply(struct vm_conf *conf, struct cfvalue *vl)
+parse_apply(struct vm_conf *conf, struct cftarget *gt)
 {
 	int rc;
 	struct cfsection *tp;
@@ -154,7 +154,7 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 	struct cfargdef *def;
 	struct cfarg *arg;
 
-	val = token_to_string(&conf->vars, &vl->tokens);
+	val = token_to_string(&conf->vars, &gt->tokens);
 	if (val == NULL)
 		return -1;
 
@@ -175,7 +175,7 @@ parse_apply(struct vm_conf *conf, struct cfvalue *vl)
 		return -1;
 	RB_INIT(args);
 
-	arg = STAILQ_FIRST(&vl->args);
+	arg = STAILQ_FIRST(&gt->args);
 	STAILQ_FOREACH (def, &tp->argdefs, next) {
 		argval = token_to_string(&conf->vars,
 		 (arg && STAILQ_FIRST(&arg->tokens)) ? &arg->tokens : &def->tokens);
@@ -1100,6 +1100,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 {
 	struct cfparam *pr;
 	struct cfvalue *vl;
+	struct cftarget *gt;
 	struct cftoken *tk;
 	struct parser_entry *parser;
 	struct vm_conf_entry *conf_ent = (struct vm_conf_entry *)conf;
@@ -1120,8 +1121,8 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 			continue;
 		}
 		if (strcasecmp(key, ".apply") == 0) {
-			STAILQ_FOREACH (vl, &pr->vals, next)
-				parse_apply(conf, vl);
+			STAILQ_FOREACH (gt, &pr->targets, next)
+				parse_apply(conf, gt);
 			continue;
 		}
 		parser = bsearch(key, parser_list,
@@ -1195,12 +1196,31 @@ free_cftokens(struct cftokens *ts)
 }
 
 void
+free_cftarget(struct cftarget *gt)
+{
+	if (gt == NULL)
+		return;
+	free_cftokens(&gt->tokens);
+	free_cfargs(&gt->args);
+	free(gt);
+}
+
+void
+free_cftargets(struct cftargets *gs)
+{
+	struct cftarget *vl, *vn;
+	if (gs == NULL)
+		return;
+	STAILQ_FOREACH_SAFE (vl, gs, next, vn)
+		free_cftarget(vl);
+}
+
+void
 free_cfvalue(struct cfvalue *vl)
 {
 	if (vl == NULL)
 		return;
 	free_cftokens(&vl->tokens);
-	free_cfargs(&vl->args);
 	free(vl);
 }
 
@@ -1220,6 +1240,7 @@ free_cfparam(struct cfparam *pr)
 	if (pr == NULL)
 		return;
 	free_cfvalues(&pr->vals);
+	free_cftargets(&pr->targets);
 	free_cftoken(pr->key);
 	free(pr);
 }

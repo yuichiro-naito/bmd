@@ -56,6 +56,8 @@ extern int lineno;
 	struct cfsection	*sc;
 	struct cfparams		*pp;
 	struct cfparam		*p;
+	struct cftargets	*gs;
+	struct cftarget		*gt;
 	struct cfvalues		*vs;
 	struct cfvalue		*vl;
 	struct cftokens		*ts;
@@ -74,8 +76,10 @@ extern int lineno;
 %type <sc> tmpl global vm
 %type <pp> param_l
 %type <p>  param
-%type <vs> values targets
-%type <vl> value target
+%type <gs> targets
+%type <gt> target
+%type <vs> values
+%type <vl> value
 %type <ts> tokens
 %type <tk> name macro
 %type <ex> expr
@@ -183,8 +187,8 @@ param	: macro targets
 			goto yyabort;
 		$$->operator = 0;
 		$$->key = $1;
-		STAILQ_INIT(&$$->vals);
-		STAILQ_CONCAT(&$$->vals, $2);
+		STAILQ_INIT(&$$->targets);
+		STAILQ_CONCAT(&$$->targets, $2);
 	}
 	| name '=' values
 	{
@@ -266,13 +270,12 @@ value	: tokens
 			goto yyabort;
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);
-		STAILQ_INIT(&$$->args);
 		STAILQ_NEXT($$, next) = NULL;
 	}
 	;
 targets	: target
 	{
-		if (($$ = objalloc(cfvalues)) == NULL)
+		if (($$ = objalloc(cftargets)) == NULL)
 			goto yyabort;
 		STAILQ_INIT($$);
 		STAILQ_INSERT_TAIL($$, $1, next);
@@ -285,7 +288,7 @@ targets	: target
 	;
 target	: tokens
 	{
-		if (($$ = objalloc(cfvalue)) == NULL)
+		if (($$ = objalloc(cftarget)) == NULL)
 			goto yyabort;
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);
@@ -294,7 +297,7 @@ target	: tokens
 	}
 	| tokens '(' args ')'
 	{
-		if (($$ = objalloc(cfvalue)) == NULL)
+		if (($$ = objalloc(cftarget)) == NULL)
 			goto yyabort;
 		STAILQ_INIT(&$$->tokens);
 		STAILQ_CONCAT(&$$->tokens, $1);

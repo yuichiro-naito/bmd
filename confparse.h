@@ -77,12 +77,19 @@ struct cfarg {
 	struct cftokens		tokens;
 };
 
+STAILQ_HEAD(cftargets, cftarget);
+
+struct cftarget {
+	STAILQ_ENTRY(cftarget)	next;
+	struct cftokens		tokens;
+	struct cfargs           args;
+};
+
 STAILQ_HEAD(cfvalues, cfvalue);
 
 struct cfvalue {
 	STAILQ_ENTRY(cfvalue)	next;
 	struct cftokens		tokens;
-	struct cfargs           args;
 };
 
 STAILQ_HEAD(cfparams, cfparam);
@@ -90,6 +97,7 @@ STAILQ_HEAD(cfparams, cfparam);
 struct cfparam {
 	STAILQ_ENTRY(cfparam)	next;
 	struct cftoken		*key;
+	struct cftargets        targets;
 	struct cfvalues		vals;
 	int			operator;
 };
@@ -170,6 +178,8 @@ void *mpool_alloc(size_t);
 void free_cfexpr(struct cfexpr *);
 void free_cftoken(struct cftoken *);
 void free_cftokens(struct cftokens *);
+void free_cftarget(struct cftarget *);
+void free_cftargets(struct cftargets *);
 void free_cfvalue(struct cfvalue *);
 void free_cfvalues(struct cfvalues *);
 void free_cfparam(struct cfparam *);
