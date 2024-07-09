@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/wait.h>
+#include <net/ethernet.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -39,6 +40,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <regex.h>
 
 #include "bmd.h"
 #include "conf.h"
@@ -46,12 +48,32 @@
 #include "log.h"
 #include "server.h"
 
-struct parser_context *pctxt, *pctxt_snapshot;
+struct conf_pattern {
+	const char *pattern;
+	bool created;
+	regex_t reg;
+};
 
+static struct conf_pattern net_patterns[] = {
+	{ "virtio-net:", false, {0} },
+	{ "e1000:", false, {0} },
+	{ "\\[([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}\\]:", false, {0}}
+};
+
+struct parser_context *pctxt, *pctxt_snapshot;
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
-
 static struct mpools mpools;
+
+
+void
+free_parser_objects(void)
+{
+	static struct conf_pattern *q;
+	ARRAY_FOREACH (q, net_patterns)
+		if (q->created)
+			regfree(&q->reg);
+}
 
 static int
 mpool_expand(void)
@@ -334,17 +356,62 @@ parse_iso(struct vm_conf *conf, char *val)
 static int
 parse_net(struct vm_conf *conf, char *val)
 {
-	size_t n;
-	const char *const *p;
-	static const char *const types[] = { "virtio-net", "e1000" };
+	int i, rc;
+	regoff_t ep = 0;
+	struct ether_addr *ea;
+	char *p, *type = NULL, etheraddr[ETHER_FORMAT_LEN + 1] = {0};
+	regmatch_t matched;
+	static struct conf_pattern *q;
 
-	ARRAY_FOREACH (p, types) {
-		n = strlen(*p);
-		if (strncmp(val, *p, n) == 0 && val[n] == ':')
-			return add_net_conf(conf, *p, &val[n + 1]);
+	ARRAY_FOREACH (q, net_patterns)
+		if (!q->created) {
+			if (regcomp(&q->reg, q->pattern, REG_EXTENDED) != 0) {
+				ERR("failed to regcomp %s\n", q->pattern);
+				return -1;
+			}
+			q->created = true;
+		}
+
+	for (i = 0; i < 2; i++) {
+		if (regexec(&net_patterns[i].reg, val, 1, &matched, 0) != 0)
+			continue;
+		if (matched.rm_eo > ep) {
+			free(type);
+			if ((type = strdup(net_patterns[i].pattern)) == NULL)
+				return -1;
+			ep = matched.rm_eo;
+		}
+	}
+	if (type == NULL && (type = strdup("virtio-net")) == NULL)
+		return -1;
+	p = &type[strlen(type) - 1];
+	if (*p == ':')
+		*p = '\0';
+
+	if (regexec(&net_patterns[2].reg, val, 1, &matched, 0) == 0) {
+		strncpy(etheraddr, &val[matched.rm_so + 1], ETHER_FORMAT_LEN);
+		if ((p = strchr(etheraddr, ']')) != NULL)
+			*p = '\0';
+		ea = ether_aton(etheraddr);
+		if (ETHER_IS_MULTICAST(ea->octet)) {
+			ERR("multicast MAC address is not allowed: %s\n",
+			    etheraddr);
+			free(type);
+			return -1;
+		}
+		if ((ea->octet[0] | ea->octet[1] | ea->octet[2] |
+		     ea->octet[3] | ea->octet[4] | ea->octet[5]) == 0) {
+			ERR("invalid MAC address: %s\n", etheraddr);
+			free(type);
+			return -1;
+		}
+		if (matched.rm_eo > ep)
+			ep = matched.rm_eo;
 	}
 
-	return add_net_conf(conf, "virtio-net", val);
+	rc = add_net_conf(conf, type, etheraddr, &val[ep]);
+	free(type);
+	return rc;
 }
 
 static int

@@ -2129,6 +2129,7 @@ main(int argc, char *argv[])
 	close(eventq);
 	free_events();
 	remove_plugins();
+	free_parser_objects();
 	free_id_list();
 	free_global_vars();
 	free_gl_conf();

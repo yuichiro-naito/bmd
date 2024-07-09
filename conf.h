@@ -37,6 +37,10 @@
 #define LOCALBASE "/usr/local"
 #endif
 
+/* The maximum ethernet address format is "xx:xx:xx:xx:xx:xx".
+   17 bytes long. */
+#define ETHER_FORMAT_LEN (3 * 5 + 2)
+
 struct global_conf {
 	char *config_file;
 	char *plugin_dir;
@@ -72,6 +76,7 @@ struct net_conf {
 	char *tap;
 	char *vale;
 	char *vale_port;
+	char *mac;
 };
 
 struct fbuf {
@@ -212,7 +217,7 @@ void clear_cpu_pin(struct vm_conf *);
 int add_passthru_conf(struct vm_conf *, const char *);
 int add_disk_conf(struct vm_conf *, const char *, const char *);
 int add_iso_conf(struct vm_conf *, const char *, const char *);
-int add_net_conf(struct vm_conf *, const char *, const char *);
+int add_net_conf(struct vm_conf *, const char *, const char *, const char *);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);
 int add_cpu_pin(struct vm_conf *, int, int);

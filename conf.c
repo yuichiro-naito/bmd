@@ -212,6 +212,7 @@ free_net_conf(struct net_conf *c)
 	free(c->tap);
 	free(c->vale);
 	free(c->vale_port);
+	free(c->mac);
 	free(c);
 }
 
@@ -379,11 +380,12 @@ generate_member_getter(char *, iso_conf, type)
 generate_member_getter(char *, iso_conf, path)
 
 int
-add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
+add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
+	     const char *bridge)
 {
 	bool is_vale;
 	struct net_conf *t;
-	char *y, *b;
+	char *y, *b, *e = NULL;
 	if (conf == NULL)
 		return 0;
 
@@ -394,6 +396,13 @@ add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
 	b = strdup(bridge);
 	if (t == NULL || y == NULL || b == NULL)
 		goto err;
+
+	if (eaddr && strlen(eaddr) > 11) {
+		if ((e = strdup(eaddr)) == NULL)
+			goto err;
+		t->mac = e;
+	}
+
 	if (is_vale) {
 		if (asprintf(&t->vale_port, "vm%dp%d", conf->id,
 			     conf->nnets) < 0)
@@ -410,6 +419,7 @@ add_net_conf(struct vm_conf *conf, const char *type, const char *bridge)
 err:
 	free(b);
 	free(y);
+	free(e);
 	free(t);
 	return -1;
 }
@@ -417,6 +427,7 @@ err:
 generate_list_getter(net_conf, nets)
 generate_member_getter(char *, net_conf, type)
 generate_member_getter(char *, net_conf, bridge)
+generate_member_getter(char *, net_conf, mac)
 generate_member_getter(char *, net_conf, tap)
 generate_member_getter(char *, net_conf, vale)
 generate_member_getter(char *, net_conf, vale_port)
@@ -489,7 +500,7 @@ struct net_conf *
 copy_net_conf(const struct net_conf *nc)
 {
 	struct net_conf *ret;
-	char *y, *b, *t, *v, *vp;
+	char *y, *b, *t, *v, *m, *vp;
 
 #define DUPLICATE_STRING(str) (str) ? strdup(str) : NULL
 #define CHECK_DUP_ERR(src, dst)  (src != NULL && dst == NULL)
@@ -497,11 +508,12 @@ copy_net_conf(const struct net_conf *nc)
 	y = strdup(nc->type);
 	b = DUPLICATE_STRING(nc->bridge);
 	t = DUPLICATE_STRING(nc->tap);
+	m = DUPLICATE_STRING(nc->mac);
 	v = DUPLICATE_STRING(nc->vale);
 	vp = DUPLICATE_STRING(nc->vale_port);
 	if (ret == NULL || y == NULL || CHECK_DUP_ERR(nc->bridge, b) ||
-	    CHECK_DUP_ERR(nc->tap, t) || CHECK_DUP_ERR(nc->vale, v) ||
-	    CHECK_DUP_ERR(nc->vale_port, vp))
+	    CHECK_DUP_ERR(nc->tap, t) || CHECK_DUP_ERR(nc->mac, m) ||
+	    CHECK_DUP_ERR(nc->vale, v) || CHECK_DUP_ERR(nc->vale_port, vp))
 		goto err;
 #undef CHECK_DUP_ERR
 #undef DUPLICATE_STRING
@@ -509,6 +521,7 @@ copy_net_conf(const struct net_conf *nc)
 	ret->type = y;
 	ret->bridge = b;
 	ret->tap = t;
+	ret->mac = m;
 	ret->vale = v;
 	ret->vale_port = vp;
 	STAILQ_NEXT(ret, next) = NULL;
@@ -517,6 +530,7 @@ err:
 	free(t);
 	free(b);
 	free(y);
+	free(m);
 	free(v);
 	free(vp);
 	free(ret);
@@ -1027,6 +1041,8 @@ vm_conf_export_env(struct vm_conf *conf)
 	i = 1;
 	STAILQ_FOREACH (nc, &vm->taps, next) {
 		vputenv(ENV_PREFIX"NETWORK%d_TYPE=%s", i, nc->type);
+		if (nc->mac)
+			vputenv(ENV_PREFIX"NETWORK%d_MAC=%s", i, nc->mac);
 		if (nc->tap)
 			vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->tap);
 		else if (nc->vale_port)
@@ -1071,7 +1087,8 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	const static char *fmt = "%18s = %s\n";
 	const static char *dfmt = "%18s = %d\n";
 	const static char *lfmt = "%18s = %s,%s\n";
-	char buf[32];
+	const static char *nfmt = "%18s = %s,%s,%s\n";
+	char *p, buf[32];
 
 	fprintf(fp, fmt, "name", conf->name);
 	fprintf(fp, dfmt, "owner", conf->owner);
@@ -1140,11 +1157,12 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	}
 	i = 0;
 	STAILQ_FOREACH (nc, &conf->nets, next) {
+		p = nc->bridge ? nc->bridge : nc->vale;
 		snprintf(buf, sizeof(buf), "net%d", i++);
-		if (nc->bridge)
-			fprintf(fp, lfmt, buf, nc->type, nc->bridge);
-		else if (nc->vale)
-			fprintf(fp, lfmt, buf, nc->type, nc->vale);
+		if (nc->mac)
+			fprintf(fp, nfmt, buf, nc->type, nc->mac, p);
+		else
+			fprintf(fp, lfmt, buf, nc->type, p);
 	}
 	fb = conf->fbuf;
 	if (fb->enable) {
@@ -1233,6 +1251,7 @@ compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 
 	CMP_STR(type);
 	CMP_STR(bridge);
+	CMP_STR(mac);
 	CMP_STR(vale);
 	/*
 	 * We don't need to compare tap.

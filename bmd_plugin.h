@@ -123,6 +123,7 @@ struct net_conf *get_net_conf(struct vm_conf *);
 struct net_conf *next_net_conf(struct net_conf *);
 char *get_net_conf_type(struct net_conf *);
 char *get_net_conf_bridge(struct net_conf *);
+char *get_net_conf_mac(struct net_conf *);
 char *get_net_conf_tap(struct net_conf *);
 char *get_net_conf_vale(struct net_conf *);
 char *get_net_conf_vale_port(struct net_conf *);

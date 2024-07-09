@@ -35,6 +35,7 @@ get_net_conf;
 next_net_conf;
 get_net_conf_type;
 get_net_conf_bridge;
+get_net_conf_mac;
 get_net_conf_tap;
 get_net_conf_vale;
 get_net_conf_vale_port;

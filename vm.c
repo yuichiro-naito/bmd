@@ -704,12 +704,14 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
 				ic->path);
 		STAILQ_FOREACH (nc, &vm->taps, next) {
+			fprintf(fp, "-s\n%d,%s", pcid++, nc->type);
 			if (nc->tap)
-				fprintf(fp, "-s\n%d,%s,%s\n", pcid++, nc->type,
-					nc->tap);
+				fprintf(fp, ",%s", nc->tap);
 			else if (nc->vale)
-				fprintf(fp, "-s\n%d,%s,%s:%s\n", pcid++,
-					nc->type, nc->vale, nc->vale_port);
+				fprintf(fp, ",%s:%s", nc->vale, nc->vale_port);
+			if (nc->mac)
+				fprintf(fp, ",mac=%s", nc->mac);
+			fprintf(fp, "\n");
 		}
 		STAILQ_FOREACH (pc, &conf->passthrues, next)
 			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);

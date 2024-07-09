@@ -579,6 +579,7 @@ do_showconfig(const char *name)
 
 	remove_plugins();
 	free_id_list();
+	free_parser_objects();
 	free_global_vars();
 	free_gl_conf();
 

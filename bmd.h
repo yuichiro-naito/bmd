@@ -217,6 +217,7 @@ int direct_run(const char *, bool, bool);
 
 int load_config_file(struct vm_conf_list *, bool);
 int compare_vm_conf_entry(struct vm_conf_entry *, struct vm_conf_entry *);
+void free_parser_objects(void);
 
 int send_fd(int, int);
 int recv_fd(int);

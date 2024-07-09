@@ -1,4 +1,4 @@
-.Dd May 15, 2024
+.Dd July 9, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -237,14 +237,25 @@ must be smaller than
 .Ar hw.ncpu
 .Xr sysctl 8
 value.
-.It Cm network = (+=) Oo Ar type : Oc Ar bridge ;
-.Ar Type
+.It Cm network = (+=) Oo Ar type : Oc Oo Ar [ MAC address ] : Oc Ar bridge ;
+The
+.Ar type
 is one of
 .Qq e1000 ,
 .Qq virtio-net
 or can be omitted to specify
 the default type
 .Qq virtio-net .
+The
+.Ar MAC address
+is an ASCII string in
+.Xr ethers 5
+format and must be embraced by '[' ']'
+and followed by ':'.
+The
+.Ar MAC address
+can be omitted to be assigned by the
+.Xr bhyve 8 .
 .Ar Bridge
 is a bridge name that a tap interface
 to be added. If a
