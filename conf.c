@@ -397,7 +397,7 @@ add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
 	if (t == NULL || y == NULL || b == NULL)
 		goto err;
 
-	if (eaddr && strlen(eaddr) > 11) {
+	if (eaddr && strlen(eaddr) > 10) {
 		if ((e = strdup(eaddr)) == NULL)
 			goto err;
 		t->mac = e;
