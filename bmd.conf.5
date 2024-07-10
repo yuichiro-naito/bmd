@@ -101,7 +101,7 @@ shutdown. If VM exits with an error,
 does not reboot again.
 .El
 .It Cm boot_delay = Ar delay_second;
-Boot delay in seconds. The default value is
+Specify the boot delay time in seconds. The default value is
 .Qq 0 .
 .It Cm comport = Ar com_device;
 Specify com1 port device (e.g. /dev/nmdm0B).
@@ -144,31 +144,32 @@ The
 is disk image filename (e.g. /var/images/vm-disk-0) or device file
 (e.g. /dev/zvol/zpool/vm-disk-1).
 .It Cm err_logfile = Ar filename;
-Log filename of bhyve messages.
+Open the log file for the bhyve messages. This file is written with the VM
+owner privilege.
 .It Cm graphics = Ar yes | no;
 Set
 .Qq yes
 to use frame buffer device. The default is
 .Qq no .
 .It Cm graphics_listen = Ar address;
-Vnc listen address. The default value is
+Set the vnc listen address. The default value is
 .Qq 0.0.0.0 .
 .It Cm graphics_port = Ar port_num;
-Vnc port number. The default value is
+Set the vnc port number. The default value is
 .Qq 5900 .
 .It Cm graphics_password = Ar password;
-Password for vnc access. This is not set by default.
+Set the password for vnc access. This is not set by default.
 .It Cm graphics_res = Ar width x height;
-Vnc resolution. The default value is
+Set the vnc resolution. The default value is
 .Qq 1280x720 .
 .It Cm graphics_vga = Ar on | off | io;
-Vga conf of bhyve. The default is
+Set the vga conf of bhyve. The default is
 .Qq io .
 .It Cm graphics_wait = Ar yes | no;
 Wait for vnc connection before booting. The default is
 .Qq no .
 .It Cm hostbridge = Ar standard | amd;
-Hostbridge device. The default is
+Set the hostbridge device. The default is
 .Qq standard .
 .It Cm install = Ar yes | no;
 Set
@@ -293,7 +294,7 @@ e.g.
 or
 .Qq vale1 .
 .It Cm owner = Ar user_name Op : Ar group_name ;
-Owner of VM. The owner is permitted to control the VM via
+The owner of VM. The owner is permitted to control the VM via
 .Xr bmdctl 8 .
 If
 .Ar group_name
