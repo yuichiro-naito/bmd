@@ -29,7 +29,7 @@ So, it is better that disk images are created to follow the policy.
 ## Requirements
 
 1. grub2-bhyve package
-2. uefi-edk2-bhyve-csm package
+2. edk2-bhyve package
 
 ## Installation
 
