@@ -163,15 +163,12 @@ sock_buf(struct event *ev, void *data)
 	return (ev->data == data);
 }
 
-/*
- * The 'vm_entry' function should be an alias for 'sock_buf'. But It's hard to
- * be replaced by #define. Because the 'vm_entry' key word is widely used in
- * this source.
- */
 static bool
 vm_entry(struct event *ev, void *data)
 {
-	return (ev->data == data);
+	return (ev->data == data) &&
+		(ev->kev.filter == EVFILT_TIMER ||
+		 (ev->kev.flags & EV_ONESHOT) == 0);
 }
 
 static void
