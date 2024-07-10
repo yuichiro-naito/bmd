@@ -61,6 +61,10 @@ struct disk_conf {
 	STAILQ_ENTRY(disk_conf) next;
 	char *type;
 	char *path;
+	bool nocache;
+	bool direct;
+	bool readonly;
+	bool nodelete;
 };
 
 struct iso_conf {
@@ -215,7 +219,8 @@ void clear_bhyve_env(struct vm_conf *);
 void clear_cpu_pin(struct vm_conf *);
 
 int add_passthru_conf(struct vm_conf *, const char *);
-int add_disk_conf(struct vm_conf *, const char *, const char *);
+int add_disk_conf(struct vm_conf *, const char *, const char *,
+		  bool, bool, bool, bool);
 int add_iso_conf(struct vm_conf *, const char *, const char *);
 int add_net_conf(struct vm_conf *, const char *, const char *, const char *);
 int add_bhyveload_env(struct vm_conf *, const char *);

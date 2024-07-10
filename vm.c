@@ -697,9 +697,19 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		fprintf(fp, "-s\n1,lpc\n");
 
 		pcid = 2;
-		STAILQ_FOREACH (dc, &conf->disks, next)
-			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, dc->type,
+		STAILQ_FOREACH (dc, &conf->disks, next) {
+			fprintf(fp, "-s\n%d,%s,%s", pcid++, dc->type,
 				dc->path);
+			if (dc->nocache)
+				fprintf(fp, ",nocache");
+			if (dc->direct)
+				fprintf(fp, ",direct");
+			if (dc->readonly)
+				fprintf(fp, ",ro");
+			if (dc->nodelete)
+				fprintf(fp, ",nodelete");
+			fprintf(fp, "\n");
+		}
 		STAILQ_FOREACH (ic, &conf->isoes, next)
 			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
 				ic->path);

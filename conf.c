@@ -71,6 +71,13 @@ struct vartree *global_vars = NULL;
 		return p->member;		    \
 	}
 
+#define generate_member_bool(type, member)	    \
+	bool					    \
+	is_##type##_##member(struct type *p)	    \
+	{					    \
+		return p->member;		    \
+	}
+
 #define generate_clear_list(type, member)			\
 	void							\
 	clear_##type(struct vm_conf *vc)			\
@@ -320,7 +327,8 @@ generate_list_getter(passthru_conf, passthrues)
 generate_member_getter(char *, passthru_conf, devid)
 
 int
-add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
+add_disk_conf(struct vm_conf *conf, const char *type, const char *path,
+	      bool nocache, bool direct, bool readonly, bool nodelete)
 {
 	struct disk_conf *t;
 	char *y, *p;
@@ -334,6 +342,10 @@ add_disk_conf(struct vm_conf *conf, const char *type, const char *path)
 		goto err;
 	t->type = y;
 	t->path = p;
+	t->nocache = nocache;
+	t->direct = direct;
+	t->readonly = readonly;
+	t->nodelete = nodelete;
 
 	STAILQ_INSERT_TAIL(&conf->disks, t, next);
 	conf->ndisks++;
@@ -348,6 +360,10 @@ err:
 generate_list_getter(disk_conf, disks)
 generate_member_getter(char *, disk_conf, type)
 generate_member_getter(char *, disk_conf, path)
+generate_member_bool(disk_conf, nocache)
+generate_member_bool(disk_conf, direct)
+generate_member_bool(disk_conf, readonly)
+generate_member_bool(disk_conf, nodelete)
 
 int
 add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -1029,7 +1045,15 @@ vm_conf_export_env(struct vm_conf *conf)
 	i = 1;
 	STAILQ_FOREACH (dc, &conf->disks, next) {
 		vputenv(ENV_PREFIX"DISK%d_TYPE=%s", i, dc->type);
-		vputenv(ENV_PREFIX"DISK%d_PATH=%s", i++, dc->path);
+		vputenv(ENV_PREFIX"DISK%d_PATH=%s", i, dc->path);
+		vputenv(ENV_PREFIX "DISK%d_NOCACHE=%s", i,
+			bool_str[dc->nocache]);
+		vputenv(ENV_PREFIX "DISK%d_DIRECT=%s", i,
+			bool_str[dc->direct]);
+		vputenv(ENV_PREFIX "DISK%d_READONLY=%s", i,
+			bool_str[dc->readonly]);
+		vputenv(ENV_PREFIX "DISK%d_NODELETE=%s", i,
+			bool_str[dc->nodelete]);
 	}
 	VPUTINT(nisoes);
 	i = 1;
@@ -1148,7 +1172,16 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	i = 0;
 	STAILQ_FOREACH (dc, &conf->disks, next) {
 		snprintf(buf, sizeof(buf), "disk%d", i++);
-		fprintf(fp, lfmt, buf, dc->type, dc->path);
+		fprintf(fp, "%18s = %s", buf, dc->type);
+		if (dc->nocache)
+			fprintf(fp, ":nocache");
+		if (dc->direct)
+			fprintf(fp, ":direct");
+		if (dc->readonly)
+			fprintf(fp, ":readonly");
+		if (dc->nodelete)
+			fprintf(fp, ":nodelete");
+		fprintf(fp, ":%s\n", dc->path);
 	}
 	i = 0;
 	STAILQ_FOREACH (ic, &conf->isoes, next) {
@@ -1229,6 +1262,10 @@ compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 
 	CMP_STR(type);
 	CMP_STR(path);
+	CMP_NUM(nocache);
+	CMP_NUM(direct);
+	CMP_NUM(readonly);
+	CMP_NUM(nodelete);
 
 	return 0;
 }

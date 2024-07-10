@@ -324,17 +324,45 @@ parse_passthru(struct vm_conf *conf, char *val)
 static int
 parse_disk(struct vm_conf *conf, char *val)
 {
+	unsigned int i, t = 2;
 	size_t n;
-	const char *const *p;
+	char *q, *s, *op = val;
 	static const char *const types[] = { "ahci","ahci-hd", "virtio-blk", "nvme" };
+	static const char *const flags[4] = { "nocache","direct", "readonly", "nodelete" };
+	bool f[4];
 
-	ARRAY_FOREACH (p, types) {
-		n = strlen(*p);
-		if (strncmp(val, *p, n) == 0 && val[n] == ':')
-			return add_disk_conf(conf, *p, &val[n + 1]);
+	if ((s = strchr(val, '/')) == NULL)
+		return -1;
+
+	for (i = 0; i < nitems(types); i++) {
+		if ((q = strstr(val, types[i])) == NULL)
+			continue;
+		if (q > s)
+			continue;
+		n = strlen(types[i]);
+		if (q[n] != ':')
+			continue;
+		if (q + n + 1 > op) {
+			t = i;
+			op = q + n + 1;
+		}
 	}
 
-	return add_disk_conf(conf, "virtio-blk", val);
+	memset(f, 0, sizeof(f));
+	for(i = 0; i < nitems(flags); i++) {
+		if ((q = strstr(val, flags[i])) == NULL)
+			continue;
+		if (q > s)
+			continue;
+		n = strlen(flags[i]);
+		if (q[n] != ':')
+			continue;
+		f[i] = true;
+		if (q + n + 1 > op)
+			op = q + n + 1;
+	}
+
+	return add_disk_conf(conf, types[t], op, f[0], f[1], f[2], f[3]);
 }
 
 static int
