@@ -1,4 +1,8 @@
 * 3.0
+	- Add support of 'nocache' 'direct' 'readonly' 'nodelete' disk options.
+	  (b5b8fdf096eb024ce930d819f02a965f545d8f41)
+	- Add support of setting MAC address for each interfaces.
+	  (584162325dcd0b95fde3c72dcb72a7616376a2ab)
 	- Introduce boot loader plugin
 	- Introduce prestart/poststop plugin interfaces.
 	- Export th VM configurations to environment variables.
