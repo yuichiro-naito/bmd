@@ -55,9 +55,9 @@ struct conf_pattern {
 };
 
 static struct conf_pattern net_patterns[] = {
-	{ "virtio-net:", false, {0} },
-	{ "e1000:", false, {0} },
-	{ "\\[([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}\\]:", false, {0}}
+	{ "virtio-net", false, {0} },
+	{ "e1000", false, {0} },
+	{ "\\[([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}\\]", false, {0}}
 };
 
 struct parser_context *pctxt, *pctxt_snapshot;
@@ -328,16 +328,14 @@ parse_disk(struct vm_conf *conf, char *val)
 	size_t n;
 	char *q, *s, *op = val;
 	static const char *const types[] = { "ahci","ahci-hd", "virtio-blk", "nvme" };
-	static const char *const flags[4] = { "nocache","direct", "readonly", "nodelete" };
-	bool f[4];
+	static const char *const flags[] = { "nocache","direct", "readonly", "nodelete" };
+	bool f[nitems(flags)];
 
 	if ((s = strchr(val, '/')) == NULL)
 		return -1;
 
 	for (i = 0; i < nitems(types); i++) {
-		if ((q = strstr(val, types[i])) == NULL)
-			continue;
-		if (q > s)
+		if ((q = strstr(val, types[i])) == NULL || q > s)
 			continue;
 		n = strlen(types[i]);
 		if (q[n] != ':')
@@ -350,9 +348,7 @@ parse_disk(struct vm_conf *conf, char *val)
 
 	memset(f, 0, sizeof(f));
 	for(i = 0; i < nitems(flags); i++) {
-		if ((q = strstr(val, flags[i])) == NULL)
-			continue;
-		if (q > s)
+		if ((q = strstr(val, flags[i])) == NULL || q > s)
 			continue;
 		n = strlen(flags[i]);
 		if (q[n] != ':')
@@ -391,30 +387,29 @@ parse_net(struct vm_conf *conf, char *val)
 	regmatch_t matched;
 	static struct conf_pattern *q;
 
-	ARRAY_FOREACH (q, net_patterns)
-		if (!q->created) {
-			if (regcomp(&q->reg, q->pattern, REG_EXTENDED) != 0) {
-				ERR("failed to regcomp %s\n", q->pattern);
-				return -1;
-			}
-			q->created = true;
+	ARRAY_FOREACH (q, net_patterns) {
+		if (q->created)
+			continue;
+		if (regcomp(&q->reg, q->pattern, REG_EXTENDED) != 0) {
+			ERR("failed to regcomp %s\n", q->pattern);
+			return -1;
 		}
+		q->created = true;
+	}
 
 	for (i = 0; i < 2; i++) {
-		if (regexec(&net_patterns[i].reg, val, 1, &matched, 0) != 0)
+		if (regexec(&net_patterns[i].reg, val, 1, &matched, 0) != 0 ||
+		    val[matched.rm_eo] != ':')
 			continue;
-		if (matched.rm_eo > ep) {
+		if (matched.rm_eo + 1 > ep) {
 			free(type);
 			if ((type = strdup(net_patterns[i].pattern)) == NULL)
 				return -1;
-			ep = matched.rm_eo;
+			ep = matched.rm_eo + 1;
 		}
 	}
 	if (type == NULL && (type = strdup("virtio-net")) == NULL)
 		return -1;
-	p = &type[strlen(type) - 1];
-	if (*p == ':')
-		*p = '\0';
 
 	if (regexec(&net_patterns[2].reg, val, 1, &matched, 0) == 0) {
 		strncpy(etheraddr, &val[matched.rm_so + 1], ETHER_FORMAT_LEN);
@@ -433,8 +428,8 @@ parse_net(struct vm_conf *conf, char *val)
 			free(type);
 			return -1;
 		}
-		if (matched.rm_eo > ep)
-			ep = matched.rm_eo;
+		if (matched.rm_eo + 1 > ep)
+			ep = matched.rm_eo + 1;
 	}
 
 	rc = add_net_conf(conf, type, etheraddr, &val[ep]);
