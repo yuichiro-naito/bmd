@@ -83,6 +83,13 @@ struct net_conf {
 	char *mac;
 };
 
+struct sharefs_conf {
+	STAILQ_ENTRY(sharefs_conf) next;
+	char *name;
+	char *path;
+	bool readonly;
+};
+
 struct fbuf {
 	int enable;
 	int port;
@@ -179,6 +186,8 @@ struct vm_conf {
 	char *tpm_dev;
 	char *tpm_type;
 	char *tpm_version;
+	STAILQ_HEAD(, sharefs_conf) sharefss;
+	int nsharefs;
 };
 
 struct vm {
@@ -205,6 +214,7 @@ void free_passthru_conf(struct passthru_conf *);
 void free_disk_conf(struct disk_conf *);
 void free_iso_conf(struct iso_conf *);
 void free_net_conf(struct net_conf *);
+void free_sharefs_conf(struct sharefs_conf *);
 void free_vm_conf(struct vm_conf *);
 #define free_bhyveload_env(p)  free(p)
 #define free_bhyve_env(p)  free(p)
@@ -214,6 +224,7 @@ void clear_passthru_conf(struct vm_conf *);
 void clear_disk_conf(struct vm_conf *);
 void clear_iso_conf(struct vm_conf *);
 void clear_net_conf(struct vm_conf *);
+void clear_sharefs_conf(struct vm_conf *);
 void clear_bhyveload_env(struct vm_conf *);
 void clear_bhyve_env(struct vm_conf *);
 void clear_cpu_pin(struct vm_conf *);
@@ -223,6 +234,7 @@ int add_disk_conf(struct vm_conf *, const char *, const char *,
 		  bool, bool, bool, bool);
 int add_iso_conf(struct vm_conf *, const char *, const char *);
 int add_net_conf(struct vm_conf *, const char *, const char *, const char *);
+int add_sharefs_conf(struct vm_conf *, const char *, const char *,  bool);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);
 int add_cpu_pin(struct vm_conf *, int, int);

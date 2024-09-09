@@ -224,6 +224,16 @@ free_net_conf(struct net_conf *c)
 }
 
 void
+free_sharefs_conf(struct sharefs_conf *c)
+{
+	if (c == NULL)
+		return;
+	free(c->name);
+	free(c->path);
+	free(c);
+}
+
+void
 free_fbuf(struct fbuf *f)
 {
 	if (f == NULL)
@@ -238,6 +248,7 @@ generate_clear_list(passthru_conf, passthrues)
 generate_clear_list(disk_conf, disks)
 generate_clear_list(iso_conf, isoes)
 generate_clear_list(net_conf, nets)
+generate_clear_list(sharefs_conf, sharefss)
 generate_clear_list(bhyveload_env, bhyveload_envs)
 generate_clear_list(bhyve_env, bhyve_envs)
 generate_clear_list(cpu_pin, cpu_pins)
@@ -288,6 +299,7 @@ free_vm_conf(struct vm_conf *vc)
 	clear_disk_conf(vc);
 	clear_iso_conf(vc);
 	clear_net_conf(vc);
+	clear_sharefs_conf(vc);
 	free(vc->keymap);
 	free(vc->bhyveload_loader);
 	clear_bhyveload_env(vc);
@@ -447,6 +459,36 @@ generate_member_getter(char *, net_conf, mac)
 generate_member_getter(char *, net_conf, tap)
 generate_member_getter(char *, net_conf, vale)
 generate_member_getter(char *, net_conf, vale_port)
+
+int
+add_sharefs_conf(struct vm_conf *conf, const char *name, const char *path,
+		 bool ro)
+{
+	struct sharefs_conf *t;
+	char *n, *p;
+
+	t = calloc(1, sizeof(struct sharefs_conf));
+	n = strdup(name);
+	p = strdup(path);
+	if (t == NULL || n == NULL || p == NULL)
+		goto err;
+	t->name = n;
+	t->path = p;
+	t->readonly = ro;
+	STAILQ_INSERT_TAIL(&conf->sharefss, t, next);
+	conf->nsharefs++;
+	return 0;
+err:
+	free(t);
+	free(n);
+	free(p);
+	return -1;
+}
+
+generate_list_getter(sharefs_conf, sharefss)
+generate_member_getter(char *, sharefs_conf, name)
+generate_member_getter(char *, sharefs_conf, path)
+generate_member_bool(sharefs_conf, readonly)
 
 int
 add_bhyveload_env(struct vm_conf *conf, const char *env)
@@ -906,6 +948,7 @@ create_vm_conf(const char *vm_name)
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
 	STAILQ_INIT(&ret->nets);
+	STAILQ_INIT(&ret->sharefss);
 	STAILQ_INIT(&ret->bhyveload_envs);
 	STAILQ_INIT(&ret->bhyve_envs);
 	STAILQ_INIT(&ret->cpu_pins);
@@ -973,6 +1016,7 @@ vm_conf_export_env(struct vm_conf *conf)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
+	struct sharefs_conf *sc;
 	struct passthru_conf *pc;
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
@@ -1055,6 +1099,14 @@ vm_conf_export_env(struct vm_conf *conf)
 		vputenv(ENV_PREFIX "DISK%d_NODELETE=%s", i,
 			bool_str[dc->nodelete]);
 	}
+	VPUTINT(nsharefs);
+	i = 1;
+	STAILQ_FOREACH (sc, &conf->sharefss, next) {
+		vputenv(ENV_PREFIX"SHAREFS%d_NAME=%s", i, sc->name);
+		vputenv(ENV_PREFIX"SHAREFS%d_PATH=%s", i, sc->path);
+		vputenv(ENV_PREFIX "DISK%d_READONLY=%s", i,
+			bool_str[sc->readonly]);
+	}
 	VPUTINT(nisoes);
 	i = 1;
 	STAILQ_FOREACH (ic, &conf->isoes, next) {
@@ -1097,6 +1149,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 {
 	int i;
 	struct disk_conf *dc;
+	struct sharefs_conf *sc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	struct passthru_conf *pc;
@@ -1184,6 +1237,13 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 		fprintf(fp, ":%s\n", dc->path);
 	}
 	i = 0;
+	STAILQ_FOREACH (sc, &conf->sharefss, next) {
+		snprintf(buf, sizeof(buf), "sharefs%d", i++);
+		fprintf(fp, "%18s = %s%s=%s\n", buf,
+			(sc->readonly) ? "readonly:": "",
+			sc->name, sc->path);
+	}
+	i = 0;
 	STAILQ_FOREACH (ic, &conf->isoes, next) {
 		snprintf(buf, sizeof(buf), "iso%d", i++);
 		fprintf(fp, lfmt, buf, ic->type, ic->path);
@@ -1266,6 +1326,18 @@ compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 	CMP_NUM(direct);
 	CMP_NUM(readonly);
 	CMP_NUM(nodelete);
+
+	return 0;
+}
+
+static int
+compare_sharefs_conf(const struct sharefs_conf *a, const struct sharefs_conf *b)
+{
+	int rc;
+
+	CMP_STR(name);
+	CMP_STR(path);
+	CMP_NUM(readonly);
 
 	return 0;
 }
@@ -1387,6 +1459,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 
 	CMP_LIST(passthru_conf, passthrues);
 	CMP_LIST(disk_conf, disks);
+	CMP_LIST(sharefs_conf, sharefss);
 	CMP_LIST(iso_conf, isoes);
 	CMP_LIST(net_conf, nets);
 	CMP_LIST(bhyveload_env, bhyveload_envs);

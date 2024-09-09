@@ -1,4 +1,4 @@
-.Dd July 10, 2024
+.Dd Sep 7, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -143,6 +143,21 @@ The
 .Ar filename
 is disk image filename (e.g. /var/images/vm-disk-0) or device file
 (e.g. /dev/zvol/zpool/vm-disk-1).
+.It Cm sharefs = (+=) Dq Oo Ar readonly : Oc Ar sharename Eo = Ec Pa pathname ;
+Export
+.Pa pathname
+under the name of
+.Ar sharename
+to the guest VM via
+.Dq virtio-9p
+device.
+Write access will be denied, if
+.Ar readonly
+option is set. Note that the value of
+.Sq sharefs
+key must contain a equal character
+.Sq = .
+It must be escaped by a backslash or the whole value must be enclosed in double quotes.
 .It Cm err_logfile = Ar filename;
 Open the log file for the bhyve messages. This file is written with the VM
 owner privilege.

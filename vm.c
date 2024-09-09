@@ -587,6 +587,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	struct vm_conf *conf = vm->conf;
 	struct passthru_conf *pc;
 	struct disk_conf *dc;
+	struct sharefs_conf *sc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
 	struct bhyve_env *be;
@@ -713,6 +714,10 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		STAILQ_FOREACH (ic, &conf->isoes, next)
 			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
 				ic->path);
+		STAILQ_FOREACH (sc, &conf->sharefss, next)
+			fprintf(fp, "-s\n%d,virtio-9p,%s=%s%s\n", pcid++,
+				sc->name, sc->path,
+				(sc->readonly)? ",ro" : "");
 		STAILQ_FOREACH (nc, &vm->taps, next) {
 			fprintf(fp, "-s\n%d,%s", pcid++, nc->type);
 			if (nc->tap)

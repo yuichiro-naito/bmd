@@ -362,6 +362,26 @@ parse_disk(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_sharefs(struct vm_conf *conf, char *val)
+{
+	int rc = -1;
+	bool readonly;
+	char *p, *c, *s;
+	static const char *ro ="readonly:";
+
+	p = (readonly = (strncmp(val, ro, strlen(ro)) == 0)) ?
+		&val[strlen(ro)] : val;
+	if ((s = strdup(p)) == NULL || (c = strchr(s, '=')) == NULL)
+		goto err;
+	*c++ = '\0';
+
+	rc = add_sharefs_conf(conf, s, c, readonly);
+err:
+	free(s);
+	return rc;
+}
+
+static int
 parse_iso(struct vm_conf *conf, char *val)
 {
 	size_t n;
@@ -872,6 +892,7 @@ static struct parser_entry parser_list[] = {
 	{ "owner", &parse_owner, NULL },
 	{ "passthru", &parse_passthru, &clear_passthru_conf },
 	{ "reboot_on_change", &parse_reboot_on_change, NULL },
+	{ "sharefs", &parse_sharefs, &clear_sharefs_conf },
 	{ "stop_timeout", &parse_stop_timeout, NULL },
 	{ "tpm", &parse_tpm, NULL},
 	{ "utctime", &parse_utctime, NULL },

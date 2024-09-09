@@ -40,6 +40,7 @@ struct passthru_conf;
 struct disk_conf;
 struct iso_conf;
 struct net_conf;
+struct sharefs_conf;
 struct vm_conf;
 struct vm;
 
@@ -81,6 +82,11 @@ enum STATE {
 	for ((nc) = get_net_conf((conf)); \
 	     (nc) != NULL;		  \
 	     (nc) = next_net_conf((nc)))
+
+#define SHAREFS_CONF_FOREACH(sc, conf)	  \
+	for ((sc) = get_sharefs_conf((conf)); \
+	     (sc) != NULL;		  \
+	     (sc) = next_net_conf((sc)))
 
 #define TAPS_FOREACH(nc, vm)		  \
 	for ((nc) = get_taps((vm));	  \
@@ -131,6 +137,11 @@ char *get_net_conf_mac(struct net_conf *);
 char *get_net_conf_tap(struct net_conf *);
 char *get_net_conf_vale(struct net_conf *);
 char *get_net_conf_vale_port(struct net_conf *);
+struct sharefs_conf *get_sharefs_conf(struct vm_conf *);
+struct sharefs_conf *next_sharefs_conf(struct sharefs_conf *);
+char *get_sharefs_conf_name(struct sharefs_conf *);
+char *get_sharefs_conf_path(struct sharefs_conf *);
+bool is_sharefs_conf_readonly(struct sharefs_conf *);
 struct bhyveload_env *get_bhyveload_env(struct vm_conf *);
 struct bhyveload_env *next_bhyveload_env(struct bhyveload_env *);
 char *get_bhyveload_env_env(struct bhyveload_env *);
