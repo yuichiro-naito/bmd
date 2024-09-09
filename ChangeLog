@@ -1,3 +1,6 @@
+* 3.1
+	- Introduce 'sharefs' key for file system sharing via virtio-9p device.
+	  (bdf1864d2c3a742b8236ece9d00a510be700fc9c)
 * 3.0
 	- Add support of 'nocache' 'direct' 'readonly' 'nodelete' disk options.
 	  (b5b8fdf096eb024ce930d819f02a965f545d8f41)
