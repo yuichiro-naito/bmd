@@ -440,6 +440,8 @@ do_console(const char *name)
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command", "showcomport");
 	nvlist_add_string(cmd, "name", name);
+	nvlist_add_number(cmd, "sigtrigger_pid", getpid());
+	nvlist_add_number(cmd, "sigtrigger_num", SIGHUP);
 
 	if ((res = send_recv(cmd)) == NULL) {
 		ret = 1;

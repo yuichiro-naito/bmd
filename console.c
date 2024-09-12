@@ -47,6 +47,16 @@ sighandler_stop(int sig __unused)
 	stop++;
 }
 
+static pid_t child_pid;
+
+static void
+sighandler_kill(int sig __unused)
+{
+	kill(child_pid, SIGTERM);
+	waitpid(child_pid, NULL, 0);
+	exit(0);
+}
+
 static void
 sighandler_exit(int sig __unused)
 {
@@ -183,6 +193,9 @@ attach_console(int fd)
 
 	if ((out_pid = fork()) < 0)
 		return -1;
+
+	child_pid = out_pid;
+	signal(SIGHUP, sighandler_kill);
 
 	if (out_pid)
 		console_in(fd);

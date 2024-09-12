@@ -98,6 +98,7 @@ static int reload_virtual_machines(void);
 static void stop_virtual_machine(struct vm_entry *);
 static void free_vm_entry(struct vm_entry *);
 static int boot_virtual_machine(struct vm_entry *);
+static void trigger_signal(struct vm_entry *);
 
 static int
 create_eventq(void)
@@ -1289,6 +1290,7 @@ static void
 free_vm_entry(struct vm_entry *vm_ent)
 {
 	struct net_conf *nc, *nnc;
+	struct signal_target *t, *nt;
 
 	STAILQ_FOREACH_SAFE (nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
@@ -1297,6 +1299,8 @@ free_vm_entry(struct vm_entry *vm_ent)
 	  Delete & free them for safty.
 	*/
 	stop_waiting_for(vm_entry, vm_ent);
+	LIST_FOREACH_SAFE (t, &vm_ent->signal_targets, next, nt)
+		free(t);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_BOOTROM(vm_ent));
 	free(VM_VARSFILE(vm_ent));
@@ -1451,6 +1455,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_LOGFD(vm_ent) = -1;
 	STAILQ_INIT(VM_TAPS(vm_ent));
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
+	LIST_INIT(&vm_ent->signal_targets);
 
 	return vm_ent;
 }
@@ -1758,6 +1763,7 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 	stop_waiting_for(vm_output_and_timers, vm_ent);
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
+	trigger_signal(vm_ent);
 	if (direct_run_mode)
 		sigterm++;
 	VM_PID(vm_ent) = -1;
@@ -2216,6 +2222,61 @@ compare_vm_conf_entry(struct vm_conf_entry *a, struct vm_conf_entry *b)
 	     pa = SLIST_NEXT(pa, next), pb = SLIST_NEXT(pb, next))
 		if ((rc = compare_nvlist(pa->pl_conf, pb->pl_conf)) != 0)
 			return rc;
+
+	return 0;
+}
+
+static void
+trigger_signal(struct vm_entry *vm_ent)
+{
+	struct signal_target *t;
+	LIST_FOREACH (t, VM_SIGTARGETS(vm_ent), next)
+		kill(t->target_pid, t->signal_number);
+}
+
+static int
+on_signal_target_exit(int ident, void *data)
+{
+	struct signal_target *t;
+	struct vm_entry *vm_ent = data;
+
+	/* Look for a signal target and remove it */
+	LIST_FOREACH (t, VM_SIGTARGETS(vm_ent), next)
+		if (t->target_pid == ident) {
+			LIST_REMOVE(t, next);
+			free(t);
+			break;
+		}
+
+	return 0;
+}
+
+int
+register_signal_target(struct vm_entry *vm_ent, pid_t tpid, int signum)
+{
+	struct signal_target *t;
+	struct kevent kev;
+
+	if ((t = malloc(sizeof(*t))) == NULL)
+		return -1;
+	t->target_pid = tpid;
+	t->signal_number = signum;
+
+	EV_SET(&kev, tpid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
+	       0, NULL);
+	/*
+	  Register 'vm_ent' for user data.
+	  If the event lives for a long time, it will be removed by
+	  the 'stop_waiting_for(vm_entry, vm_ent)' function in the
+	  'free_vm_entry'. Fail-safe for memory leak.
+	 */
+	if (register_event(&kev, on_signal_target_exit, vm_ent) < 0) {
+		ERR("failed to wait signal_target (%s)\n", strerror(errno));
+		free(t);
+		return -1;
+	}
+
+	LIST_INSERT_HEAD(VM_SIGTARGETS(vm_ent), t, next);
 
 	return 0;
 }

@@ -51,6 +51,17 @@
 struct global_conf;
 
 /*
+  Signal Target
+*/
+
+LIST_HEAD(signal_targets, signal_target);
+struct signal_target {
+	LIST_ENTRY(signal_target) next;
+	pid_t target_pid;
+	int signal_number;
+};
+
+/*
   Entry of plugins.
   The individual entries refer to the installed plugin.
  */
@@ -113,6 +124,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_PLCONF(v)        ((v)->pl_conf)
 #define VM_TYPE(v)          ((v)->type)
 #define VM_PLUGIN_DATA(v)   (VM_CONF_ENT(v)->pl_data)
+#define VM_SIGTARGETS(v)    (&(v)->signal_targets)
 #define VM_PID(v)           ((v)->vm.pid)
 #define VM_TAPS(v)          (&(v)->vm.taps)
 #define VM_STATE(v)         ((v)->vm.state)
@@ -147,6 +159,7 @@ struct vm_entry {
 	struct vm_method *vm_method;
 	struct loader_method *loader_method;
 	nvlist_t *pl_conf;
+	struct signal_targets signal_targets;
 	bool   restart;
 };
 
@@ -226,7 +239,10 @@ int recv_ack(int);
 int register_events(struct kevent *, event_call_back *, void **, int);
 int set_sock_buf_wait_flags(struct sock_buf *, short, short);
 
+int register_signal_target(struct vm_entry *, pid_t, int);
+
 /* implemented in control.c */
 int control(int, char *[]);
 struct vm_conf_entry *lookup_vm_conf(const char *);
+
 #endif
