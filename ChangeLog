@@ -1,4 +1,6 @@
 * 3.1
+	- 'bmdctl console' disconnects the console on the VM termination.
+	  (f51a3a6181fbd9161701b5f294422aadc597b78c)
 	- Introduce 'sharefs' key for file system sharing via virtio-9p device.
 	  (bdf1864d2c3a742b8236ece9d00a510be700fc9c)
 * 3.0
