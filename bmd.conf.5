@@ -1,4 +1,4 @@
-.Dd Sep 7, 2024
+.Dd Sep 12, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -95,8 +95,8 @@ starts and never reboots.
 .It Cm always
 Boot at
 .Xr bmd 8
-starts or reloads configurations. And always reboots VM after successful
-shutdown. If VM exits with an error,
+starts or reloads configurations. And always reboots the VM after successful
+shutdown. If the VM exits with an error,
 .Xr bmd 8
 does not reboot again.
 .El
@@ -157,14 +157,14 @@ option is set. Note that the value of
 .Sq sharefs
 key must contain a equal character
 .Sq = .
-It must be escaped by a backslash or the whole value must be enclosed in double quotes.
+It must be escaped by a backslash or enclosed in double quotes.
 .It Cm err_logfile = Ar filename;
 Open the log file for the bhyve messages. This file is written with the VM
 owner privilege.
 .It Cm graphics = Ar yes | no;
 Set
 .Qq yes
-to use frame buffer device. The default is
+to use frame a buffer device. The default is
 .Qq no .
 .It Cm graphics_listen = Ar address;
 Set the vnc listen address. The default value is
@@ -191,7 +191,7 @@ Set
 .Qq yes
 to boot from ISO. The install mode VM will never restart, it always quits the
 bhyve execution. After the installation has finished,
-change the configuration to
+change this configuration to
 .Qq no .
 The default is
 .Qq no .
@@ -221,7 +221,7 @@ Specify boot loader. This parameter is mandatory.
 Loader timeout in seconds. If set to 0 or negative value, timeout is disabled.
 The default value is
 .Qq 15 .
-.It Cm bhyve_env = (+=) Ar Environment_definition;
+.It Cm bhyve_env = (+=) Dq Ar Environment_definition ;
 Specify an environment variable for the bhyve process. Note that
 .Ar Environment_definition
 must contain a equal character '='. It must be escaped by a backslash or
@@ -234,7 +234,7 @@ to the bhyveload.
 If omitted, the default OS loader
 .Qq Pa /boot/userboot.so
 is used.
-.It Cm bhyveload_env = (+=) Ar Environment_definition;
+.It Cm bhyveload_env = (+=) Dq Ar Environment_definition ;
 Specify an environment variable for the FreeBSD boot loader.
 It is passed with
 .Qq -e
@@ -470,6 +470,12 @@ global {
 	$isopath = /zpool/iso;
 }
 
+template common(ncpu = 2, memory = 2G) {
+	ncpu = ${ncpu};
+	memory = ${memory};
+	.apply default_disk;
+}
+
 template default_disk {
 	disk = ${imgpath}/${NAME};
 }
@@ -496,45 +502,35 @@ template grub_inspect {
 
 vm freebsd {
 	boot = yes;
-	ncpu = 2;
-	memory = 2G;
-	iso = ${isopath}/FreeBSD-13.2-RELEASE-amd64-disc1.iso;
+	iso = ${isopath}/FreeBSD-14.1-RELEASE-amd64-disc1.iso;
 	loader = bhyveload;
-	.apply default_disk, serial, internet;
+	.apply common(4, 4G), serial, internet;
 }
 
 vm netbsd {
 	boot = yes;
-	ncpu = 2;
-	memory = 2G;
-	iso = ${isopath}/NetBSD-9.2-amd64.iso;
-	.apply default_disk, serial, internet, grub_inspect;
+	iso = ${isopath}/NetBSD-10.0-amd64.iso;
+	.apply common, serial, internet, grub_inspect;
 }
 
 vm openbsd {
 	boot = yes;
-	ncpu = 2;
-	memory = 2G;
-	iso = ${isopath}/OpenBSD-6.9-amd64.iso;
-	.apply default_disk, serial, internet, grub_inspect;
+	iso = ${isopath}/OpenBSD-7.5-amd64.iso;
+	.apply common, serial, internet, grub_inspect;
 }
 
 vm centos {
 	boot = yes;
-	ncpu = 2;
-	memory = 4G;
 	iso = ${isopath}/CentOS-8.2.2004-x86_64-dvd1.iso;
 	loader = uefi;
-	.apply default_disk, internet, graphics;
+	.apply common(2, 4G), internet, graphics;
 }
 
 vm ubuntu {
 	boot = yes;
-	ncpu = 2;
-	memory = 4G;
 	iso = ${isopath}/ubuntu-20.04.2.0-desktop-amd64.iso;
 	loader = uefi;
-	.apply default_disk, internet, graphics;
+	.apply common(2, 4G), internet, graphics;
 	graphics_res = 1280x720;
 }
 
