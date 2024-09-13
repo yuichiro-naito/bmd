@@ -506,6 +506,9 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 	if (nvlist_exists_string(res, "comport"))
 		comport = nvlist_get_string(res, "comport");
 
+	if (nvlist_exists_number(res, FD_KEY))
+		close(nvlist_take_number(res, FD_KEY));
+
 	if (show)
 		printf("%s\n", comport ? comport : "no com port");
 
