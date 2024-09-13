@@ -385,6 +385,30 @@ err:
 	return -1;
 }
 
+static bool
+is_server_alive(struct addrinfo *r)
+{
+	int s;
+
+	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
+			   r->ai_protocol)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err;
+
+	while (connect(s, r->ai_addr, r->ai_addrlen) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err;
+
+	close(s);
+	return true;
+
+err:
+	if (s != -1)
+		close(s);
+	return false;
+
+}
+
 int
 create_command_server(const struct global_conf *gc)
 {
@@ -401,11 +425,17 @@ create_command_server(const struct global_conf *gc)
 	if (getaddrinfo(gc->cmd_socket_path, NULL, &hints, &r))
 		return -1;
 
+	if (is_server_alive(r)) {
+		freeaddrinfo(r);
+		return -1;
+	}
+
 	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
 			   r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
+	unlink(gc->cmd_socket_path);
 	while (bind(s, r->ai_addr, r->ai_addrlen) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
