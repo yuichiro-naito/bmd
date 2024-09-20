@@ -39,7 +39,7 @@ name
 name
 .Nm
 .Op Fl f config_file
-.Cm showcomport
+.Cm showconsole
 name
 .Nm
 .Op Fl f config_file
@@ -67,7 +67,7 @@ command is a control utility for virtual machines which are managed by
 Root privileged user can control all virtual machines. Non-privileged user
 can control its own virtual machines.
 
-.Bl -tag -width ".Cm showcomport Fl name"
+.Bl -tag -width ".Cm showconsole Fl name"
 .It Xo
 .Cm list
 .Op Fl r
@@ -114,7 +114,7 @@ Force to quit the bhyve process.
 Force to reset the bhyve process.
 .It Cm console Ar name
 Connect to the console of the virtual machine. See ESCAPE SEQUENCES below.
-.It Cm showcomport Ar name
+.It Cm showconsole Ar name
 Print the console device file. (nmdm)
 .It Cm showvgaport Ar name
 Print the vnc listen address and port number that are separated by space.

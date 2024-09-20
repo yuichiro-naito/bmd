@@ -525,7 +525,7 @@ get_peer_comport(const char *comport)
 	/* A null modem device has at least 11 characters. */
 	if (comport == NULL ||
 	    (i = strlen(comport) - 1 ) < 10)
-		return 0;
+		return NULL;
 
 	if ((peer = strdup(comport)) == NULL)
 		return NULL;
@@ -549,14 +549,10 @@ chown_comport(const char *comport, struct xucred *ucred)
 {
 	int i, rc;
 	struct stat st;
-	char *fn = get_peer_comport(comport);
-
-	if (fn == NULL)
-		return 0;
 
 	for (i = 0; i < 5; i++) {
-		if (stat(fn, &st) < 0 ||
-		    chown(fn, ucred->cr_uid, st.st_gid) < 0) {
+		if (stat(comport, &st) < 0 ||
+		    chown(comport, ucred->cr_uid, st.st_gid) < 0) {
 			rc = -1;
 			usleep(1000);
 			continue;
@@ -565,7 +561,6 @@ chown_comport(const char *comport, struct xucred *ucred)
 		break;
 	}
 
-	free(fn);
 	return rc;
 }
 
@@ -573,21 +568,16 @@ static int
 open_comport(const char *comport)
 {
 	int fd;
-	char *fn;
 
-	if ((fn = get_peer_comport(comport)) == NULL)
-		return -1;
-	if ((fd = open(fn, O_RDWR)) < 0)
+	if ((fd = open(comport, O_RDWR)) < 0)
 		goto err;
 	if (flock(fd, LOCK_EX | LOCK_NB) < 0)
 		goto err2;
 
-	free(fn);
 	return fd;
 err2:
 	close(fd);
 err:
-	free(fn);
 	return -1;
 }
 
@@ -835,7 +825,7 @@ install_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
 }
 
 static nvlist_t *
-showcomport_command(struct sock_buf *s, const nvlist_t *nv,
+showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 		    struct xucred *ucred)
 {
 	const char *name, *reason;
@@ -843,7 +833,7 @@ showcomport_command(struct sock_buf *s, const nvlist_t *nv,
 	int rc = -1;
 	nvlist_t *res;
 	bool error = false;
-	char *comport;
+	char *cons = NULL;
 
 	res = nvlist_create(0);
 
@@ -855,13 +845,14 @@ showcomport_command(struct sock_buf *s, const nvlist_t *nv,
 		goto ret;
 	}
 
-	comport = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
+	cons = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
+	cons = get_peer_comport(cons);
 
 	if (VM_STATE(vm_ent) == PRESTART || VM_STATE(vm_ent) == LOAD ||
 	    VM_STATE(vm_ent) == RUN) {
-		chown_comport(comport, ucred);
+		chown_comport(cons, ucred);
 
-		if ((rc = delayed_open_comport(s, comport, res)) < 0) {
+		if ((rc = delayed_open_comport(s, cons, res)) < 0) {
 			error = true;
 			reason = "failed to open comport";
 			goto ret;
@@ -873,9 +864,10 @@ showcomport_command(struct sock_buf *s, const nvlist_t *nv,
 					       nvlist_get_number(nv, "sigtrigger_num"));
 	}
 
-	nvlist_add_string(res, "comport", comport ? comport : "(null)");
+	nvlist_add_string(res, "console", cons ? cons : "(null)");
 
 ret:
+	free(cons);
 	nvlist_add_bool(res, "error", error);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
@@ -1062,7 +1054,7 @@ static struct command_entry command_list[] = {
 	{ "list", &list_command },
 	{ "poweroff", &poweroff_command },
 	{ "reset", &reset_command },
-	{ "showcomport", &showcomport_command },
+	{ "showconsole", &showconsole_command },
 	{ "showvgaport", &showvgaport_command },
 	{ "shutdown", &shutdown_command },
 };

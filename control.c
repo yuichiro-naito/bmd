@@ -55,7 +55,7 @@ usage(int argc __unused, char *argv[])
 	    "  poweroff <name>          : poweroff VM\n"
 	    "  reset <name>             : reset VM\n"
 	    "  console <name>           : connect to com port\n"
-	    "  showcomport <name>       : show comport\n"
+	    "  showconsole <name>       : show console\n"
 	    "  showvgaport <name>       : show vgaport\n"
 	    "  showconfig [<name>]      : show VM config\n"
 	    "  inspect <name>           : inspect and print installcmd & loadcmd\n"
@@ -438,7 +438,7 @@ do_console(const char *name)
 	nvlist_t *cmd, *res = NULL;
 
 	cmd = nvlist_create(0);
-	nvlist_add_string(cmd, "command", "showcomport");
+	nvlist_add_string(cmd, "command", "showconsole");
 	nvlist_add_string(cmd, "name", name);
 	nvlist_add_number(cmd, "sigtrigger_pid", getpid());
 	nvlist_add_number(cmd, "sigtrigger_num", SIGHUP);
@@ -475,15 +475,15 @@ end:
 }
 
 /*
- * boot_style= 0: showcomport, 1: boot, 2: install
+ * boot_style= 0: showconsole, 1: boot, 2: install
  */
 static int
 do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
 {
 	int ret = 0;
 	nvlist_t *cmd, *res = NULL;
-	const char *comport = NULL;
-	const static char *command[] = {"showcomport", "boot", "install"};
+	const char *cons = NULL;
+	const static char *command[] = {"showconsole", "boot", "install"};
 
 	if (boot_style > sizeof(command)/sizeof(command[0]))
 		return -1;
@@ -503,14 +503,14 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 		goto end;
 	}
 
-	if (nvlist_exists_string(res, "comport"))
-		comport = nvlist_get_string(res, "comport");
+	if (nvlist_exists_string(res, "console"))
+		cons = nvlist_get_string(res, "console");
 
 	if (nvlist_exists_number(res, FD_KEY))
 		close(nvlist_take_number(res, FD_KEY));
 
 	if (show)
-		printf("%s\n", comport ? comport : "no com port");
+		printf("%s\n", cons ? cons : "no console");
 
 	if (console)
 		do_console(name);
@@ -650,7 +650,7 @@ control(int argc, char *argv[])
 			return do_inspect(argv[2]);
 		if (strcmp(argv[1], "console") == 0)
 			return do_console(argv[2]);
-		if (strcmp(argv[1], "showcomport") == 0)
+		if (strcmp(argv[1], "showconsole") == 0)
 			return do_boot_console(argv[2], 0, false, true);
 	}
 
