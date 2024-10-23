@@ -638,6 +638,16 @@ err:
 	return -1;
 }
 
+static bool
+is_version(const char *p)
+{
+	for (; *p != '\0'; p++)
+		if ((! isnumber(*p)) && (*p != '.'))
+			return false;
+	return true;
+}
+
+
 static int
 parse_tpm(struct vm_conf *conf, char *val)
 {
@@ -655,25 +665,29 @@ parse_tpm(struct vm_conf *conf, char *val)
 	}
 	tpm[i] = p;
 
-	/* version string must consist of numbers and periods. */
-	if (i > 0)
-		for (p = tpm[i]; *p != '\0'; p++)
-			if ((! isnumber(*p)) && (*p != '.'))
-				goto err;
-
 	switch(i) {
 	case 2:
 		/* type must be "passthru" */
-		if (strcmp(tpm[0], "passthru") != 0)
+		if (strcmp(tpm[0], "passthru") != 0 &&
+		    strcmp(tpm[0], "swtpm") != 0)
+			goto err;
+		if (! is_version(tpm[2]))
 			goto err;
 		set_tpm_version(conf, tpm[2]);
 		set_tpm_dev(conf, tpm[1]);
 		set_tpm_type(conf, tpm[0]);
 		break;
 	case 1:
-		set_tpm_version(conf, tpm[1]);
-		set_tpm_dev(conf, tpm[0]);
-		set_tpm_type(conf, "passthru");
+		if (strcmp(tpm[0], "passthru") == 0 ||
+		    strcmp(tpm[0], "swtpm") == 0) {
+			set_tpm_type(conf, tpm[0]);
+			set_tpm_dev(conf, tpm[1]);
+		} else if (is_version(tpm[1])) {
+			set_tpm_version(conf, tpm[1]);
+			set_tpm_dev(conf, tpm[0]);
+			set_tpm_type(conf, "passthru");
+		} else
+			goto err;
 		break;
 	case 0:
 		set_tpm_dev(conf, tpm[0]);
