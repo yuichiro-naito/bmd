@@ -648,7 +648,11 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 		flockfile(fp);
 
+#if __FreeBSD_version > 1500023
+		fprintf(fp, "/usr/sbin/bhyve\n-H\n-w\n");
+#else
 		fprintf(fp, "/usr/sbin/bhyve\n-A\n-H\n-w\n");
+#endif
 		if (conf->utctime == true)
 			fprintf(fp, "-u\n");
 		if (conf->wired_memory == true)
