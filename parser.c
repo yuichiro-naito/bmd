@@ -1277,8 +1277,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 				parse_apply(conf, gt);
 			continue;
 		}
-		parser = bsearch(key, parser_list,
-		    sizeof(parser_list) / sizeof(parser_list[0]),
+		parser = bsearch(key, parser_list, nitems(parser_list),
 		    sizeof(parser_list[0]), compare_parser_entry);
 		if (parser && parser->clear != NULL && pr->operator== 0)
 			(*parser->clear)(conf);

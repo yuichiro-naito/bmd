@@ -1073,8 +1073,7 @@ get_command_function(const char *name)
 
 	struct command_entry *p;
 
-	p = bsearch(name, command_list,
-	    sizeof(command_list) / sizeof(command_list[0]),
+	p = bsearch(name, command_list, nitems(command_list),
 	    sizeof(command_list[0]), compare_command_entry);
 
 	return ((p != NULL) ? p->func : NULL);
