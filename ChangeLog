@@ -1,4 +1,6 @@
 * 3.2
+	- Add support of 'com[1-4]'.
+	  (51d452b3fde3b341e32188ab7400ebb0438ee6da)
 	- Add support of 'swtpm' type in the 'tpm' parameter.
 	  (b8581474d3b053ea5a34331d7c7ee275e837fbf0)
 * 3.1
