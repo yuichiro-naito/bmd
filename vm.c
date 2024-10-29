@@ -62,7 +62,7 @@ redirect_to_com(struct vm *vm, bool redirect_stdin)
 	int fd, flag;
 	const char *com;
 
-	if ((com = get_assigned_comport(vm)) == NULL)
+	if ((com = get_assigned_com(vm, 0)) == NULL)
 		com = "/dev/null";
 
 	flag = (redirect_stdin) ? O_RDWR : O_WRONLY;
@@ -299,8 +299,8 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	struct vm_conf *conf = vm_get_conf(vm);
 	size_t len;
 	char *cmd, *mapfile = NULL;
-	bool doredirect = (get_assigned_comport(vm) == NULL) ||
-		(strcasecmp(get_assigned_comport(vm), "stdio") != 0);
+	bool doredirect = (get_assigned_com(vm, 0) == NULL) ||
+		(strcasecmp(get_assigned_com(vm, 0), "stdio") != 0);
 
 	if (write_mapfile(conf, &mapfile) < 0)
 		return -1;
@@ -407,8 +407,8 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	int outfd[2], errfd[2];
 	struct bhyveload_env *be;
 	struct vm_conf *conf = vm->conf;
-	bool dopipe = (vm->assigned_comport == NULL) ||
-	    (strcasecmp(vm->assigned_comport, "stdio") != 0);
+	bool dopipe = (vm->assigned_com[0] == NULL) ||
+	    (strcasecmp(vm->assigned_com[0], "stdio") != 0);
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -463,8 +463,8 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "-e\n%s\n", &be->env[0]);
 		if (conf->bhyveload_loader)
 			fprintf(fp, "-l\n%s\n", conf->bhyveload_loader);
-		fprintf(fp, "-c\n%s\n", (vm->assigned_comport != NULL)
-		    ? vm->assigned_comport
+		fprintf(fp, "-c\n%s\n", (vm->assigned_com[0] != NULL)
+		    ? vm->assigned_com[0]
 		    : "stdio");
 		fprintf(fp, "-m\n%s\n", conf->memory);
 		fprintf(fp, "-d\n%s\n", (conf->install)
@@ -595,8 +595,8 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	pid_t pid;
 	int pcid;
 	int outfd[2], errfd[2];
-	bool dopipe = ((vm->assigned_comport == NULL) ||
-	    (strcasecmp(vm->assigned_comport, "stdio") != 0));
+	bool dopipe = ((vm->assigned_com[0] == NULL) ||
+	    (strcasecmp(vm->assigned_com[0], "stdio") != 0));
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -624,8 +624,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		vm->pid = pid;
 		vm->state = RUN;
 	} else if (pid == 0) {
-		char **args;
-		char *buf;
+		char **args, **com, *buf;
 		size_t buf_size;
 		FILE *fp;
 
@@ -666,8 +665,11 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		STAILQ_FOREACH (cp, &conf->cpu_pins, next)
 			fprintf(fp, "-p\n%d:%d\n", cp->vcpu, cp->hostcpu);
 		fprintf(fp, "-m\n%s\n", conf->memory);
-		if (vm->assigned_comport != NULL)
-			fprintf(fp, "-l\ncom1,%s\n", vm->assigned_comport);
+		ARRAY_FOREACH(com, vm->assigned_com)
+			if (*com != NULL)
+				fprintf(fp, "-l\ncom%ld,%s\n",
+					CONF_COM_NUM(com, vm->assigned_com),
+					*com);
 
 		if (conf->keymap != NULL)
 			fprintf(fp, "-K\n%s\n", conf->keymap);

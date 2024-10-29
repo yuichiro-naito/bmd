@@ -149,7 +149,7 @@ struct vm_conf {
 	int ncpu;
 	char *memory;
 	char *name;
-	char *comport;
+	char *com[4];
 	char *loader;
 	char *loadcmd;
 	char *installcmd;
@@ -198,7 +198,7 @@ struct vm {
 	char *mapfile;
 	char *bootrom;
 	char *varsfile;
-	char *assigned_comport;
+	char *assigned_com[4];
 	int infd;
 	int outfd;
 	int errfd;
@@ -208,6 +208,8 @@ struct vm {
 
 #define ARRAY_FOREACH(p, a) \
 	for (p = &a[0]; p < &a[nitems(a)]; p++)
+
+#define CONF_COM_NUM(com, base)  ((com) - (base) + 1)
 
 void free_vartree(struct vartree *);
 void free_passthru_conf(struct passthru_conf *);
@@ -258,7 +260,7 @@ int set_boot(struct vm_conf *, enum BOOT);
 int set_hostbridge(struct vm_conf *, enum HOSTBRIDGE_TYPE);
 int set_backend(struct vm_conf *, const char *);
 int set_boot_delay(struct vm_conf *, int);
-int set_comport(struct vm_conf *, const char *);
+int set_com(struct vm_conf *, unsigned int, const char *);
 int set_reboot_on_change(struct vm_conf *, bool);
 int set_single_user(struct vm_conf *, bool);
 int set_install(struct vm_conf *, bool);

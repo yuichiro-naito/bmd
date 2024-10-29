@@ -763,7 +763,31 @@ parse_boot_delay(struct vm_conf *conf, char *val)
 static int
 parse_comport(struct vm_conf *conf, char *val)
 {
-	return set_comport(conf, val);
+	return set_com(conf, 0, val);
+}
+
+static int
+parse_com1(struct vm_conf *conf, char *val)
+{
+	return set_com(conf, 0, val);
+}
+
+static int
+parse_com2(struct vm_conf *conf, char *val)
+{
+	return set_com(conf, 1, val);
+}
+
+static int
+parse_com3(struct vm_conf *conf, char *val)
+{
+	return set_com(conf, 2, val);
+}
+
+static int
+parse_com4(struct vm_conf *conf, char *val)
+{
+	return set_com(conf, 3, val);
 }
 
 static bool
@@ -878,6 +902,10 @@ static struct parser_entry parser_list[] = {
 	{ "bhyveload_loader", &parse_bhyveload_loader, NULL },
 	{ "boot", &parse_boot, NULL },
 	{ "boot_delay", &parse_boot_delay, NULL },
+	{ "com1", &parse_com1, NULL },
+	{ "com2", &parse_com2, NULL },
+	{ "com3", &parse_com3, NULL },
+	{ "com4", &parse_com4, NULL },
 	{ "comport", &parse_comport, NULL },
 	{ "cpu_pin", &parse_cpu_pin, &clear_cpu_pin },
 	{ "debug_port", &parse_debug_port, NULL },

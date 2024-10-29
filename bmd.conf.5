@@ -1,4 +1,4 @@
-.Dd Sep 12, 2024
+.Dd Oct 29, 2024
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -104,10 +104,18 @@ does not reboot again.
 Specify the boot delay time in seconds. The default value is
 .Qq 0 .
 .It Cm comport = Ar com_device;
+Alias to the 'com1' parameter.
+.It Cm com1 = Ar com_device;
 Specify com1 port device (e.g. /dev/nmdm0B).
 .Qq auto
 assigns a nmdm device
 automatically.
+.It Cm com2 = Ar com_device;
+Specify com2 port device as same as com1.
+.It Cm com3 = Ar com_device;
+Specify com3 port device as same as com1.
+.It Cm com4 = Ar com_device;
+Specify com4 port device as same as com1.
 .It Cm debug_port = Ar port_number;
 Gdb debug port.
 .It Cm disk = (+=) Oo Ar type : Oc Oo Ar options : Oc Ar filename ;

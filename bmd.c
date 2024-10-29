@@ -1289,6 +1289,7 @@ call_plugin_parser(struct plugin_data_list *head,
 static void
 free_vm_entry(struct vm_entry *vm_ent)
 {
+	char **com;
 	struct net_conf *nc, *nnc;
 	struct signal_target *t, *nt;
 
@@ -1304,7 +1305,8 @@ free_vm_entry(struct vm_entry *vm_ent)
 	free(VM_MAPFILE(vm_ent));
 	free(VM_BOOTROM(vm_ent));
 	free(VM_VARSFILE(vm_ent));
-	free(VM_ASCOMPORT(vm_ent));
+	ARRAY_FOREACH(com, VM_ASCOM(vm_ent))
+		free(*com);
 	free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 	free_vm_conf_entry(VM_NEWCONF(vm_ent));
 	free(vm_ent);
@@ -1486,30 +1488,32 @@ get_nmdm_number(const char *p)
  * "/dev/" directory.
  */
 static int
-assign_comport(struct vm_entry *vm_ent)
+assign_com(struct vm_entry *vm_ent, unsigned int cid)
 {
 	int i, n, max = -1;
 	struct dirent **names;
-	char *new_com;
+	char *new_com, **com;
 	struct vm_entry *e;
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	struct stat sb;
 
-	if (conf->comport == NULL)
+	if (conf->com[cid] == NULL)
 		return 0;
 
 	/* Already assigned */
-	if (VM_ASCOMPORT(vm_ent))
+	if (VM_ASCOM(vm_ent)[cid])
 		return 0;
 
 	/* If no need to assign comport, copy from `struct vm_conf.comport`. */
-	if (strcasecmp(conf->comport, "auto"))
-		return (VM_ASCOMPORT(vm_ent) = strdup(conf->comport)) ? 0 : -1;
+	if (strcasecmp(conf->com[cid], "auto"))
+		return (VM_ASCOM(vm_ent)[cid] = strdup(conf->com[cid])) ? 0 : -1;
 
 	/* Get maximum nmdm number of all VMs. */
 	SLIST_FOREACH (e, &vm_list, next) {
-		max = MAX(get_nmdm_number(VM_CONF(e)->comport), max);
-		max = MAX(get_nmdm_number(VM_ASCOMPORT(e)), max);
+		ARRAY_FOREACH(com, VM_CONF(e)->com)
+			max = MAX(get_nmdm_number(*com), max);
+		ARRAY_FOREACH(com, VM_ASCOM(e))
+			max = MAX(get_nmdm_number(*com), max);
 	}
 
 	/* Get maximum nmdm number in "/dev" directory. */
@@ -1534,7 +1538,7 @@ assign_comport(struct vm_entry *vm_ent)
 		free(new_com);
 		return -1;
 	}
-	VM_ASCOMPORT(vm_ent) = new_com;
+	VM_ASCOM(vm_ent)[cid] = new_com;
 
 	return 0;
 }
@@ -1618,6 +1622,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 static int
 boot_virtual_machine(struct vm_entry *vm_ent)
 {
+	unsigned int i;
 	int rc;
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
@@ -1642,10 +1647,11 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 		return 0;
 	}
 
-	if (assign_comport(vm_ent) < 0) {
-		ERR("failed to assign comport for vm %s\n", name);
-		return -1;
-	}
+	for (i = 0; i < nitems(VM_ASCOM(vm_ent)); i++)
+		if (assign_com(vm_ent, i) < 0) {
+			ERR("failed to assign comport for vm %s\n", name);
+			return -1;
+		}
 
 	if (VM_STATE(vm_ent) == TERMINATE) {
 		init_plugin_results(vm_ent);
@@ -2164,8 +2170,8 @@ direct_run(const char *name, bool install, bool single)
 	}
 
 	conf = &conf_ent->conf;
-	free(conf->comport);
-	conf->comport = strdup("stdio");
+	free(conf->com[0]);
+	conf->com[0] = strdup("stdio");
 	conf->install = install;
 	conf->boot = ONESHOT;
 	set_single_user(conf, single);

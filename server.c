@@ -828,9 +828,9 @@ static nvlist_t *
 showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 		    struct xucred *ucred)
 {
-	const char *name, *reason;
+	const char *name, *port, *reason;
 	struct vm_entry *vm_ent;
-	int rc = -1;
+	int pnum, rc = -1;
 	nvlist_t *res;
 	bool error = false;
 	char *cons = NULL;
@@ -845,9 +845,16 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 		goto ret;
 	}
 
-	cons = VM_ASCOMPORT(vm_ent) ? VM_ASCOMPORT(vm_ent) : VM_CONF(vm_ent)->comport;
-	cons = get_peer_comport(cons);
+	if ((port = nvlist_get_string(nv, "port")) == NULL ||
+	    strncmp(port, "com", 3) != 0 || port[3] < '1' || port[3] > '4') {
+		error = true;
+		reason = "invalid port";
+		goto ret;
+	}
+	pnum = port[3] - '1';
 
+	cons = VM_ASCOM(vm_ent)[pnum] ? VM_ASCOM(vm_ent)[pnum] : VM_CONF(vm_ent)->com[pnum];
+	cons = get_peer_comport(cons);
 	if (VM_STATE(vm_ent) == PRESTART || VM_STATE(vm_ent) == LOAD ||
 	    VM_STATE(vm_ent) == RUN) {
 		chown_comport(cons, ucred);

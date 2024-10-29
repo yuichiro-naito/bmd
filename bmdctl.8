@@ -1,4 +1,4 @@
-.Dd Apr 8, 2024
+.Dd Oct 29, 2024
 .Dt bmdctl 8
 .Os
 .
@@ -36,6 +36,10 @@ name
 .Nm
 .Op Fl f config_file
 .Cm console
+name
+.Nm
+.Op Fl f config_file
+.Cm com[1-4]
 name
 .Nm
 .Op Fl f config_file
@@ -113,7 +117,10 @@ Force to quit the bhyve process.
 .It Cm reset Ar name
 Force to reset the bhyve process.
 .It Cm console Ar name
-Connect to the console of the virtual machine. See ESCAPE SEQUENCES below.
+Connect to the console (com1) of the virtual machine. See ESCAPE SEQUENCES
+below.
+.It Cm com[1-4] Ar name
+Connect to the com[1-4] of the virtual machine. See ESCAPE SEQUENCES below.
 .It Cm showconsole Ar name
 Print the console device file. (nmdm)
 .It Cm showvgaport Ar name

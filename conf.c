@@ -278,6 +278,7 @@ free_vartree(struct vartree *vt)
 void
 free_vm_conf(struct vm_conf *vc)
 {
+	char **com;
 
 	if (vc == NULL)
 		return;
@@ -286,7 +287,8 @@ free_vm_conf(struct vm_conf *vc)
 
 	free(vc->name);
 	free(vc->memory);
-	free(vc->comport);
+	ARRAY_FOREACH(com, vc->com)
+		free(*com);
 	free(vc->loader);
 	free(vc->loadcmd);
 	free(vc->installcmd);
@@ -620,7 +622,6 @@ generate_number_accessor(int, stop_timeout)
 generate_string_accessor(grub_run_partition)
 generate_string_accessor(debug_port)
 generate_string_accessor(memory)
-generate_string_accessor(comport)
 
 int
 set_ncpu(struct vm_conf *conf, int ncpu)
@@ -805,7 +806,39 @@ generate_vm_accessor(enum STATE, state)
 char *
 get_assigned_comport(struct vm *vm)
 {
-	return vm->assigned_comport;
+	return vm->assigned_com[0];
+}
+
+int
+set_com(struct vm_conf *c, unsigned int i, const char *v)
+{
+	if (c == NULL)
+		return -1;
+	return set_string(&c->com[i], v);
+}
+
+char *
+get_comport(struct vm_conf *conf)
+{
+	return conf->com[0];
+}
+
+char *
+get_com(struct vm_conf *conf, unsigned int i)
+{
+	if (i >= nitems(conf->com))
+		return NULL;
+
+	return conf->com[i];
+}
+
+char *
+get_assigned_com(struct vm *vm, unsigned int i)
+{
+	if (i >= nitems(vm->assigned_com))
+		return NULL;
+
+	return vm->assigned_com[i];
 }
 
 void
@@ -1026,7 +1059,7 @@ vm_conf_export_env(struct vm_conf *conf)
 				       "always", "reboot" };
 	const static char *hostbridge_str[] = {"none", "intel", "amd"};
 	const static char *bool_str[] ={"false", "true"};
-	char buf[32];
+	char **com, buf[32];
 	struct vm_entry *vm_ent;
 	struct vm *vm;
 
@@ -1054,7 +1087,11 @@ vm_conf_export_env(struct vm_conf *conf)
 	VPUTBOOL(reboot_on_change);
 	VPUTBOOL(single_user);
 	VPUTBOOL(install);
-	vputenv(ENV_PREFIX"COMPORT=%s", vm->assigned_comport);
+	ARRAY_FOREACH(com, vm->assigned_com)
+		if (*com != NULL)
+			vputenv(ENV_PREFIX "COM%ld=%s",
+				CONF_COM_NUM(com, vm->assigned_com),
+				*com);
 	VPUTSTR(debug_port);
 	vputenv(ENV_PREFIX"BOOT=%s", btype[conf->boot]);
 	VPUTINT(boot_delay);
@@ -1165,7 +1202,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	const static char *dfmt = "%18s = %d\n";
 	const static char *lfmt = "%18s = %s,%s\n";
 	const static char *nfmt = "%18s = %s,%s,%s\n";
-	char *p, buf[32];
+	char *p, **com, buf[32];
 
 	fprintf(fp, fmt, "name", conf->name);
 	fprintf(fp, dfmt, "owner", conf->owner);
@@ -1183,7 +1220,12 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, fmt, "reboot_on_change", bool_str[conf->reboot_on_change]);
 	fprintf(fp, fmt, "single_user", bool_str[conf->single_user]);
 	fprintf(fp, fmt, "install", bool_str[conf->install]);
-	fprintf(fp, fmt, "comport", conf->comport);
+	ARRAY_FOREACH(com, conf->com)
+		if (*com != NULL) {
+			snprintf(buf, sizeof(buf), "com%ld",
+				 CONF_COM_NUM(com, conf->com));
+			fprintf(fp, fmt, buf, *com);
+		}
 	fprintf(fp, fmt, "debug_port", conf->debug_port);
 	fprintf(fp, fmt, "boot", btype[conf->boot]);
 	fprintf(fp, dfmt, "boot_delay", conf->boot_delay);
@@ -1418,6 +1460,7 @@ compare_cpu_pin(const struct cpu_pin *a, const struct cpu_pin *b)
 int
 compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 {
+	unsigned int i;
 	int rc;
 
 	CMP_NUM(boot_delay);
@@ -1433,7 +1476,8 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(ncpu_threads);
 	CMP_STR(memory);
 	CMP_STR(name);
-	CMP_STR(comport);
+	for(i = 0; i < nitems(a->com); i++)
+		CMP_STR(com[i]);
 	CMP_NUM(boot);
 	CMP_STR(loader);
 	CMP_STR(loadcmd);

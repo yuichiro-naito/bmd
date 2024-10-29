@@ -54,7 +54,8 @@ usage(int argc __unused, char *argv[])
 	    "  shutdown <name>          : ACPI shutdown VM\n"
 	    "  poweroff <name>          : poweroff VM\n"
 	    "  reset <name>             : reset VM\n"
-	    "  console <name>           : connect to com port\n"
+	    "  console <name>           : connect to com1 port\n"
+	    "  com[1-4] <name>          : connect to com[1-4] port\n"
 	    "  showconsole <name>       : show console\n"
 	    "  showvgaport <name>       : show vgaport\n"
 	    "  showconfig [<name>]      : show VM config\n"
@@ -432,13 +433,14 @@ end:
  * attach console
  */
 static int
-do_console(const char *name)
+do_console(const char *name, const char *port)
 {
 	int fd, ret = 0;
 	nvlist_t *cmd, *res = NULL;
 
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command", "showconsole");
+	nvlist_add_string(cmd, "port", port ? port : "com1");
 	nvlist_add_string(cmd, "name", name);
 	nvlist_add_number(cmd, "sigtrigger_pid", getpid());
 	nvlist_add_number(cmd, "sigtrigger_num", SIGHUP);
@@ -513,7 +515,7 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 		printf("%s\n", cons ? cons : "no console");
 
 	if (console)
-		do_console(name);
+		do_console(name, NULL);
 
 	ret = 0;
 end:
@@ -647,11 +649,19 @@ end:
 }
 
 static int
+sub_com(int argc, char *argv[])
+{
+	if (argc < 2)
+		return 2;
+	return do_console(argv[1], argv[0]);
+}
+
+static int
 sub_console(int argc, char *argv[])
 {
 	if (argc < 2)
 		return 2;
-	return do_console(argv[1]);
+	return do_console(argv[1], NULL);
 }
 
 static int
@@ -746,6 +756,10 @@ static struct subcommand {
 	int (*func)(int, char *[]);
 } subcommand_table[] = {
 	{"boot", sub_boot_install},
+	{"com1", sub_com},
+	{"com2", sub_com},
+	{"com3", sub_com},
+	{"com4", sub_com},
 	{"console", sub_console},
 	{"inspect", sub_inspect},
 	{"install", sub_boot_install},
