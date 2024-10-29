@@ -480,13 +480,13 @@ end:
 static int
 do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
 {
-	int ret = 0;
+	int ret;
 	nvlist_t *cmd, *res = NULL;
 	const char *cons = NULL;
 	const static char *command[] = {"showconsole", "boot", "install"};
 
-	if (boot_style > sizeof(command)/sizeof(command[0]))
-		return -1;
+	if (boot_style > nitems(command))
+		return 1;
 
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command", command[boot_style]);
@@ -515,6 +515,7 @@ do_boot_console(const char *name, unsigned int boot_style, bool console, bool sh
 	if (console)
 		do_console(name);
 
+	ret = 0;
 end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
@@ -526,7 +527,7 @@ end:
 static int
 do_show_vgaport(const char *name)
 {
-	int ret = 0;
+	int ret;
 	nvlist_t *cmd, *res = NULL;
 	const char *vgaport = NULL;
 
@@ -549,7 +550,7 @@ do_show_vgaport(const char *name)
 		vgaport = nvlist_get_string(res, "vgaport");
 
 	printf("%s\n", vgaport);
-
+	ret = 0;
 end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
@@ -591,125 +592,42 @@ do_showconfig(const char *name)
 	return 0;
 }
 
-int
-control(int argc, char *argv[])
+static int
+sub_boot_install(int argc, char *argv[])
 {
-	int boot_style, ret = 0;
-	nvlist_t *cmd, *res = NULL;
+	char c, *name;
+	bool console = false;
+	int boot_style = strcmp(argv[0], "install") == 0 ? 2 : 1;
+
+	while ((c = getopt(argc, argv, "c")) != -1) {
+		switch (c) {
+		case 'c':
+			console = true;
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	if ((name = argv[optind]) == NULL)
+		return 2;
+	return do_boot_console(name, boot_style, console, false);
+}
+
+static int
+sub_send_recv(int argc, char *argv[])
+{
+	int ret;
+	nvlist_t *cmd, *res;
 
 	if (argc < 2)
-		return usage(argc, argv);
+		return 2;
 
-	if (argc > 2 && strcmp(argv[1], "-f") == 0) {
-		free(gl_conf->config_file);
-		gl_conf->config_file = strdup(argv[2]);
-		argv += 2;
-		argc += 2;
-	}
-
-	if (load_config_file(NULL, 1) < 0)
-		fprintf(stderr, "failed to load %s. use default value\n",
-			gl_conf->config_file);
-
-	if (strcmp(argv[1], "list") == 0) {
-		char c, *key = NULL;
-		unsigned int i;
-		bool r = false;
-		while ((c = getopt(argc - 1, argv + 1, "rs:")) != -1) {
-			switch (c) {
-			case 'r':
-				r = true;
-				break;
-			case 's':
-				key = optarg;
-				break;
-			default:
-				return usage(argc, argv);
-			}
-		}
-		if (key == NULL)
-			i = 0;
-		else {
-			for (i = 0; i < nitems(compar_list); i++)
-				if (strcmp(key, compar_list[i].name) == 0)
-					break;
-			if (i == nitems(compar_list))
-				i = 0;
-		}
-		return do_list(i, r);
-	}
-
-	if (strcmp(argv[1], "showconfig") == 0)
-		return do_showconfig(argv[2]);
-
-	if (strcmp(argv[1], "showvgaport") == 0)
-		return do_show_vgaport(argv[2]);
-
-	if (argc == 3) {
-		if (strcmp(argv[1], "inspect") == 0)
-			return do_inspect(argv[2]);
-		if (strcmp(argv[1], "console") == 0)
-			return do_console(argv[2]);
-		if (strcmp(argv[1], "showconsole") == 0)
-			return do_boot_console(argv[2], 0, false, true);
-	}
-
-	if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "start") == 0)
-		boot_style = 1;
-	else if (strcmp(argv[1], "install") == 0)
-		boot_style = 2;
-	else
-		boot_style = 0;
-
-	if (boot_style > 0) {
-		char c, *name;
-		bool console = false;
-		while ((c = getopt(argc - 1, argv + 1, "c")) != -1) {
-			switch (c) {
-			case 'c':
-				console = true;
-				break;
-			default:
-				return usage(argc, argv);
-			}
-		}
-		if ((name = argv[optind + 1]) == NULL)
-			return usage(argc, argv);
-		return do_boot_console(name, boot_style, console, false);
-	}
-
-	if (strcmp(argv[1], "run") == 0) {
-		char c, *name;
-		bool install, single;
-		install = single = false;
-		while ((c = getopt(argc - 1, argv + 1, "is")) != -1) {
-			switch (c) {
-			case 'i':
-				install = true;
-				break;
-			case 's':
-				single = true;
-				break;
-			default:
-				return usage(argc, argv);
-			}
-		}
-		if ((name = argv[optind + 1]) == NULL)
-			return usage(argc, argv);
-		return direct_run(name, install, single);
-	}
-
-	if (argc == 3 && (strcmp(argv[1], "reset") == 0 ||
-			  strcmp(argv[1], "poweroff") == 0 ||
-			  strcmp(argv[1], "stop") == 0 ||
-			  strcmp(argv[1], "shutdown") == 0)) {
-		cmd = nvlist_create(0);
-		nvlist_add_string(cmd, "command",
-				  strcmp(argv[1], "stop") == 0 ?
-				  "shutdown" : argv[1]);
-		nvlist_add_string(cmd, "name", argv[2]);
-	} else
-		return usage(argc, argv);
+	cmd = nvlist_create(0);
+	nvlist_add_string(cmd, "command",
+			  strcmp(argv[0], "stop") == 0 ?
+			  "shutdown" : argv[0]);
+	nvlist_add_string(cmd, "name", argv[1]);
 
 	if ((res = send_recv(cmd)) == NULL) {
 		ret = 1;
@@ -721,9 +639,170 @@ control(int argc, char *argv[])
 		printf("%s\n", nvlist_get_string(res, "reason"));
 		goto end;
 	}
-
+	ret = 0;
 end:
 	nvlist_destroy(cmd);
 	nvlist_destroy(res);
 	return ret;
+}
+
+static int
+sub_console(int argc, char *argv[])
+{
+	if (argc < 2)
+		return 2;
+	return do_console(argv[1]);
+}
+
+static int
+sub_showconsole(int argc, char *argv[])
+{
+	if (argc < 2)
+		return 2;
+	return do_boot_console(argv[1], 0, false, true);
+}
+
+static int
+sub_showvgaport(int argc, char *argv[])
+{
+	if (argc < 2)
+		return 2;
+	return do_show_vgaport(argv[1]);
+}
+
+static int
+sub_showconfig(int argc, char *argv[])
+{
+	if (argc < 2)
+		return 2;
+	return do_showconfig(argv[1]);
+}
+
+static int
+sub_inspect(int argc, char *argv[])
+{
+	if (argc < 2)
+		return 2;
+	return do_inspect(argv[1]);
+}
+
+static int
+sub_run(int argc, char *argv[])
+{
+	char c, *name;
+	bool install, single;
+	install = single = false;
+	while ((c = getopt(argc, argv, "is")) != -1) {
+		switch (c) {
+		case 'i':
+			install = true;
+			break;
+		case 's':
+			single = true;
+			break;
+		default:
+			return 2;
+		}
+	}
+	if ((name = argv[optind]) == NULL)
+		return 2;
+	return direct_run(name, install, single);
+}
+
+static int
+sub_list(int argc, char *argv[])
+{
+	char c, *key = NULL;
+	unsigned int i;
+	bool r = false;
+	while ((c = getopt(argc, argv, "rs:")) != -1) {
+		switch (c) {
+		case 'r':
+			r = true;
+			break;
+		case 's':
+			key = optarg;
+			break;
+		default:
+			return 2;
+		}
+	}
+	if (key == NULL)
+		i = 0;
+	else {
+		for (i = 0; i < nitems(compar_list); i++)
+			if (strcmp(key, compar_list[i].name) == 0)
+				break;
+		if (i == nitems(compar_list))
+			i = 0;
+	}
+	return do_list(i, r);
+
+}
+
+/* Must be sorted by name */
+static struct subcommand {
+	const char *name;
+	int (*func)(int, char *[]);
+} subcommand_table[] = {
+	{"boot", sub_boot_install},
+	{"console", sub_console},
+	{"inspect", sub_inspect},
+	{"install", sub_boot_install},
+	{"list", sub_list},
+	{"poweroff", sub_send_recv},
+	{"reset", sub_send_recv},
+	{"run", sub_run},
+	{"showconfig", sub_showconfig},
+	{"showconsole", sub_showconsole},
+	{"showvgaport", sub_showvgaport},
+	{"shutdown", sub_send_recv},
+	{"start", sub_boot_install},
+	{"stop", sub_send_recv},
+};
+
+static int
+compare_subcommand(const void *a, const void *b)
+{
+	const char *name = a;
+	const struct subcommand *sbc = b;
+	return strcasecmp(name, sbc->name);
+}
+
+int
+control(int argc, char *argv[])
+{
+	int oargc, rc;
+	char **oargv;
+	struct subcommand *sbc;
+
+	oargc = argc;
+	oargv = argv;
+
+	if (argc > 2 && strcmp(argv[1], "-f") == 0) {
+		free(gl_conf->config_file);
+		gl_conf->config_file = strdup(argv[2]);
+		argv += 2;
+		argc -= 2;
+	}
+
+	if (argc < 2)
+		return usage(oargc, oargv);
+
+	argv++;
+	argc--;
+
+	if (load_config_file(NULL, 1) < 0)
+		fprintf(stderr, "failed to load %s. use default value\n",
+			gl_conf->config_file);
+
+	sbc = bsearch(argv[0], subcommand_table, nitems(subcommand_table),
+		      sizeof(subcommand_table[0]), compare_subcommand);
+	if (sbc == NULL)
+		return usage(oargc, oargv);
+
+	rc = sbc->func(argc, argv);
+	if (rc == 2)
+		return usage(oargc, oargv);
+	return rc;
 }
