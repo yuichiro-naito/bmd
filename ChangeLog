@@ -1,3 +1,6 @@
+* 3.2
+	- Add support of 'swtpm' type in the 'tpm' parameter.
+	  (b8581474d3b053ea5a34331d7c7ee275e837fbf0)
 * 3.1
 	- Introduce 'bmdctl showconsole' subcommand and retire 'showcomport'.
           (4a246594a5d9b9d39d7d1995f47df3acadd32be3)
