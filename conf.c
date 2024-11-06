@@ -501,7 +501,7 @@ add_bhyveload_env(struct vm_conf *conf, const char *env)
 		return 0;
 
 	if (env == NULL ||
-	    (be = malloc(sizeof(struct bhyveload_env) + strlen(env) + 1)) == NULL)
+	    (be = malloc(sizeof(*be) + strlen(env) + 1)) == NULL)
 		return -1;
 	strcpy(be->env, env);
 
@@ -522,7 +522,7 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 		return 0;
 
 	if (env == NULL ||
-	    (be = malloc(sizeof(struct bhyve_env) + strlen(env) + 1)) == NULL)
+	    (be = malloc(sizeof(*be) + strlen(env) + 1)) == NULL)
 		return -1;
 	strcpy(be->env, env);
 
