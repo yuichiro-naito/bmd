@@ -411,7 +411,8 @@ Following subcommands are available.
 | shutdown<br>stop | VM name | ACPI shutdown VM |
 | poweroff | VM name | force to power off VM<br>***Warning: damage to disk image*** |
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
-| console | VM name | open the console device and emulate `cu -l` |
+| console | VM name | open the com1 device and emulate `cu -l` |
+| com[1-4] | VM name | open the com[1-4] device and emulate `cu -l` |
 | showconsole | VM name | show current console device to connect in |
 | showvgaport | VM name | show current vnc listen address and port number |
 | showconfig | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
