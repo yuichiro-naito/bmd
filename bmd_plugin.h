@@ -193,6 +193,8 @@ char *get_fbuf_password(struct vm_conf *);
 bool is_mouse(struct vm_conf *);
 bool is_wired_memory(struct vm_conf *);
 bool is_utctime(struct vm_conf *);
+bool is_virt_random(struct vm_conf *);
+bool is_x2apic(struct vm_conf *);
 char *get_keymap(struct vm_conf *);
 char *get_tpm_dev(struct vm_conf *);
 char *get_tpm_type(struct vm_conf *);

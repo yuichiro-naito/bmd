@@ -810,6 +810,18 @@ parse_install(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_virt_random(struct vm_conf *conf, char *val)
+{
+	return set_virt_random(conf, parse_boolean(val));
+}
+
+static int
+parse_x2apic(struct vm_conf *conf, char *val)
+{
+	return set_x2apic(conf, parse_boolean(val));
+}
+
+static int
 parse_graphics(struct vm_conf *conf, char *val)
 {
 	return set_fbuf_enable(conf->fbuf, parse_boolean(val));
@@ -938,7 +950,9 @@ static struct parser_entry parser_list[] = {
 	{ "stop_timeout", &parse_stop_timeout, NULL },
 	{ "tpm", &parse_tpm, NULL},
 	{ "utctime", &parse_utctime, NULL },
+	{ "virt_random", &parse_virt_random, NULL },
 	{ "wired_memory", &parse_wired_memory, NULL },
+	{ "x2apic", &parse_x2apic, NULL },
 	{ "xhci_mouse", &parse_xhci_mouse, NULL },
 };
 

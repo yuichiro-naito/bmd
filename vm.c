@@ -652,6 +652,8 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 #else
 		fprintf(fp, "/usr/sbin/bhyve\n-A\n-H\n-w\n");
 #endif
+		if (conf->x2apic == true)
+			fprintf(fp, "-x\n");
 		if (conf->utctime == true)
 			fprintf(fp, "-u\n");
 		if (conf->wired_memory == true)
@@ -704,6 +706,8 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		fprintf(fp, "-s\n1,lpc\n");
 
 		pcid = 2;
+		if (conf->virt_random)
+			fprintf(fp, "-s\n%d,virtio-rnd\n", pcid++);
 		STAILQ_FOREACH (dc, &conf->disks, next) {
 			fprintf(fp, "-s\n%d,%s,%s", pcid++, dc->type,
 				dc->path);

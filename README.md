@@ -195,7 +195,9 @@ Following keys are available.
 | stop_timeout | VM exit timeout in seconds<br>if expired, force to kill VM | no | 300 |
 | tpm | TPM device name | no | (none) |
 | utctime | "yes": RTC keeps UTC time<br>"no" : RTC keeps localtime | no | yes |
+| virt_random | "yes": add virtio_random device | no | no |
 | wired_memory | set "yes" to wire VM memory | no | no |
+| x2apic | "yes": enable x2APIC | no | no |
 | xhci_mouse | set "yes" to use xhci tablet | no | no |
 
 ### Global Configurations

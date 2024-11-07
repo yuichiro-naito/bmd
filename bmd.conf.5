@@ -369,11 +369,22 @@ for RTC to keep UTC time. Set
 for RTC to keep localtime.
 The default value is
 .Qq yes .
+.It Cm virt_random = Ar yes | no;
+Set
+.Qq yes
+to add a virtio random device. The default is
+.Qq no .
 .It Cm wired_memory = Ar yes | no;
 Set
 .Qq yes
 to wire VM memory. The default is
 .Qq no .
+.It Cm x2apic = Ar yes | no;
+Set
+.Qq yes
+to configure the guest local APIC in x2APIC mode. The default is
+.Qq no .
+This option is available on the amd64 platform.
 .It Cm xhci_mouse = Ar yes | no;
 Set
 .Qq yes

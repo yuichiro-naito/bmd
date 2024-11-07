@@ -188,6 +188,8 @@ struct vm_conf {
 	char *tpm_version;
 	STAILQ_HEAD(, sharefs_conf) sharefss;
 	int nsharefs;
+	bool virt_random;
+	bool x2apic;
 };
 
 struct vm {
@@ -274,6 +276,8 @@ int set_fbuf_password(struct fbuf *, const char *);
 int set_mouse(struct vm_conf *, bool);
 int set_wired_memory(struct vm_conf *, bool);
 int set_utctime(struct vm_conf *, bool);
+int set_virt_random(struct vm_conf *, bool);
+int set_x2apic(struct vm_conf *, bool);
 int set_keymap(struct vm_conf *, const char *);
 int set_tpm_dev(struct vm_conf *, const char *);
 int set_tpm_type(struct vm_conf *, const char *);

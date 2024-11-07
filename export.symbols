@@ -94,6 +94,8 @@ get_fbuf_password;
 is_mouse;
 is_wired_memory;
 is_utctime;
+is_virt_rnd;
+is_x2apic;
 get_keymap;
 get_tpm_dev;
 get_tpm_type;

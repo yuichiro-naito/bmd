@@ -664,6 +664,8 @@ generate_number_accessor(int, boot_delay)
 generate_bool_accessor(reboot_on_change)
 generate_bool_accessor(single_user)
 generate_bool_accessor(install)
+generate_bool_accessor(virt_random)
+generate_bool_accessor(x2apic)
 
 int
 set_fbuf_enable(struct fbuf *fb, bool enable)
@@ -1087,6 +1089,8 @@ vm_conf_export_env(struct vm_conf *conf)
 	VPUTBOOL(reboot_on_change);
 	VPUTBOOL(single_user);
 	VPUTBOOL(install);
+	VPUTBOOL(virt_random);
+	VPUTBOOL(x2apic);
 	ARRAY_FOREACH(com, vm->assigned_com)
 		if (*com != NULL)
 			vputenv(ENV_PREFIX "COM%ld=%s",
@@ -1214,6 +1218,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 			fprintf(fp, ", %d:%d", cp->vcpu, cp->hostcpu);
 		fprintf(fp, "\n");
 	}
+	fprintf(fp, fmt, "x2apic", bool_str[conf->x2apic]);
 	fprintf(fp, fmt, "memory", conf->memory);
 	fprintf(fp, fmt, "wired_memory", bool_str[conf->wired_memory]);
 	fprintf(fp, fmt, "utctime", bool_str[conf->utctime]);
@@ -1247,6 +1252,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, fmt, "installcmd", conf->installcmd);
 	fprintf(fp, fmt, "err_logfile", conf->err_logfile);
 	fprintf(fp, fmt, "hostbrigde", hostbridge_str[conf->hostbridge]);
+	fprintf(fp, fmt, "virt_random", bool_str[conf->virt_random]);
 
 	if (!STAILQ_EMPTY(&conf->passthrues)) {
 		fprintf(fp, "%18s =" , "passthru");
@@ -1500,6 +1506,8 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(ndisks);
 	CMP_NUM(nisoes);
 	CMP_NUM(nnets);
+	CMP_NUM(virt_random);
+	CMP_NUM(x2apic);
 
 	CMP_LIST(passthru_conf, passthrues);
 	CMP_LIST(disk_conf, disks);
