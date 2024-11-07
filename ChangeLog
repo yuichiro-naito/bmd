@@ -1,4 +1,7 @@
 * 3.2
+	- Add support of 'x2apic'.
+	- Add support of 'virt-random'.
+	  (1a415683e027e7a1d82ecf89067b4168d50b94f9)
 	- Add support of 'com[1-4]'.
 	  (51d452b3fde3b341e32188ab7400ebb0438ee6da)
 	- Add support of 'swtpm' type in the 'tpm' parameter.
