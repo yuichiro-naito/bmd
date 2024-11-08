@@ -244,14 +244,14 @@ free_fbuf(struct fbuf *f)
 	free(f);
 }
 
-generate_clear_list(passthru_conf, passthrues)
-generate_clear_list(disk_conf, disks)
-generate_clear_list(iso_conf, isoes)
-generate_clear_list(net_conf, nets)
-generate_clear_list(sharefs_conf, sharefss)
-generate_clear_list(bhyveload_env, bhyveload_envs)
-generate_clear_list(bhyve_env, bhyve_envs)
-generate_clear_list(cpu_pin, cpu_pins)
+generate_clear_list(passthru_conf, passthrues);
+generate_clear_list(disk_conf, disks);
+generate_clear_list(iso_conf, isoes);
+generate_clear_list(net_conf, nets);
+generate_clear_list(sharefs_conf, sharefss);
+generate_clear_list(bhyveload_env, bhyveload_envs);
+generate_clear_list(bhyve_env, bhyve_envs);
+generate_clear_list(cpu_pin, cpu_pins);
 
 static void
 free_var(struct conf_var *c)
@@ -337,8 +337,8 @@ err:
 	return -1;
 }
 
-generate_list_getter(passthru_conf, passthrues)
-generate_member_getter(char *, passthru_conf, devid)
+generate_list_getter(passthru_conf, passthrues);
+generate_member_getter(char *, passthru_conf, devid);
 
 int
 add_disk_conf(struct vm_conf *conf, const char *type, const char *path,
@@ -371,13 +371,13 @@ err:
 	return -1;
 }
 
-generate_list_getter(disk_conf, disks)
-generate_member_getter(char *, disk_conf, type)
-generate_member_getter(char *, disk_conf, path)
-generate_member_bool(disk_conf, nocache)
-generate_member_bool(disk_conf, direct)
-generate_member_bool(disk_conf, readonly)
-generate_member_bool(disk_conf, nodelete)
+generate_list_getter(disk_conf, disks);
+generate_member_getter(char *, disk_conf, type);
+generate_member_getter(char *, disk_conf, path);
+generate_member_bool(disk_conf, nocache);
+generate_member_bool(disk_conf, direct);
+generate_member_bool(disk_conf, readonly);
+generate_member_bool(disk_conf, nodelete);
 
 int
 add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -405,9 +405,9 @@ err:
 	return -1;
 }
 
-generate_list_getter(iso_conf, isoes)
-generate_member_getter(char *, iso_conf, type)
-generate_member_getter(char *, iso_conf, path)
+generate_list_getter(iso_conf, isoes);
+generate_member_getter(char *, iso_conf, type);
+generate_member_getter(char *, iso_conf, path);
 
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
@@ -454,13 +454,13 @@ err:
 	return -1;
 }
 
-generate_list_getter(net_conf, nets)
-generate_member_getter(char *, net_conf, type)
-generate_member_getter(char *, net_conf, bridge)
-generate_member_getter(char *, net_conf, mac)
-generate_member_getter(char *, net_conf, tap)
-generate_member_getter(char *, net_conf, vale)
-generate_member_getter(char *, net_conf, vale_port)
+generate_list_getter(net_conf, nets);
+generate_member_getter(char *, net_conf, type);
+generate_member_getter(char *, net_conf, bridge);
+generate_member_getter(char *, net_conf, mac);
+generate_member_getter(char *, net_conf, tap);
+generate_member_getter(char *, net_conf, vale);
+generate_member_getter(char *, net_conf, vale_port);
 
 int
 add_sharefs_conf(struct vm_conf *conf, const char *name, const char *path,
@@ -487,10 +487,10 @@ err:
 	return -1;
 }
 
-generate_list_getter(sharefs_conf, sharefss)
-generate_member_getter(char *, sharefs_conf, name)
-generate_member_getter(char *, sharefs_conf, path)
-generate_member_bool(sharefs_conf, readonly)
+generate_list_getter(sharefs_conf, sharefss);
+generate_member_getter(char *, sharefs_conf, name);
+generate_member_getter(char *, sharefs_conf, path);
+generate_member_bool(sharefs_conf, readonly);
 
 int
 add_bhyveload_env(struct vm_conf *conf, const char *env)
@@ -510,8 +510,8 @@ add_bhyveload_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-generate_list_getter(bhyveload_env, bhyveload_envs)
-generate_member_getter(char *, bhyveload_env, env)
+generate_list_getter(bhyveload_env, bhyveload_envs);
+generate_member_getter(char *, bhyveload_env, env);
 
 int
 add_bhyve_env(struct vm_conf *conf, const char *env)
@@ -531,8 +531,8 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 	return 0;
 }
 
-generate_list_getter(bhyve_env, bhyve_envs)
-generate_member_getter(char *, bhyve_env, env)
+generate_list_getter(bhyve_env, bhyve_envs);
+generate_member_getter(char *, bhyve_env, env);
 
 int
 add_cpu_pin(struct vm_conf *conf, int vcpu, int hostcpu)
@@ -552,9 +552,9 @@ add_cpu_pin(struct vm_conf *conf, int vcpu, int hostcpu)
 	return 0;
 }
 
-generate_list_getter(cpu_pin, cpu_pins)
-generate_member_getter(int, cpu_pin, vcpu)
-generate_member_getter(int, cpu_pin, hostcpu)
+generate_list_getter(cpu_pin, cpu_pins);
+generate_member_getter(int, cpu_pin, vcpu);
+generate_member_getter(int, cpu_pin, hostcpu);
 
 struct net_conf *
 copy_net_conf(const struct net_conf *nc)
@@ -610,18 +610,18 @@ set_string(char **var, const char *value)
 	return 0;
 }
 
-generate_getter(unsigned int, id)
-generate_string_accessor(name)
-generate_string_accessor(loadcmd)
-generate_string_accessor(installcmd)
-generate_string_accessor(err_logfile)
-generate_string_accessor(loader)
-generate_string_accessor(bhyveload_loader)
-generate_number_accessor(int, loader_timeout)
-generate_number_accessor(int, stop_timeout)
-generate_string_accessor(grub_run_partition)
-generate_string_accessor(debug_port)
-generate_string_accessor(memory)
+generate_getter(unsigned int, id);
+generate_string_accessor(name);
+generate_string_accessor(loadcmd);
+generate_string_accessor(installcmd);
+generate_string_accessor(err_logfile);
+generate_string_accessor(loader);
+generate_string_accessor(bhyveload_loader);
+generate_number_accessor(int, loader_timeout);
+generate_number_accessor(int, stop_timeout);
+generate_string_accessor(grub_run_partition);
+generate_string_accessor(debug_port);
+generate_string_accessor(memory);
 
 int
 set_ncpu(struct vm_conf *conf, int ncpu)
@@ -650,22 +650,22 @@ set_cpu_topology(struct vm_conf *conf, int ncpu[3])
 	return 0;
 }
 
-generate_getter(int, ncpu)
-generate_getter(int, ncpu_sockets)
-generate_getter(int, ncpu_cores)
-generate_getter(int, ncpu_threads)
-generate_number_accessor(uid_t, owner)
-generate_number_accessor(gid_t, group)
-generate_number_accessor(enum BOOT, boot)
-generate_number_accessor(enum HOSTBRIDGE_TYPE, hostbridge)
-generate_string_accessor(backend)
-generate_string_accessor(keymap)
-generate_number_accessor(int, boot_delay)
-generate_bool_accessor(reboot_on_change)
-generate_bool_accessor(single_user)
-generate_bool_accessor(install)
-generate_bool_accessor(virt_random)
-generate_bool_accessor(x2apic)
+generate_getter(int, ncpu);
+generate_getter(int, ncpu_sockets);
+generate_getter(int, ncpu_cores);
+generate_getter(int, ncpu_threads);
+generate_number_accessor(uid_t, owner);
+generate_number_accessor(gid_t, group);
+generate_number_accessor(enum BOOT, boot);
+generate_number_accessor(enum HOSTBRIDGE_TYPE, hostbridge);
+generate_string_accessor(backend);
+generate_string_accessor(keymap);
+generate_number_accessor(int, boot_delay);
+generate_bool_accessor(reboot_on_change);
+generate_bool_accessor(single_user);
+generate_bool_accessor(install);
+generate_bool_accessor(virt_random);
+generate_bool_accessor(x2apic);
 
 int
 set_fbuf_enable(struct fbuf *fb, bool enable)
@@ -792,18 +792,18 @@ get_fbuf_password(struct vm_conf *conf)
 	return conf->fbuf->password;
 }
 
-generate_bool_accessor(mouse)
-generate_bool_accessor(wired_memory)
-generate_bool_accessor(utctime)
-generate_string_accessor(tpm_dev)
-generate_string_accessor(tpm_type)
-generate_string_accessor(tpm_version)
+generate_bool_accessor(mouse);
+generate_bool_accessor(wired_memory);
+generate_bool_accessor(utctime);
+generate_string_accessor(tpm_dev);
+generate_string_accessor(tpm_type);
+generate_string_accessor(tpm_version);
 
-generate_vm_accessor(int, infd)
-generate_vm_accessor(int, outfd)
-generate_vm_accessor(int, errfd)
-generate_vm_accessor(int, logfd)
-generate_vm_accessor(enum STATE, state)
+generate_vm_accessor(int, infd);
+generate_vm_accessor(int, outfd);
+generate_vm_accessor(int, errfd);
+generate_vm_accessor(int, logfd);
+generate_vm_accessor(enum STATE, state);
 
 char *
 get_assigned_comport(struct vm *vm)
