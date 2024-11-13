@@ -34,24 +34,24 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include <ctype.h>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <ctype.h>
-#include <pwd.h>
 
 #include "bmd.h"
+#include "bmd_plugin.h"
 #include "log.h"
 #include "server.h"
 #include "vm.h"
-#include "bmd_plugin.h"
 
 /*
   List of VM configurations.
@@ -104,7 +104,7 @@ static int
 create_eventq(void)
 {
 #if __FreeBSD_version >= 1400088 || \
-	(__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+    (__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
 	if ((eventq = kqueue1(O_CLOEXEC)) < 0) {
 #else
 	if ((eventq = kqueue()) < 0) {
@@ -129,7 +129,7 @@ static int
 kevent_get(struct kevent *kev, int n, struct timespec *timeout)
 {
 	int rc;
-	while ((rc = kevent(eventq, NULL, 0 , kev, n, timeout)) < 0)
+	while ((rc = kevent(eventq, NULL, 0, kev, n, timeout)) < 0)
 		if (errno != EINTR)
 			return -1;
 	return rc;
@@ -141,8 +141,8 @@ vm_output(struct event *ev, void *data)
 	struct kevent *k = &ev->kev;
 	struct vm_entry *e = data;
 
-	return  ev->data == e && k->filter == EVFILT_READ && (
-		(int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e));
+	return ev->data == e && k->filter == EVFILT_READ &&
+	    ((int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e));
 }
 
 static bool
@@ -151,11 +151,11 @@ vm_output_and_timers(struct event *ev, void *data)
 	struct kevent *k = &ev->kev;
 	struct vm_entry *e = data;
 
-	return ev->data == e && (
-		k->filter == EVFILT_TIMER ||
+	return ev->data == e &&
+	    (k->filter == EVFILT_TIMER ||
 		(k->filter == EVFILT_READ &&
-		 ((int)k->ident == VM_OUTFD(e) || (int)k->ident == VM_ERRFD(e)))
-		);
+		    ((int)k->ident == VM_OUTFD(e) ||
+			(int)k->ident == VM_ERRFD(e))));
 }
 
 static bool
@@ -168,8 +168,8 @@ static bool
 vm_entry(struct event *ev, void *data)
 {
 	return (ev->data == data) &&
-		(ev->kev.filter == EVFILT_TIMER ||
-		 (ev->kev.flags & EV_ONESHOT) == 0);
+	    (ev->kev.filter == EVFILT_TIMER ||
+		(ev->kev.flags & EV_ONESHOT) == 0);
 }
 
 static void
@@ -179,7 +179,7 @@ stop_waiting_for(bool (*fn)(struct event *, void *), void *data)
 	struct event *ev, *evn;
 	struct kevent kev[5];
 
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
+	LIST_FOREACH_SAFE(ev, &event_list, next, evn) {
 		if (!fn(ev, data))
 			continue;
 		kev[i] = ev->kev;
@@ -200,7 +200,7 @@ stop_waiting_for(bool (*fn)(struct event *, void *), void *data)
 
 static int
 register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
-	       void *data)
+    void *data)
 {
 	struct event *ev;
 
@@ -222,7 +222,7 @@ register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 	return 0;
 }
 
-#define register_event(b, c, d) register_event0(EVENT, (b), (c), (d))
+#define register_event(b, c, d)	       register_event0(EVENT, (b), (c), (d))
 #define register_plugin_event(b, c, d) register_event0(PLUGIN, (b), (c), (d))
 
 int
@@ -270,7 +270,7 @@ count_plugin_process_events(void)
 	int n = 0;
 	struct event *ev;
 
-	LIST_FOREACH (ev, &event_list, next)
+	LIST_FOREACH(ev, &event_list, next)
 		if (ev->type == PLUGIN && ev->kev.filter == EVFILT_PROC)
 			n++;
 	return n;
@@ -281,8 +281,7 @@ plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 {
 	struct kevent kev;
 
-	EV_SET(&kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT,
-	       NOTE_EXIT, 0, NULL);
+	EV_SET(&kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
 
 	if (register_plugin_event(&kev, cb, data) < 0) {
 		ERR("failed to wait plugin process (%s)\n", strerror(errno));
@@ -296,8 +295,8 @@ plugin_set_timer(int second, plugin_call_back cb, void *data)
 {
 	struct kevent kev;
 
-	EV_SET(&kev, ++timer_id, EVFILT_TIMER,
-	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, NULL);
+	EV_SET(&kev, ++timer_id, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
+	    NOTE_SECONDS, second, NULL);
 
 	if (register_plugin_event(&kev, cb, data) < 0) {
 		ERR("failed to plugin set timer (%s)\n", strerror(errno));
@@ -311,10 +310,10 @@ lookup_plugin_data(PLUGIN_DESC *desc, struct vm_entry *vm_ent)
 {
 	struct plugin_data *pd;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (strcmp(pd->ent->desc.name, desc->name) == 0 &&
 		    (pd->ent->desc.prestart == desc->prestart ||
-		     pd->ent->desc.poststop == desc->poststop))
+			pd->ent->desc.poststop == desc->poststop))
 			break;
 	return pd;
 }
@@ -325,7 +324,7 @@ init_plugin_results(struct vm_entry *vm_ent)
 	unsigned int i;
 	struct plugin_data *pd;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		for (i = 0; i < nitems(pd->results); i++)
 			memset(&pd->results[i], 0, sizeof(pd->results[i]));
 }
@@ -335,12 +334,10 @@ print_prestart_error(struct vm_entry *vm_ent)
 {
 	struct plugin_data *pd;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
-		if (pd->results[0].called &&
-		    pd->prestart_result.state < 0)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
+		if (pd->results[0].called && pd->prestart_result.state < 0)
 			ERR("%s: plugin '%s' prevents from starting VM",
-			    VM_CONF(vm_ent)->name,
-			    pd->ent->desc_name);
+			    VM_CONF(vm_ent)->name, pd->ent->desc_name);
 }
 
 static int
@@ -349,7 +346,7 @@ get_plugin_state(struct vm_entry *vm_ent, unsigned int i)
 	int rc = 0;
 	struct plugin_data *pd;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->results[i].called) {
 			if (pd->prestart_result.state == 0)
 				continue;
@@ -377,7 +374,7 @@ int
 plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 {
 	int st;
-	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct vm_entry *vm_ent = (struct vm_entry *)v;
 	struct plugin_data *pd;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
@@ -399,7 +396,7 @@ plugin_start_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 int
 plugin_stop_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 {
-	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct vm_entry *vm_ent = (struct vm_entry *)v;
 	struct plugin_data *pd;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
@@ -495,8 +492,7 @@ recv_fd(int sock)
 		goto err;
 
 	cmsg = CMSG_FIRSTHDR(&msg);
-	if (cmsg->cmsg_level != SOL_SOCKET ||
-	    cmsg->cmsg_type != SCM_RIGHTS)
+	if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS)
 		goto err;
 
 	memcpy(&fd, CMSG_DATA(cmsg), sizeof(int));
@@ -506,7 +502,6 @@ recv_fd(int sock)
 err:
 	free(msg.msg_control);
 	return -1;
-
 }
 
 int
@@ -559,20 +554,20 @@ open_err_logfile(struct vm_conf *conf)
 		if (conf->owner > 0) {
 			if ((group = conf->group) == -1)
 				group = (pwd = getpwuid((uid_t)conf->owner)) ?
-					pwd->pw_gid : GID_NOBODY;
+				    pwd->pw_gid :
+				    GID_NOBODY;
 
 			setgid((gid_t)group);
 			setuid((uid_t)conf->owner);
 		}
 
-		while ((fd = open(conf->err_logfile,
-				  O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
-				  0644)) < 0)
+		while (
+		    (fd = open(conf->err_logfile,
+			 O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644)) < 0)
 			if (errno != EINTR)
 				break;
 
-		if (fd >= 0 &&
-		    (fstat(fd, &st) < 0 || (! S_ISREG(st.st_mode)))) {
+		if (fd >= 0 && (fstat(fd, &st) < 0 || (!S_ISREG(st.st_mode)))) {
 			close(fd);
 			fd = -1;
 		}
@@ -605,7 +600,7 @@ on_read_vm_output(int fd, void *data)
 	struct kevent *kev;
 
 	if (write_err_log(fd, VM_PTR(vm_ent)) == 0) {
-		LIST_FOREACH_SAFE (ev, &event_list, next, evn) {
+		LIST_FOREACH_SAFE(ev, &event_list, next, evn) {
 			kev = &ev->kev;
 			if (ev->data != vm_ent || (int)kev->ident != fd ||
 			    kev->filter != EVFILT_READ)
@@ -626,18 +621,18 @@ wait_for_vm_output(struct vm_entry *vm_ent)
 {
 	int i = 0;
 	struct kevent kev[2];
-	static event_call_back cb[2] = {on_read_vm_output, on_read_vm_output};
+	static event_call_back cb[2] = { on_read_vm_output, on_read_vm_output };
 	void *data[2];
 
 	if (VM_OUTFD(vm_ent) != -1) {
 		EV_SET(&kev[i], VM_OUTFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
-		       NULL);
+		    NULL);
 		data[i] = vm_ent;
 		i++;
 	}
 	if (VM_ERRFD(vm_ent) != -1) {
 		EV_SET(&kev[i], VM_ERRFD(vm_ent), EVFILT_READ, EV_ADD, 0, 0,
-		       NULL);
+		    NULL);
 		data[i] = vm_ent;
 		i++;
 	}
@@ -655,7 +650,7 @@ free_events(void)
 {
 	struct event *ev, *evn;
 
-	LIST_FOREACH_SAFE (ev, &event_list, next, evn)
+	LIST_FOREACH_SAFE(ev, &event_list, next, evn)
 		free(ev);
 	LIST_INIT(&event_list);
 }
@@ -696,8 +691,8 @@ set_timer(struct vm_entry *vm_ent, int second)
 {
 	struct kevent kev;
 
-	EV_SET(&kev, ++timer_id, EVFILT_TIMER,
-	       EV_ADD | EV_ONESHOT, NOTE_SECONDS, second, NULL);
+	EV_SET(&kev, ++timer_id, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
+	    NOTE_SECONDS, second, NULL);
 
 	if (register_event(&kev, on_timer, vm_ent) < 0) {
 		ERR("failed to set timer (%s)\n", strerror(errno));
@@ -714,7 +709,7 @@ reason_string(int status)
 
 	if (WIFSIGNALED(status))
 		sz = asprintf(&mes, " by signal %d%s", WTERMSIG(status),
-			      (WCOREDUMP(status) ? " coredump" : ""));
+		    (WCOREDUMP(status) ? " coredump" : ""));
 	else if (WIFSTOPPED(status))
 		sz = asprintf(&mes, " by signal %d", WSTOPSIG(status));
 	else
@@ -732,10 +727,10 @@ call_prestart_plugins(struct vm_entry *vm_ent)
 
 	VM_STATE(vm_ent) = PRESTART;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.prestart) {
 			rc = (pd->ent->desc.prestart)(VM_PTR(vm_ent),
-						      pd->pl_conf);
+			    pd->pl_conf);
 			pd->prestart_result.called = true;
 			pd->prestart_result.state = rc;
 			called = true;
@@ -761,10 +756,10 @@ call_poststop_plugins(struct vm_entry *vm_ent)
 
 	VM_STATE(vm_ent) = POSTSTOP;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.poststop) {
 			rc = (pd->ent->desc.poststop)(VM_PTR(vm_ent),
-						      pd->pl_conf);
+			    pd->pl_conf);
 			pd->poststop_result.called = true;
 			pd->poststop_result.state = rc;
 			called = true;
@@ -806,11 +801,10 @@ on_vm_exit(int ident __unused, void *data)
 		stop_virtual_machine(vm_ent);
 		break;
 	case RUN:
-		if (VM_CONF(vm_ent)->install == false &&
-		    WIFEXITED(status) &&
+		if (VM_CONF(vm_ent)->install == false && WIFEXITED(status) &&
 		    (VM_CONF(vm_ent)->boot == ALWAYS ||
-		     (strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
-		      WEXITSTATUS(status) == 0))) {
+			(strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
+			    WEXITSTATUS(status) == 0))) {
 			VM_STATE(vm_ent) = PRESTART;
 			boot_virtual_machine(vm_ent);
 			break;
@@ -819,7 +813,7 @@ on_vm_exit(int ident __unused, void *data)
 	case STOP:
 		rs = reason_string(status);
 		INFO("vm %s is stopped%s\n", VM_CONF(vm_ent)->name,
-		     (rs == NULL ? "" : rs));
+		    (rs == NULL ? "" : rs));
 		free(rs);
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
@@ -852,7 +846,7 @@ wait_for_vm(struct vm_entry *vm_ent)
 	struct kevent kev;
 
 	EV_SET(&kev, VM_PID(vm_ent), EVFILT_PROC, EV_ADD | EV_ONESHOT,
-	       NOTE_EXIT, 0, NULL);
+	    NOTE_EXIT, 0, NULL);
 
 	if (register_event(&kev, on_vm_exit, vm_ent) < 0) {
 		ERR("failed to wait process (%s)\n", strerror(errno));
@@ -866,10 +860,10 @@ int
 set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 {
 	int i = 0;
-	struct event *e, *ev[2] = {NULL, NULL};
+	struct event *e, *ev[2] = { NULL, NULL };
 	struct kevent kev[2];
 
-	LIST_FOREACH (e, &event_list, next) {
+	LIST_FOREACH(e, &event_list, next) {
 		if (e->data != sb)
 			continue;
 		switch (e->kev.filter) {
@@ -902,10 +896,10 @@ set_sock_buf_wait_flags(struct sock_buf *sb, short recv_f, short send_f)
 	}
 
 	if (ev[0])
-		ev[0]->kev.flags =  recv_f;
+		ev[0]->kev.flags = recv_f;
 
 	if (ev[1])
-		ev[1]->kev.flags =  send_f;
+		ev[1]->kev.flags = send_f;
 
 	return 0;
 }
@@ -940,7 +934,7 @@ on_send_sock_buf(int ident __unused, void *data)
 	switch (send_sock_buf(sb)) {
 	case 2:
 		clear_send_sock_buf(sb);
-		set_sock_buf_wait_flags(sb,  EV_ENABLE, EV_DISABLE);
+		set_sock_buf_wait_flags(sb, EV_ENABLE, EV_DISABLE);
 		/* FALLTHROUGH */
 	case 1:
 		break;
@@ -956,8 +950,8 @@ static int
 wait_for_sock_buf(struct sock_buf *sb)
 {
 	struct kevent kev[2];
-	static event_call_back cb[2] = {on_recv_sock_buf, on_send_sock_buf};
-	void *data[2] = {sb, sb};
+	static event_call_back cb[2] = { on_recv_sock_buf, on_send_sock_buf };
+	void *data[2] = { sb, sb };
 
 	EV_SET(&kev[0], sb->fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
 	EV_SET(&kev[1], sb->fd, EVFILT_WRITE, EV_ADD, EV_DISABLE, 0, NULL);
@@ -980,7 +974,7 @@ on_accept_cmd_sock(int ident __unused, void *data __unused)
 		return -1;
 
 	if ((sb = create_sock_buf(n)) == NULL) {
-		ERR("%s\n","failed to allocate socket buffer");
+		ERR("%s\n", "failed to allocate socket buffer");
 		close(n);
 		return -1;
 	}
@@ -1043,7 +1037,7 @@ dummy2(struct vm *vm __unused, nvlist_t *pl_ent __unused)
 	return;
 }
 
-#define set_default(o, m, f)   (o)->m = (o)->m ? (o)->m : (f)
+#define set_default(o, m, f) (o)->m = (o)->m ? (o)->m : (f)
 
 static struct plugin_entry *
 create_plugin_entry(struct plugin_desc *desc)
@@ -1247,7 +1241,7 @@ remove_plugins(void)
 {
 	struct plugin_entry *pl_ent, *pln;
 
-	SLIST_FOREACH_SAFE (pl_ent, &plugin_list, next, pln) {
+	SLIST_FOREACH_SAFE(pl_ent, &plugin_list, next, pln) {
 		if (pl_ent->desc.finalize)
 			(*pl_ent->desc.finalize)();
 		dlclose(pl_ent->handle);
@@ -1266,22 +1260,23 @@ call_plugins(struct vm_entry *vm_ent)
 	if (VM_PID(vm_ent) == -1)
 		return;
 
-	SLIST_FOREACH (pd, &VM_PLUGIN_DATA(vm_ent), next)
+	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->ent->desc.on_status_change)
 			(pd->ent->desc.on_status_change)(VM_PTR(vm_ent),
-							 pd->pl_conf);
+			    pd->pl_conf);
 }
 
 int
-call_plugin_parser(struct plugin_data_list *head,
-		   const char *key, const char *val)
+call_plugin_parser(struct plugin_data_list *head, const char *key,
+    const char *val)
 {
 	int rc;
 	struct plugin_data *pd;
 
-	SLIST_FOREACH (pd, head, next)
+	SLIST_FOREACH(pd, head, next)
 		if (pd->ent->desc.parse_config &&
-		    (rc = (pd->ent->desc.parse_config)(pd->pl_conf, key, val)) <= 0)
+		    (rc = (pd->ent->desc.parse_config)(pd->pl_conf, key,
+			 val)) <= 0)
 			return rc;
 	return 1;
 }
@@ -1293,14 +1288,14 @@ free_vm_entry(struct vm_entry *vm_ent)
 	struct net_conf *nc, *nnc;
 	struct signal_target *t, *nt;
 
-	STAILQ_FOREACH_SAFE (nc, VM_TAPS(vm_ent), next, nnc)
+	STAILQ_FOREACH_SAFE(nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
 	/*
 	  Basically no events are left on this timing.
 	  Delete & free them for safty.
 	*/
 	stop_waiting_for(vm_entry, vm_ent);
-	LIST_FOREACH_SAFE (t, &vm_ent->signal_targets, next, nt)
+	LIST_FOREACH_SAFE(t, &vm_ent->signal_targets, next, nt)
 		free(t);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_BOOTROM(vm_ent));
@@ -1317,7 +1312,7 @@ free_vm_list(void)
 {
 	struct vm_entry *vm_ent, *vmn;
 
-	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
+	SLIST_FOREACH_SAFE(vm_ent, &vm_list, next, vmn)
 		free_vm_entry(vm_ent);
 	SLIST_INIT(&vm_list);
 }
@@ -1327,7 +1322,7 @@ free_plugin_data(struct plugin_data_list *head)
 {
 	struct plugin_data *pld, *pln;
 
-	SLIST_FOREACH_SAFE (pld, head, next, pln) {
+	SLIST_FOREACH_SAFE(pld, head, next, pln) {
 		nvlist_destroy(pld->pl_conf);
 		free(pld);
 	}
@@ -1350,7 +1345,7 @@ create_plugin_data(struct plugin_data_list *head)
 	struct plugin_data *pld;
 
 	SLIST_INIT(head);
-	SLIST_FOREACH (pl_ent, &plugin_list, next) {
+	SLIST_FOREACH(pl_ent, &plugin_list, next) {
 		if ((pld = calloc(1, sizeof(*pld))) == NULL)
 			goto err;
 		pld->ent = pl_ent;
@@ -1375,7 +1370,7 @@ set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 	struct vm_method *m;
 	const char *backend = conf_ent->conf.backend;
 
-	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
+	SLIST_FOREACH(pd, &conf_ent->pl_data, next)
 		if ((m = pd->ent->desc.method) != NULL &&
 		    strcmp(m->name, backend) == 0) {
 			VM_METHOD(vm_ent) = m;
@@ -1398,7 +1393,7 @@ set_loader_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 		return 0;
 	}
 
-	SLIST_FOREACH (pd, &conf_ent->pl_data, next)
+	SLIST_FOREACH(pd, &conf_ent->pl_data, next)
 		if ((m = pd->ent->desc.loader_method) != NULL &&
 		    strcmp(m->name, loader) == 0) {
 			VM_LD_METHOD(vm_ent) = m;
@@ -1415,7 +1410,7 @@ vm_method_exists(char *name)
 	struct plugin_entry *pl_ent;
 	struct vm_method *m;
 
-	SLIST_FOREACH (pl_ent, &plugin_list, next)
+	SLIST_FOREACH(pl_ent, &plugin_list, next)
 		if ((m = pl_ent->desc.method) && strcmp(m->name, name) == 0)
 			return true;
 
@@ -1428,7 +1423,7 @@ loader_method_exists(char *name)
 	struct plugin_entry *pl_ent;
 	struct loader_method *m;
 
-	SLIST_FOREACH (pl_ent, &plugin_list, next)
+	SLIST_FOREACH(pl_ent, &plugin_list, next)
 		if ((m = pl_ent->desc.loader_method) &&
 		    strcmp(m->name, name) == 0)
 			return true;
@@ -1466,7 +1461,7 @@ static int
 nmdm_selector(const struct dirent *e)
 {
 	return (strncmp(e->d_name, "nmdm", 4) == 0 &&
-		e->d_name[e->d_namlen - 1] == 'B');
+	    e->d_name[e->d_namlen - 1] == 'B');
 }
 
 static int
@@ -1506,10 +1501,11 @@ assign_com(struct vm_entry *vm_ent, unsigned int cid)
 
 	/* If no need to assign comport, copy from `struct vm_conf.comport`. */
 	if (strcasecmp(conf->com[cid], "auto"))
-		return (VM_ASCOM(vm_ent)[cid] = strdup(conf->com[cid])) ? 0 : -1;
+		return (VM_ASCOM(vm_ent)[cid] = strdup(conf->com[cid])) ? 0 :
+									  -1;
 
 	/* Get maximum nmdm number of all VMs. */
-	SLIST_FOREACH (e, &vm_list, next) {
+	SLIST_FOREACH(e, &vm_list, next) {
 		ARRAY_FOREACH(com, VM_CONF(e)->com)
 			max = MAX(get_nmdm_number(*com), max);
 		ARRAY_FOREACH(com, VM_ASCOM(e))
@@ -1534,7 +1530,7 @@ assign_com(struct vm_entry *vm_ent, unsigned int cid)
 
 	/* Create nmdm device to reserve it. */
 	if (stat(new_com, &sb) < 0) {
-		ERR("failed to stat %s (%s)\n",  new_com, strerror(errno));
+		ERR("failed to stat %s (%s)\n", new_com, strerror(errno));
 		free(new_com);
 		return -1;
 	}
@@ -1554,7 +1550,7 @@ cleanup_virtual_machine(struct vm_entry *vm_ent)
 int
 plugin_cleanup_virtualmachine(PLUGIN_DESC *desc, struct vm *v)
 {
-	struct vm_entry *vm_ent = (struct vm_entry*)v;
+	struct vm_entry *vm_ent = (struct vm_entry *)v;
 	struct plugin_data *pd;
 
 	if ((pd = lookup_plugin_data(desc, vm_ent)) == NULL)
@@ -1585,15 +1581,12 @@ load_virtual_machine(struct vm_entry *vm_ent)
 		return -1;
 	}
 	if (rc == 0) {
-		if (wait_for_vm(vm_ent) < 0 ||
-		    wait_for_vm_output(vm_ent) < 0)
+		if (wait_for_vm(vm_ent) < 0 || wait_for_vm_output(vm_ent) < 0)
 			return -2;
 		call_plugins(vm_ent);
 		if (conf->loader_timeout > 0 &&
-		    set_timer(vm_ent,
-			      conf->loader_timeout) < 0) {
-			ERR("failed to set timer for vm %s\n",
-			    name);
+		    set_timer(vm_ent, conf->loader_timeout) < 0) {
+			ERR("failed to set timer for vm %s\n", name);
 			return -1;
 		}
 		return 0;
@@ -1669,8 +1662,7 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 			return -1;
 		}
 	}
-	if (VM_STATE(vm_ent) == TERMINATE ||
-	    VM_STATE(vm_ent) == PRESTART) {
+	if (VM_STATE(vm_ent) == TERMINATE || VM_STATE(vm_ent) == PRESTART) {
 		rc = load_virtual_machine(vm_ent);
 		if (rc <= -2)
 			goto force_kill;
@@ -1736,8 +1728,8 @@ start_virtual_machines(void)
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
 	struct kevent sigev[3];
-	static event_call_back cb[3] = {on_sigterm, on_sigterm, on_sighup};
-	static void *data[3] = {NULL, NULL, NULL};
+	static event_call_back cb[3] = { on_sigterm, on_sigterm, on_sighup };
+	static void *data[3] = { NULL, NULL, NULL };
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -1746,7 +1738,7 @@ start_virtual_machines(void)
 	if (register_events(sigev, cb, data, 3) < 0)
 		return -1;
 
-	LIST_FOREACH (conf_ent, &vm_conf_list, next) {
+	LIST_FOREACH(conf_ent, &vm_conf_list, next) {
 		if ((vm_ent = create_vm_entry(conf_ent)) == NULL)
 			return -1;
 		if (VM_CONF(vm_ent)->boot == NO)
@@ -1784,7 +1776,7 @@ lookup_vm_by_name(const char *name)
 {
 	struct vm_entry *vm_ent;
 
-	SLIST_FOREACH (vm_ent, &vm_list, next)
+	SLIST_FOREACH(vm_ent, &vm_list, next)
 		if (strcmp(VM_CONF(vm_ent)->name, name) == 0)
 			return vm_ent;
 	return NULL;
@@ -1800,7 +1792,7 @@ copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 	     da = SLIST_NEXT(da, next), db = SLIST_NEXT(db, next))
 		if (da->ent->desc.on_reload_config)
 			da->ent->desc.on_reload_config(da->pl_conf,
-						       db->pl_conf);
+			    db->pl_conf);
 }
 
 static int
@@ -1815,10 +1807,10 @@ reload_virtual_machines(void)
 		return -1;
 
 	/* make sure tmp_conf_ent is NULL */
-	SLIST_FOREACH (vm_ent, &vm_list, next)
+	SLIST_FOREACH(vm_ent, &vm_list, next)
 		VM_TMPCONF(vm_ent) = NULL;
 
-	LIST_FOREACH (conf_ent, &new_list, next) {
+	LIST_FOREACH(conf_ent, &new_list, next) {
 		conf = &conf_ent->conf;
 		vm_ent = lookup_vm_by_name(conf->name);
 		if (vm_ent == NULL) {
@@ -1890,7 +1882,7 @@ reload_virtual_machines(void)
 		}
 	}
 
-	SLIST_FOREACH_SAFE (vm_ent, &vm_list, next, vmn)
+	SLIST_FOREACH_SAFE(vm_ent, &vm_list, next, vmn)
 		if (VM_TMPCONF(vm_ent) == NULL) {
 			switch (VM_STATE(vm_ent)) {
 			case LOAD:
@@ -1911,8 +1903,7 @@ reload_virtual_machines(void)
 				LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 				break;
 			default:
-				SLIST_REMOVE(&vm_list, vm_ent, vm_entry,
-					     next);
+				SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
 				LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 				free_vm_entry(vm_ent);
 			}
@@ -1977,7 +1968,7 @@ stop_virtual_machines(void)
 	struct vm_entry *vm_ent;
 	int do_remove, count = 0;
 
-	SLIST_FOREACH (vm_ent, &vm_list, next) {
+	SLIST_FOREACH(vm_ent, &vm_list, next) {
 		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 			count++;
 			VM_ACPI_POWEROFF(vm_ent);
@@ -2037,7 +2028,7 @@ parse_opt(int argc, char *argv[])
 			break;
 		case 'v':
 			printf("BMD (Bhyve Management Daemon) version %s\n",
-			       BMD_VERSION);
+			    BMD_VERSION);
 			exit(0);
 		default:
 			fprintf(stderr,
@@ -2072,14 +2063,16 @@ main(int argc, char *argv[])
 	sigset_t nmask, omask;
 
 	if (init_gl_conf() < 0) {
-		fprintf(stderr, "failed to allocate memory "
-			"for global configuration\n");
+		fprintf(stderr,
+		    "failed to allocate memory "
+		    "for global configuration\n");
 		return 1;
 	}
 
 	if (init_global_vars() < 0) {
-		fprintf(stderr,	"failed to allocate memory "
-			"for global variables\n");
+		fprintf(stderr,
+		    "failed to allocate memory "
+		    "for global variables\n");
 		free_gl_conf();
 		return 1;
 	}
@@ -2107,8 +2100,7 @@ main(int argc, char *argv[])
 	    0)
 		WARN("%s\n", "cannot protect from OOM killer");
 
-	if (load_config_file(&vm_conf_list, true) < 0 ||
-	    create_eventq() < 0)
+	if (load_config_file(&vm_conf_list, true) < 0 || create_eventq() < 0)
 		return 1;
 
 	if ((cmd_sock = create_command_server(gl_conf)) < 0) {
@@ -2124,8 +2116,7 @@ main(int argc, char *argv[])
 
 	INFO("%s\n", "start daemon");
 
-	if (start_virtual_machines() < 0 ||
-	    wait_for_cmd_sock(cmd_sock) < 0)
+	if (start_virtual_machines() < 0 || wait_for_cmd_sock(cmd_sock) < 0)
 		ERR("%s\n", "failed to start virtual machines");
 	else
 		event_loop();
@@ -2154,8 +2145,8 @@ direct_run(const char *name, bool install, bool single)
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
 	struct kevent sigev[3];
-	static event_call_back cb[3] = {on_sigterm, on_sigterm, on_sighup};
-	static void *data[3] = {NULL, NULL, NULL};
+	static event_call_back cb[3] = { on_sigterm, on_sigterm, on_sighup };
+	static void *data[3] = { NULL, NULL, NULL };
 	LOG_OPEN_PERROR();
 
 	direct_run_mode = true;
@@ -2236,7 +2227,7 @@ static void
 trigger_signal(struct vm_entry *vm_ent)
 {
 	struct signal_target *t;
-	LIST_FOREACH (t, VM_SIGTARGETS(vm_ent), next)
+	LIST_FOREACH(t, VM_SIGTARGETS(vm_ent), next)
 		kill(t->target_pid, t->signal_number);
 }
 
@@ -2247,7 +2238,7 @@ on_signal_target_exit(int ident, void *data)
 	struct vm_entry *vm_ent = data;
 
 	/* Look for a signal target and remove it */
-	LIST_FOREACH (t, VM_SIGTARGETS(vm_ent), next)
+	LIST_FOREACH(t, VM_SIGTARGETS(vm_ent), next)
 		if (t->target_pid == ident) {
 			LIST_REMOVE(t, next);
 			free(t);
@@ -2268,8 +2259,8 @@ register_signal_target(struct vm_entry *vm_ent, pid_t tpid, int signum)
 	t->target_pid = tpid;
 	t->signal_number = signum;
 
-	EV_SET(&kev, tpid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT,
-	       0, NULL);
+	EV_SET(&kev, tpid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0,
+	    NULL);
 	/*
 	  Register 'vm_ent' for user data.
 	  If the event lives for a long time, it will be removed by

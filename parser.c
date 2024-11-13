@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/wait.h>
+
 #include <net/ethernet.h>
 
 #include <ctype.h>
@@ -37,10 +38,10 @@
 #include <grp.h>
 #include <libgen.h>
 #include <pwd.h>
+#include <regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <regex.h>
 
 #include "bmd.h"
 #include "conf.h"
@@ -54,23 +55,20 @@ struct conf_pattern {
 	regex_t reg;
 };
 
-static struct conf_pattern net_patterns[] = {
-	{ "virtio-net", false, {0} },
-	{ "e1000", false, {0} },
-	{ "\\[([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}\\]", false, {0}}
-};
+static struct conf_pattern net_patterns[] = { { "virtio-net", false, { 0 } },
+	{ "e1000", false, { 0 } },
+	{ "\\[([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}\\]", false, { 0 } } };
 
 struct parser_context *pctxt, *pctxt_snapshot;
 static struct cfsection *lookup_template(const char *name);
 static int vm_conf_set_params(struct vm_conf *conf, struct cfsection *vm);
 static struct mpools mpools;
 
-
 void
 free_parser_objects(void)
 {
 	static struct conf_pattern *q;
-	ARRAY_FOREACH (q, net_patterns)
+	ARRAY_FOREACH(q, net_patterns)
 		if (q->created)
 			regfree(&q->reg);
 }
@@ -103,7 +101,7 @@ static void
 mpool_destroy(void)
 {
 	struct mpool *m, *mn;
-	STAILQ_FOREACH_SAFE (m, &mpools, next, mn)
+	STAILQ_FOREACH_SAFE(m, &mpools, next, mn)
 		munmap(m, (uintptr_t)m->end - (uintptr_t)m);
 	STAILQ_INIT(&mpools);
 }
@@ -112,7 +110,7 @@ static void
 mpool_snapshot(void)
 {
 	struct mpool *m;
-	STAILQ_FOREACH (m, &mpools, next) {
+	STAILQ_FOREACH(m, &mpools, next) {
 		m->last_used = m->used;
 		m->error_number = MPERR_NONE;
 	}
@@ -123,7 +121,7 @@ mpool_rollback(void)
 {
 	struct mpool *m;
 
-	STAILQ_FOREACH (m, &mpools, next)
+	STAILQ_FOREACH(m, &mpools, next)
 		m->used = m->last_used;
 }
 
@@ -133,7 +131,7 @@ mpool_get_error(void)
 	enum mpool_error e = MPERR_NONE;
 	struct mpool *m;
 
-	STAILQ_FOREACH (m, &mpools, next)
+	STAILQ_FOREACH(m, &mpools, next)
 		if (e < m->error_number)
 			e = m->error_number;
 	return e;
@@ -153,7 +151,7 @@ mpool_alloc(size_t sz)
 		return NULL;
 	}
 
-	STAILQ_FOREACH (m, &mpools, next)
+	STAILQ_FOREACH(m, &mpools, next)
 		if ((uintptr_t)m->used + sz <= (uintptr_t)m->end)
 			break;
 
@@ -225,9 +223,10 @@ parse_apply(struct vm_conf *conf, struct cftarget *gt)
 	RB_INIT(args);
 
 	arg = STAILQ_FIRST(&gt->args);
-	STAILQ_FOREACH (def, &tp->argdefs, next) {
+	STAILQ_FOREACH(def, &tp->argdefs, next) {
 		argval = token_to_string(&conf->vars,
-		 (arg && STAILQ_FIRST(&arg->tokens)) ? &arg->tokens : &def->tokens);
+		    (arg && STAILQ_FIRST(&arg->tokens)) ? &arg->tokens :
+							  &def->tokens);
 		if (set_var0(args, def->name, argval ? argval : "") < 0)
 			ERR("failed to set \"%s\" argument! (%s)\n", def->name,
 			    strerror(errno));
@@ -257,7 +256,7 @@ static int
 parse_ncpu(struct vm_conf *conf, char *val)
 {
 	unsigned int i;
-	int ncpu[3] = {1, 1, 1};
+	int ncpu[3] = { 1, 1, 1 };
 	long n;
 	char *p;
 
@@ -327,8 +326,10 @@ parse_disk(struct vm_conf *conf, char *val)
 	unsigned int i, t = 2;
 	size_t n;
 	char *q, *s, *op = val;
-	static const char *const types[] = { "ahci","ahci-hd", "virtio-blk", "nvme" };
-	static const char *const flags[] = { "nocache","direct", "readonly", "nodelete" };
+	static const char *const types[] = { "ahci", "ahci-hd", "virtio-blk",
+		"nvme" };
+	static const char *const flags[] = { "nocache", "direct", "readonly",
+		"nodelete" };
 	bool f[nitems(flags)];
 
 	if ((s = strchr(val, '/')) == NULL)
@@ -347,7 +348,7 @@ parse_disk(struct vm_conf *conf, char *val)
 	}
 
 	memset(f, 0, sizeof(f));
-	for(i = 0; i < nitems(flags); i++) {
+	for (i = 0; i < nitems(flags); i++) {
 		if ((q = strstr(val, flags[i])) == NULL || q > s)
 			continue;
 		n = strlen(flags[i]);
@@ -367,10 +368,11 @@ parse_sharefs(struct vm_conf *conf, char *val)
 	int rc = -1;
 	bool readonly;
 	char *p, *c, *s;
-	static const char *ro ="readonly:";
+	static const char *ro = "readonly:";
 
 	p = (readonly = (strncmp(val, ro, strlen(ro)) == 0)) ?
-		&val[strlen(ro)] : val;
+	    &val[strlen(ro)] :
+	    val;
 	if ((s = strdup(p)) == NULL || (c = strchr(s, '=')) == NULL)
 		goto err;
 	*c++ = '\0';
@@ -388,7 +390,7 @@ parse_iso(struct vm_conf *conf, char *val)
 	const char *const *p;
 	static const char *const types[] = { "ahci-cd" };
 
-	ARRAY_FOREACH (p, types) {
+	ARRAY_FOREACH(p, types) {
 		n = strlen(*p);
 		if (strncmp(val, *p, n) == 0 && val[n] == ':')
 			return add_iso_conf(conf, *p, &val[n + 1]);
@@ -403,11 +405,11 @@ parse_net(struct vm_conf *conf, char *val)
 	int i, rc;
 	regoff_t ep = 0;
 	struct ether_addr *ea;
-	char *p, *type = NULL, etheraddr[ETHER_FORMAT_LEN + 1] = {0};
+	char *p, *type = NULL, etheraddr[ETHER_FORMAT_LEN + 1] = { 0 };
 	regmatch_t matched;
 	static struct conf_pattern *q;
 
-	ARRAY_FOREACH (q, net_patterns) {
+	ARRAY_FOREACH(q, net_patterns) {
 		if (q->created)
 			continue;
 		if (regcomp(&q->reg, q->pattern, REG_EXTENDED) != 0) {
@@ -442,8 +444,8 @@ parse_net(struct vm_conf *conf, char *val)
 			free(type);
 			return -1;
 		}
-		if ((ea->octet[0] | ea->octet[1] | ea->octet[2] |
-		     ea->octet[3] | ea->octet[4] | ea->octet[5]) == 0) {
+		if ((ea->octet[0] | ea->octet[1] | ea->octet[2] | ea->octet[3] |
+			ea->octet[4] | ea->octet[5]) == 0) {
 			ERR("invalid MAC address: %s\n", etheraddr);
 			free(type);
 			return -1;
@@ -642,11 +644,10 @@ static bool
 is_version(const char *p)
 {
 	for (; *p != '\0'; p++)
-		if ((! isnumber(*p)) && (*p != '.'))
+		if ((!isnumber(*p)) && (*p != '.'))
 			return false;
 	return true;
 }
-
 
 static int
 parse_tpm(struct vm_conf *conf, char *val)
@@ -665,13 +666,13 @@ parse_tpm(struct vm_conf *conf, char *val)
 	}
 	tpm[i] = p;
 
-	switch(i) {
+	switch (i) {
 	case 2:
 		/* type must be "passthru" */
 		if (strcmp(tpm[0], "passthru") != 0 &&
 		    strcmp(tpm[0], "swtpm") != 0)
 			goto err;
-		if (! is_version(tpm[2]))
+		if (!is_version(tpm[2]))
 			goto err;
 		set_tpm_version(conf, tpm[2]);
 		set_tpm_dev(conf, tpm[1]);
@@ -709,10 +710,10 @@ parse_boot(struct vm_conf *conf, char *val)
 {
 	const char *const *p;
 	static const char *const values[] = { "yes", "true", "oneshot",
-	    "always" };
+		"always" };
 	static enum BOOT const r[] = { YES, YES, ONESHOT, ALWAYS, NO };
 
-	ARRAY_FOREACH (p, values)
+	ARRAY_FOREACH(p, values)
 		if (strcasecmp(val, *p) == 0)
 			break;
 
@@ -724,10 +725,10 @@ parse_hostbridge(struct vm_conf *conf, char *val)
 {
 	const char *const *p;
 	static const char *const values[] = { "none", "standard", "intel",
-	    "amd" };
+		"amd" };
 	static enum HOSTBRIDGE_TYPE const t[] = { NONE, INTEL, INTEL, AMD };
 
-	ARRAY_FOREACH (p, values)
+	ARRAY_FOREACH(p, values)
 		if (strcasecmp(val, *p) == 0)
 			break;
 
@@ -793,8 +794,8 @@ parse_com4(struct vm_conf *conf, char *val)
 static bool
 parse_boolean(const char *value)
 {
-	return (strcasecmp(value, "yes") == 0 ||
-		strcasecmp(value, "true") == 0);
+	return (
+	    strcasecmp(value, "yes") == 0 || strcasecmp(value, "true") == 0);
 }
 
 static int
@@ -948,7 +949,7 @@ static struct parser_entry parser_list[] = {
 	{ "reboot_on_change", &parse_reboot_on_change, NULL },
 	{ "sharefs", &parse_sharefs, &clear_sharefs_conf },
 	{ "stop_timeout", &parse_stop_timeout, NULL },
-	{ "tpm", &parse_tpm, NULL},
+	{ "tpm", &parse_tpm, NULL },
 	{ "utctime", &parse_utctime, NULL },
 	{ "virt_random", &parse_virt_random, NULL },
 	{ "wired_memory", &parse_wired_memory, NULL },
@@ -971,12 +972,12 @@ check_disks(struct vm_conf *conf)
 	struct disk_conf *dc;
 	struct stat st;
 
-	STAILQ_FOREACH (dc, &conf->disks, next) {
+	STAILQ_FOREACH(dc, &conf->disks, next) {
 		if (stat(dc->path, &st) < 0) {
 			ERR("%s: %s is not found\n", name, dc->path);
 			return -1;
 		}
-		if (! S_ISREG(st.st_mode) && ! S_ISCHR(st.st_mode)) {
+		if (!S_ISREG(st.st_mode) && !S_ISCHR(st.st_mode)) {
 			ERR("%s: %s is not a file nor block device\n", name,
 			    dc->path);
 			return -1;
@@ -1015,9 +1016,8 @@ check_conf(struct vm_conf *conf)
 	 * hw.vmm.maxcpu will be shown after vmm.ko is loaded.
 	 * If hw.vmm.maxcpu is not available, this check will be skipped.
 	 */
-	if (sysctlbyname("hw.vmm.maxcpu",
-			 &vmm_maxcpu, &(size_t[]){sizeof(vmm_maxcpu)}[0],
-			 NULL, 0) >= 0) {
+	if (sysctlbyname("hw.vmm.maxcpu", &vmm_maxcpu,
+		&(size_t[]) { sizeof(vmm_maxcpu) }[0], NULL, 0) >= 0) {
 		if (vmm_maxcpu < conf->ncpu) {
 			ERR("%s: ncpu %d must be equal or smaller"
 			    " than hw.vmm.maxncpu %d\n",
@@ -1026,13 +1026,13 @@ check_conf(struct vm_conf *conf)
 		}
 	}
 
-	if (sysctlbyname("hw.ncpu", &hw_ncpu, &(size_t[]){sizeof(hw_ncpu)}[0],
-			 NULL, 0) < 0) {
+	if (sysctlbyname("hw.ncpu", &hw_ncpu,
+		&(size_t[]) { sizeof(hw_ncpu) }[0], NULL, 0) < 0) {
 		ERR("%s: failed to sysctl hw.ncpu\n", name);
 		return -1;
 	}
 
-	STAILQ_FOREACH (cp, &conf->cpu_pins, next) {
+	STAILQ_FOREACH(cp, &conf->cpu_pins, next) {
 		if (conf->ncpu <= cp->vcpu) {
 			ERR("%s: cpu_pin: "
 			    "vcpu %d must be equal or smaller than ncpu %d\n",
@@ -1055,7 +1055,7 @@ lookup_template(const char *name)
 {
 	struct cfsection *tp;
 
-	STAILQ_FOREACH (tp, &pctxt->cftemplates, next)
+	STAILQ_FOREACH(tp, &pctxt->cftemplates, next)
 		if (strcmp(tp->name, name) == 0)
 			return tp;
 	return NULL;
@@ -1146,7 +1146,7 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 	if ((fp = open_memstream(&str, &len)) == NULL)
 		return NULL;
 
-	STAILQ_FOREACH (tk, tokens, next) {
+	STAILQ_FOREACH(tk, tokens, next) {
 		switch (tk->type) {
 		case CF_STR:
 			fwrite(tk->s, 1, tk->len, fp);
@@ -1193,7 +1193,7 @@ apply_global_vars(struct cfsection *sc)
 	vars.local = NULL;
 	vars.args = NULL;
 
-	STAILQ_FOREACH (pr, &sc->params, next)
+	STAILQ_FOREACH(pr, &sc->params, next)
 		if (pr->key->type == CF_VAR) {
 			vl = STAILQ_FIRST(&pr->vals);
 			val = token_to_string(&vars, &vl->tokens);
@@ -1217,7 +1217,7 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 	struct cfvalue *vl;
 	char *key, *val, **t, *p, *nmdm_offset_s = NULL;
 
-	STAILQ_FOREACH (pr, &sc->params, next) {
+	STAILQ_FOREACH(pr, &sc->params, next) {
 		key = pr->key->s;
 		if (pr->key->type == CF_VAR) {
 			vl = STAILQ_FIRST(&pr->vals);
@@ -1264,7 +1264,7 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 			goto unknown;
 		}
 
-		STAILQ_FOREACH (vl, &pr->vals, next) {
+		STAILQ_FOREACH(vl, &pr->vals, next) {
 			val = token_to_string(vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -1301,7 +1301,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 	char *key, *val;
 	int rc;
 
-	STAILQ_FOREACH (pr, &sc->params, next) {
+	STAILQ_FOREACH(pr, &sc->params, next) {
 		key = pr->key->s;
 		if (pr->key->type == CF_VAR) {
 			vl = STAILQ_FIRST(&pr->vals);
@@ -1315,7 +1315,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 			continue;
 		}
 		if (strcasecmp(key, ".apply") == 0) {
-			STAILQ_FOREACH (gt, &pr->targets, next)
+			STAILQ_FOREACH(gt, &pr->targets, next)
 				parse_apply(conf, gt);
 			continue;
 		}
@@ -1323,7 +1323,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 		    sizeof(parser_list[0]), compare_parser_entry);
 		if (parser && parser->clear != NULL && pr->operator== 0)
 			(*parser->clear)(conf);
-		STAILQ_FOREACH (vl, &pr->vals, next) {
+		STAILQ_FOREACH(vl, &pr->vals, next) {
 			val = token_to_string(&conf->vars, &vl->tokens);
 			if (val == NULL)
 				continue;
@@ -1384,7 +1384,7 @@ free_cftokens(struct cftokens *ts)
 	struct cftoken *tk, *tn;
 	if (ts == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (tk, ts, next, tn)
+	STAILQ_FOREACH_SAFE(tk, ts, next, tn)
 		free_cftoken(tk);
 }
 
@@ -1404,7 +1404,7 @@ free_cftargets(struct cftargets *gs)
 	struct cftarget *vl, *vn;
 	if (gs == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (vl, gs, next, vn)
+	STAILQ_FOREACH_SAFE(vl, gs, next, vn)
 		free_cftarget(vl);
 }
 
@@ -1423,7 +1423,7 @@ free_cfvalues(struct cfvalues *vs)
 	struct cfvalue *vl, *vn;
 	if (vs == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (vl, vs, next, vn)
+	STAILQ_FOREACH_SAFE(vl, vs, next, vn)
 		free_cfvalue(vl);
 }
 
@@ -1444,7 +1444,7 @@ free_cfparams(struct cfparams *ps)
 	struct cfparam *pr, *pn;
 	if (ps == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (pr, ps, next, pn)
+	STAILQ_FOREACH_SAFE(pr, ps, next, pn)
 		free_cfparam(pr);
 }
 
@@ -1466,7 +1466,7 @@ free_cfsections(struct cfsections *ss)
 
 	if (ss == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (sc, ss, next, sn)
+	STAILQ_FOREACH_SAFE(sc, ss, next, sn)
 		free_cfsection(sc);
 }
 
@@ -1485,7 +1485,7 @@ free_cfargs(struct cfargs *as)
 	struct cfarg *ag, *an;
 	if (as == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (ag, as, next, an)
+	STAILQ_FOREACH_SAFE(ag, as, next, an)
 		free_cfarg(ag);
 }
 
@@ -1505,7 +1505,7 @@ free_cfargdefs(struct cfargdefs *ds)
 	struct cfargdef *ad, *an;
 	if (ds == NULL)
 		return;
-	STAILQ_FOREACH_SAFE (ad, ds, next, an)
+	STAILQ_FOREACH_SAFE(ad, ds, next, an)
 		free_cfargdef(ad);
 }
 
@@ -1523,13 +1523,14 @@ push_file(char *fn)
 		goto err;
 	}
 
-	STAILQ_FOREACH (file, &pctxt->cffiles, next)
+	STAILQ_FOREACH(file, &pctxt->cffiles, next)
 		if (strcmp(file->filename, path) == 0) {
 			ERR("%s is already included\n", path);
 			goto err;
 		}
 
-	/* No need to free 'rpath' and 'opath' , because it's allocated from mpool.  */
+	/* No need to free 'rpath' and 'opath' , because it's allocated from
+	 * mpool.  */
 	rpath = mpool_strdup(path);
 	free(path);
 	file = objalloc(cffile);
@@ -1618,7 +1619,7 @@ clear_applied(void)
 {
 	struct cfsection *sc;
 
-	STAILQ_FOREACH (sc, &pctxt->cftemplates, next)
+	STAILQ_FOREACH(sc, &pctxt->cftemplates, next)
 		sc->applied = 0;
 }
 
@@ -1627,7 +1628,7 @@ check_duplicate(void)
 {
 	struct cfsection *sc;
 
-	STAILQ_FOREACH (sc, &pctxt->cftemplates, next)
+	STAILQ_FOREACH(sc, &pctxt->cftemplates, next)
 		if (sc->duplicate)
 			return -1;
 	return 0;
@@ -1641,31 +1642,24 @@ compare_fstat(int fd, struct stat *old)
 	if (fstat(fd, &st) < 0)
 		return false;
 
-#define CMP_FIELD(field)  (st.field == old->field)
-#define CMP_TIME(field)  (memcmp(&st.field, &old->field, sizeof(struct timespec)) == 0)
+#define CMP_FIELD(field) (st.field == old->field)
+#define CMP_TIME(field) \
+	(memcmp(&st.field, &old->field, sizeof(struct timespec)) == 0)
 
-	return (CMP_FIELD(st_dev) &&
-		CMP_FIELD(st_ino) &&
-		CMP_FIELD(st_dev) &&
-		CMP_FIELD(st_nlink) &&
-		CMP_FIELD(st_flags) &&
-		CMP_FIELD(st_size) &&
-		CMP_FIELD(st_blksize) &&
-		CMP_FIELD(st_blocks) &&
-		CMP_FIELD(st_uid) &&
-		CMP_FIELD(st_gid) &&
-		CMP_FIELD(st_mode) &&
-		CMP_TIME(st_mtim) &&
-		CMP_TIME(st_ctim) &&
-		CMP_TIME(st_birthtim));
+	return (CMP_FIELD(st_dev) && CMP_FIELD(st_ino) && CMP_FIELD(st_dev) &&
+	    CMP_FIELD(st_nlink) && CMP_FIELD(st_flags) && CMP_FIELD(st_size) &&
+	    CMP_FIELD(st_blksize) && CMP_FIELD(st_blocks) &&
+	    CMP_FIELD(st_uid) && CMP_FIELD(st_gid) && CMP_FIELD(st_mode) &&
+	    CMP_TIME(st_mtim) && CMP_TIME(st_ctim) && CMP_TIME(st_birthtim));
 #undef CMP_TIME
 #undef CMP_FIELD
 }
 
-#define END_UP(var, type) do { \
-		struct type *p = STAILQ_LAST(var, type, next);	\
-		if (p)						\
-			STAILQ_NEXT(p, next) = NULL;		\
+#define END_UP(var, type)                                      \
+	do {                                                   \
+		struct type *p = STAILQ_LAST(var, type, next); \
+		if (p)                                         \
+			STAILQ_NEXT(p, next) = NULL;           \
 	} while (0)
 
 static int
@@ -1683,12 +1677,13 @@ retry:
 	if ((pid = fork()) < 0)
 		return -1;
 	if (pid == 0) {
-		if (stat(file->original_name, &st) < 0 || (!S_ISREG(st.st_mode))) {
+		if (stat(file->original_name, &st) < 0 ||
+		    (!S_ISREG(st.st_mode))) {
 			ERR("%s is not a file\n", file->original_name);
 			exit(0);
 		}
-		if (lstat(file->original_name, &lst) < 0 || st.st_uid != lst.st_uid ||
-			st.st_gid != lst.st_gid) {
+		if (lstat(file->original_name, &lst) < 0 ||
+		    st.st_uid != lst.st_uid || st.st_gid != lst.st_gid) {
 			ERR("access denied %s \n", file->original_name);
 			exit(0);
 		}
@@ -1700,7 +1695,7 @@ retry:
 		setgid(st.st_gid);
 		setuid(st.st_uid);
 		if ((fp = fopen(file->original_name, "r")) == NULL ||
-		    ! compare_fstat(fileno(fp), &st)) {
+		    !compare_fstat(fileno(fp), &st)) {
 			ERR("failed to open %s\n", file->original_name);
 			exit(0);
 		}
@@ -1784,14 +1779,14 @@ load_config_file(struct vm_conf_list *list, bool update_gl_conf)
 	if (push_file(gl_conf->config_file) < 0)
 		goto err;
 
-	STAILQ_FOREACH (inf, &pctxt->cffiles, next)
+	STAILQ_FOREACH(inf, &pctxt->cffiles, next)
 		if (parse(inf) < 0)
 			goto err;
 
 	if (check_duplicate() != 0)
 		goto err;
 
-	STAILQ_FOREACH (sc, &pctxt->cfglobals, next)
+	STAILQ_FOREACH(sc, &pctxt->cfglobals, next)
 		if (sc->owner == 0)
 			gl_conf_set_params(global_conf, &vars, sc);
 		else
@@ -1804,7 +1799,7 @@ load_config_file(struct vm_conf_list *list, bool update_gl_conf)
 	load_plugins(global_conf->plugin_dir ? global_conf->plugin_dir :
 					       gl_conf->plugin_dir);
 
-	STAILQ_FOREACH (sc, &pctxt->cfvms, next) {
+	STAILQ_FOREACH(sc, &pctxt->cfvms, next) {
 		if (create_plugin_data(&head) < 0)
 			continue;
 		if ((conf = create_vm_conf(sc->name)) == NULL) {

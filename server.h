@@ -28,7 +28,6 @@
 #ifndef _SERVER_H
 #define _SERVER_H
 
-
 /*
  * Nmdm number offset for auto assignment.
  */
@@ -51,7 +50,7 @@ int connect_to_server(const struct global_conf *);
 int create_command_server(const struct global_conf *);
 int accept_command_socket(int s0);
 int recv_command(struct sock_buf *);
-struct timespec *calc_timeout(int , struct timespec *);
+struct timespec *calc_timeout(int, struct timespec *);
 void close_timeout_sock_buf(int);
 
 int attach_console(int);

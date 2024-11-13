@@ -25,14 +25,14 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <sys/param.h>
 #include <sys/types.h>
-#include <sys/stat.h>
+#include <sys/param.h>
+#include <sys/cpuset.h>
 #include <sys/ioctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/sysctl.h>
-#include <sys/cpuset.h>
 
 #include <machine/vmm.h>
 #include <machine/vmm_dev.h>
@@ -48,13 +48,13 @@
 #include <unistd.h>
 
 #include "conf.h"
+#include "inspect.h"
 #include "log.h"
 #include "vm.h"
-#include "inspect.h"
 
-#define UEFI_CSM_FIRMWARE   LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
-#define UEFI_FIRMWARE       LOCALBASE"/share/uefi-firmware/BHYVE_UEFI.fd"
-#define UEFI_FIRMWARE_VARS  LOCALBASE"/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
+#define UEFI_CSM_FIRMWARE  LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
+#define UEFI_FIRMWARE	   LOCALBASE "/share/uefi-firmware/BHYVE_UEFI.fd"
+#define UEFI_FIRMWARE_VARS LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
 
 static int
 redirect_to_com(struct vm *vm, bool redirect_stdin)
@@ -97,7 +97,8 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", get_name(conf), getpid()) < 0)
+	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", get_name(conf), getpid()) <
+	    0)
 		return -1;
 
 	fd = mkstemp(fn);
@@ -115,14 +116,14 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 	}
 
 	i = 0;
-	DISK_CONF_FOREACH (dc, conf)
-		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
-			goto err;
+	DISK_CONF_FOREACH(dc, conf)
+	if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
+		goto err;
 
 	i = 0;
-	ISO_CONF_FOREACH (ic, conf)
-		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
-			goto err;
+	ISO_CONF_FOREACH(ic, conf)
+	if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
+		goto err;
 
 	fclose(fp);
 	return 0;
@@ -149,8 +150,8 @@ copy_uefi_vars(struct vm *vm)
 	struct vm_conf *conf = vm_get_conf(vm);
 
 	if ((fn = get_varsfile(vm)) == NULL) {
-		if (asprintf(&p, "%s/%s.vars", get_varsdir(),
-			     get_name(conf)) < 0)
+		if (asprintf(&p, "%s/%s.vars", get_varsdir(), get_name(conf)) <
+		    0)
 			return -1;
 		rc = set_varsfile(vm, p);
 		free(p);
@@ -183,7 +184,8 @@ copy_uefi_vars(struct vm *vm)
 		goto err;
 
 retry:
-	while ((n = copy_file_range(in, &len, out, &len, st.st_size - len, 0)) < 0)
+	while (
+	    (n = copy_file_range(in, &len, out, &len, st.st_size - len, 0)) < 0)
 		if (errno != EINTR)
 			goto err;
 	if (n > 0) {
@@ -222,7 +224,8 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	if (strcasecmp(t, "auto") == 0) {
 		if ((cmd = inspect(conf)) == NULL) {
 			ERR("%s inspection failed for VM %s\n",
-			    is_install(conf) ? "installcmd" : "loadcmd", get_name(conf));
+			    is_install(conf) ? "installcmd" : "loadcmd",
+			    get_name(conf));
 			goto end;
 		}
 		len = strlen(cmd);
@@ -230,7 +233,7 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	}
 
 	if (is_single_user(conf))
-		ARRAY_FOREACH (p, repl) {
+		ARRAY_FOREACH(p, repl) {
 			len = strlen(*p);
 			if (strncmp(t, *p, len) == 0) {
 				len = asprintf(&cmd, "%s-s %s\nboot\n", *p,
@@ -273,7 +276,7 @@ split_args(char *buf)
 	if (ap0 == NULL)
 		return (NULL);
 	p = buf;
-	for (ap = ap0; (*ap = strsep(&p, "\n")) != NULL; )
+	for (ap = ap0; (*ap = strsep(&p, "\n")) != NULL;)
 		if (**ap != '\0' && ++ap >= &ap0[n])
 			break;
 
@@ -300,7 +303,7 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	size_t len;
 	char *cmd, *mapfile = NULL;
 	bool doredirect = (get_assigned_com(vm, 0) == NULL) ||
-		(strcasecmp(get_assigned_com(vm, 0), "stdio") != 0);
+	    (strcasecmp(get_assigned_com(vm, 0), "stdio") != 0);
 
 	if (write_mapfile(conf, &mapfile) < 0)
 		return -1;
@@ -355,7 +358,7 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		flockfile(fp);
 
 		setenv("TERM", "vt100", 1);
-		fprintf(fp, LOCALBASE"/sbin/grub-bhyve\n");
+		fprintf(fp, LOCALBASE "/sbin/grub-bhyve\n");
 		if (is_wired_memory(conf))
 			fprintf(fp, "-S\n");
 		fprintf(fp, "-r\n");
@@ -397,7 +400,8 @@ static int
 uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	return (set_bootrom(vm, UEFI_FIRMWARE) < 0 || copy_uefi_vars(vm) < 0) ?
-		-1 : 1;
+	    -1 :
+	    1;
 }
 
 static int
@@ -459,17 +463,17 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "-S\n");
 		if (conf->single_user)
 			fprintf(fp, "-e\nboot_single=YES\n");
-		STAILQ_FOREACH (be, &conf->bhyveload_envs, next)
+		STAILQ_FOREACH(be, &conf->bhyveload_envs, next)
 			fprintf(fp, "-e\n%s\n", &be->env[0]);
 		if (conf->bhyveload_loader)
 			fprintf(fp, "-l\n%s\n", conf->bhyveload_loader);
-		fprintf(fp, "-c\n%s\n", (vm->assigned_com[0] != NULL)
-		    ? vm->assigned_com[0]
-		    : "stdio");
+		fprintf(fp, "-c\n%s\n",
+		    (vm->assigned_com[0] != NULL) ? vm->assigned_com[0] :
+						    "stdio");
 		fprintf(fp, "-m\n%s\n", conf->memory);
-		fprintf(fp, "-d\n%s\n", (conf->install)
-		    ? STAILQ_FIRST(&conf->isoes)->path
-		    : STAILQ_FIRST(&conf->disks)->path);
+		fprintf(fp, "-d\n%s\n",
+		    (conf->install) ? STAILQ_FIRST(&conf->isoes)->path :
+				      STAILQ_FIRST(&conf->disks)->path);
 		fprintf(fp, "%s\n", conf->name);
 		funlockfile(fp);
 		fclose(fp);
@@ -504,7 +508,7 @@ remove_taps(struct vm *vm)
 		if (errno != EAGAIN && errno != EINTR)
 			return -1;
 
-	STAILQ_FOREACH_SAFE (nc, &vm->taps, next, nnc) {
+	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc) {
 		if (nc->tap != NULL)
 			destroy_tap(s, nc->tap);
 		free_net_conf(nc);
@@ -524,7 +528,7 @@ activate_taps(struct vm *vm)
 	while ((s = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			return -1;
-	STAILQ_FOREACH (nc, &vm->taps, next)
+	STAILQ_FOREACH(nc, &vm->taps, next)
 		if (activate_tap(s, nc->tap) < 0)
 			ERR("failed to up %s\n", nc->tap);
 	close(s);
@@ -542,7 +546,7 @@ assign_taps(struct vm *vm)
 	if (STAILQ_FIRST(&vm->taps) != NULL)
 		return 0;
 
-	STAILQ_FOREACH (nc, &conf->nets, next) {
+	STAILQ_FOREACH(nc, &conf->nets, next) {
 		if ((nnc = copy_net_conf(nc)) == NULL)
 			goto err;
 		STAILQ_INSERT_TAIL(&vm->taps, nnc, next);
@@ -553,7 +557,7 @@ assign_taps(struct vm *vm)
 			goto err;
 
 	i = 0;
-	STAILQ_FOREACH (nc, &vm->taps, next) {
+	STAILQ_FOREACH(nc, &vm->taps, next) {
 		if (nc->bridge == NULL)
 			continue;
 		if (asprintf(&desc, "vm-%s-%d", conf->name, i++) < 0)
@@ -575,7 +579,7 @@ assign_taps(struct vm *vm)
 	return 0;
 err:
 	ERR("%s\n", "failed to create tap");
-	STAILQ_FOREACH_SAFE (nc, &vm->taps, next, nnc)
+	STAILQ_FOREACH_SAFE(nc, &vm->taps, next, nnc)
 		free_net_conf(nc);
 	STAILQ_INIT(&vm->taps);
 	return -1;
@@ -636,7 +640,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			dup2(errfd[1], 2);
 		}
 
-		STAILQ_FOREACH (be, &conf->bhyve_envs, next)
+		STAILQ_FOREACH(be, &conf->bhyve_envs, next)
 			if (putenv(be->env) < 0)
 				ERR("invalid environment: %s", be->env);
 
@@ -662,16 +666,15 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "-G\n%s\n", conf->debug_port);
 
 		fprintf(fp, "-c\ncpus=%d,sockets=%d,cores=%d,threads=%d\n",
-			conf->ncpu, conf->ncpu_sockets, conf->ncpu_cores,
-			conf->ncpu_threads);
-		STAILQ_FOREACH (cp, &conf->cpu_pins, next)
+		    conf->ncpu, conf->ncpu_sockets, conf->ncpu_cores,
+		    conf->ncpu_threads);
+		STAILQ_FOREACH(cp, &conf->cpu_pins, next)
 			fprintf(fp, "-p\n%d:%d\n", cp->vcpu, cp->hostcpu);
 		fprintf(fp, "-m\n%s\n", conf->memory);
 		ARRAY_FOREACH(com, vm->assigned_com)
 			if (*com != NULL)
 				fprintf(fp, "-l\ncom%ld,%s\n",
-					CONF_COM_NUM(com, vm->assigned_com),
-					*com);
+				    CONF_COM_NUM(com, vm->assigned_com), *com);
 
 		if (conf->keymap != NULL)
 			fprintf(fp, "-K\n%s\n", conf->keymap);
@@ -686,11 +689,11 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		if (conf->tpm_dev) {
 			if (conf->tpm_version)
 				fprintf(fp, "-l\ntpm,%s,%s,version=%s\n",
-					conf->tpm_type,	conf->tpm_dev,
-					conf->tpm_version);
+				    conf->tpm_type, conf->tpm_dev,
+				    conf->tpm_version);
 			else
-				fprintf(fp, "-l\ntpm,%s,%s\n",
-					conf->tpm_type, conf->tpm_dev);
+				fprintf(fp, "-l\ntpm,%s,%s\n", conf->tpm_type,
+				    conf->tpm_dev);
 		}
 
 		switch (conf->hostbridge) {
@@ -708,9 +711,8 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		pcid = 2;
 		if (conf->virt_random)
 			fprintf(fp, "-s\n%d,virtio-rnd\n", pcid++);
-		STAILQ_FOREACH (dc, &conf->disks, next) {
-			fprintf(fp, "-s\n%d,%s,%s", pcid++, dc->type,
-				dc->path);
+		STAILQ_FOREACH(dc, &conf->disks, next) {
+			fprintf(fp, "-s\n%d,%s,%s", pcid++, dc->type, dc->path);
 			if (dc->nocache)
 				fprintf(fp, ",nocache");
 			if (dc->direct)
@@ -721,14 +723,13 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 				fprintf(fp, ",nodelete");
 			fprintf(fp, "\n");
 		}
-		STAILQ_FOREACH (ic, &conf->isoes, next)
+		STAILQ_FOREACH(ic, &conf->isoes, next)
 			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
-				ic->path);
-		STAILQ_FOREACH (sc, &conf->sharefss, next)
+			    ic->path);
+		STAILQ_FOREACH(sc, &conf->sharefss, next)
 			fprintf(fp, "-s\n%d,virtio-9p,%s=%s%s\n", pcid++,
-				sc->name, sc->path,
-				(sc->readonly)? ",ro" : "");
-		STAILQ_FOREACH (nc, &vm->taps, next) {
+			    sc->name, sc->path, (sc->readonly) ? ",ro" : "");
+		STAILQ_FOREACH(nc, &vm->taps, next) {
 			fprintf(fp, "-s\n%d,%s", pcid++, nc->type);
 			if (nc->tap)
 				fprintf(fp, ",%s", nc->tap);
@@ -738,14 +739,13 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 				fprintf(fp, ",mac=%s", nc->mac);
 			fprintf(fp, "\n");
 		}
-		STAILQ_FOREACH (pc, &conf->passthrues, next)
+		STAILQ_FOREACH(pc, &conf->passthrues, next)
 			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);
 		if (conf->fbuf->enable) {
 			struct fbuf *fb = conf->fbuf;
 			fprintf(fp, "-s\n%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
-				pcid++, fb->ipaddr, fb->port, fb->width,
-				fb->height, fb->vgaconf,
-				fb->wait ? ",wait" : "");
+			    pcid++, fb->ipaddr, fb->port, fb->width, fb->height,
+			    fb->vgaconf, fb->wait ? ",wait" : "");
 			if (fb->password)
 				fprintf(fp, ",password=%s", fb->password);
 			fprintf(fp, "\n");
@@ -895,27 +895,14 @@ write_err_log(int fd, struct vm *vm)
 	return size;
 }
 
-struct vm_method bhyve_method =
-{"bhyve", exec_bhyve, reset_bhyve, poweroff_bhyve, acpi_poweroff_bhyve,
-	  cleanup_bhyve
-};
+struct vm_method bhyve_method = { "bhyve", exec_bhyve, reset_bhyve,
+	poweroff_bhyve, acpi_poweroff_bhyve, cleanup_bhyve };
 
-struct loader_method bhyveload_method =
-{
-	"bhyveload", bhyve_load, NULL
-};
+struct loader_method bhyveload_method = { "bhyveload", bhyve_load, NULL };
 
-struct loader_method grub2load_method =
-{
-	"grub", grub_load, grub_load_cleanup
-};
+struct loader_method grub2load_method = { "grub", grub_load,
+	grub_load_cleanup };
 
-struct loader_method uefiload_method =
-{
-	"uefi", uefi_load, NULL
-};
+struct loader_method uefiload_method = { "uefi", uefi_load, NULL };
 
-struct loader_method csmload_method =
-{
-	"csm", csm_load, NULL
-};
+struct loader_method csmload_method = { "csm", csm_load, NULL };

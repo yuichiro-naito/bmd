@@ -25,24 +25,26 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <sys/queue.h>
 #include <sys/event.h>
+#include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <netinet/in.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <signal.h>
 
-#include "log.h"
-#include "vm.h"
-#include "server.h"
+#include <netinet/in.h>
+
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include "bmd.h"
 #include "inspect.h"
+#include "log.h"
+#include "server.h"
+#include "vm.h"
 
 static int
 usage(int argc __unused, char *argv[])
@@ -77,7 +79,7 @@ lookup_vm_conf(const char *name)
 		return NULL;
 	}
 
-	LIST_FOREACH_SAFE (conf_ent, &list, next, cen)
+	LIST_FOREACH_SAFE(conf_ent, &list, next, cen)
 		if (strcmp(conf_ent->conf.name, name) == 0)
 			ret = conf_ent;
 		else
@@ -240,15 +242,13 @@ end:
 static int
 cmp_by_id(const void *a, const void *b)
 {
-	return strtol(NVGET(a, id), NULL, 10) -
-		strtol(NVGET(b, id), NULL, 10);
+	return strtol(NVGET(a, id), NULL, 10) - strtol(NVGET(b, id), NULL, 10);
 }
 
 static int
 cmp_by_id_r(const void *a, const void *b)
 {
-	return strtol(NVGET(b, id), NULL, 10) -
-		strtol(NVGET(a, id), NULL, 10);
+	return strtol(NVGET(b, id), NULL, 10) - strtol(NVGET(a, id), NULL, 10);
 }
 
 static int
@@ -267,19 +267,19 @@ static int
 cmp_by_ncpu(const void *a, const void *b)
 {
 	return strtol(NVGET(a, ncpu), NULL, 10) -
-		strtol(NVGET(b, ncpu), NULL, 10);
+	    strtol(NVGET(b, ncpu), NULL, 10);
 }
 
 static int
 cmp_by_ncpu_r(const void *a, const void *b)
 {
 	return strtol(NVGET(b, ncpu), NULL, 10) -
-		strtol(NVGET(a, ncpu), NULL, 10);
+	    strtol(NVGET(a, ncpu), NULL, 10);
 }
 
 static long
-calc_memsize(const char *ms) {
-
+calc_memsize(const char *ms)
+{
 	long n;
 	char *p;
 
@@ -359,17 +359,15 @@ cmp_by_owner_r(const void *a, const void *b)
 
 static struct compar_entry {
 	const char *name;
-	int (*compar)(const void *, const void*);
-	int (*compar_r)(const void *, const void*);
-} compar_list[] = {
-	{"id", cmp_by_id, cmp_by_id_r},
-	{"name", cmp_by_name, cmp_by_name_r},
-	{"ncpu", cmp_by_ncpu, cmp_by_ncpu_r},
-	{"memory", cmp_by_memory, cmp_by_memory_r},
-	{"loader", cmp_by_loader, cmp_by_loader_r},
-	{"state", cmp_by_state, cmp_by_state_r},
-	{"owner", cmp_by_owner, cmp_by_owner_r}
-};
+	int (*compar)(const void *, const void *);
+	int (*compar_r)(const void *, const void *);
+} compar_list[] = { { "id", cmp_by_id, cmp_by_id_r },
+	{ "name", cmp_by_name, cmp_by_name_r },
+	{ "ncpu", cmp_by_ncpu, cmp_by_ncpu_r },
+	{ "memory", cmp_by_memory, cmp_by_memory_r },
+	{ "loader", cmp_by_loader, cmp_by_loader_r },
+	{ "state", cmp_by_state, cmp_by_state_r },
+	{ "owner", cmp_by_owner, cmp_by_owner_r } };
 
 static int
 do_list(int col, bool reverse)
@@ -394,8 +392,8 @@ do_list(int col, bool reverse)
 	}
 
 	printf(fmt, "id", "name", "ncpu", "memory", "loader", "state", "owner");
-	printf(fmt, "---","-------------------",
-	       "----", "------", "---------", "-----------", "----------");
+	printf(fmt, "---", "-------------------", "----", "------", "---------",
+	    "-----------", "----------");
 
 	if (!nvlist_exists(res, "vm_list"))
 		goto end;
@@ -408,16 +406,15 @@ do_list(int col, bool reverse)
 	}
 	memcpy(l, list, sizeof(nvlist_t *) * count);
 	qsort(l, count, sizeof(nvlist_t *),
-	      reverse ? compar_list[col].compar_r : compar_list[col].compar);
+	    reverse ? compar_list[col].compar_r : compar_list[col].compar);
 	for (i = 0; i < count; i++) {
-		printf(fmt,
-		       nvlist_get_string(l[i], "id"),
-		       nvlist_get_string(l[i], "name"),
-		       nvlist_get_string(l[i], "ncpu"),
-		       nvlist_get_string(l[i], "memory"),
-		       nvlist_get_string(l[i], "loader"),
-		       nvlist_get_string(l[i], "state"),
-		       nvlist_get_string(l[i], "owner"));
+		printf(fmt, nvlist_get_string(l[i], "id"),
+		    nvlist_get_string(l[i], "name"),
+		    nvlist_get_string(l[i], "ncpu"),
+		    nvlist_get_string(l[i], "memory"),
+		    nvlist_get_string(l[i], "loader"),
+		    nvlist_get_string(l[i], "state"),
+		    nvlist_get_string(l[i], "owner"));
 	}
 	free(l);
 
@@ -480,12 +477,13 @@ end:
  * boot_style= 0: showconsole, 1: boot, 2: install
  */
 static int
-do_boot_console(const char *name, unsigned int boot_style, bool console, bool show)
+do_boot_console(const char *name, unsigned int boot_style, bool console,
+    bool show)
 {
 	int ret;
 	nvlist_t *cmd, *res = NULL;
 	const char *cons = NULL;
-	const static char *command[] = {"showconsole", "boot", "install"};
+	const static char *command[] = { "showconsole", "boot", "install" };
 
 	if (boot_style > nitems(command))
 		return 1;
@@ -575,7 +573,7 @@ do_showconfig(const char *name)
 		return 1;
 	}
 
-	LIST_FOREACH_SAFE (conf_ent, &list, next, cen) {
+	LIST_FOREACH_SAFE(conf_ent, &list, next, cen) {
 		if (name == NULL || strcmp(conf_ent->conf.name, name) == 0) {
 			if (count)
 				fputs("\n", stdout);
@@ -627,8 +625,7 @@ sub_send_recv(int argc, char *argv[])
 
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command",
-			  strcmp(argv[0], "stop") == 0 ?
-			  "shutdown" : argv[0]);
+	    strcmp(argv[0], "stop") == 0 ? "shutdown" : argv[0]);
 	nvlist_add_string(cmd, "name", argv[1]);
 
 	if ((res = send_recv(cmd)) == NULL) {
@@ -747,7 +744,6 @@ sub_list(int argc, char *argv[])
 			i = 0;
 	}
 	return do_list(i, r);
-
 }
 
 /* Must be sorted by name */
@@ -755,24 +751,24 @@ static struct subcommand {
 	const char *name;
 	int (*func)(int, char *[]);
 } subcommand_table[] = {
-	{"boot", sub_boot_install},
-	{"com1", sub_com},
-	{"com2", sub_com},
-	{"com3", sub_com},
-	{"com4", sub_com},
-	{"console", sub_console},
-	{"inspect", sub_inspect},
-	{"install", sub_boot_install},
-	{"list", sub_list},
-	{"poweroff", sub_send_recv},
-	{"reset", sub_send_recv},
-	{"run", sub_run},
-	{"showconfig", sub_showconfig},
-	{"showconsole", sub_showconsole},
-	{"showvgaport", sub_showvgaport},
-	{"shutdown", sub_send_recv},
-	{"start", sub_boot_install},
-	{"stop", sub_send_recv},
+	{ "boot", sub_boot_install },
+	{ "com1", sub_com },
+	{ "com2", sub_com },
+	{ "com3", sub_com },
+	{ "com4", sub_com },
+	{ "console", sub_console },
+	{ "inspect", sub_inspect },
+	{ "install", sub_boot_install },
+	{ "list", sub_list },
+	{ "poweroff", sub_send_recv },
+	{ "reset", sub_send_recv },
+	{ "run", sub_run },
+	{ "showconfig", sub_showconfig },
+	{ "showconsole", sub_showconsole },
+	{ "showvgaport", sub_showvgaport },
+	{ "shutdown", sub_send_recv },
+	{ "start", sub_boot_install },
+	{ "stop", sub_send_recv },
 };
 
 static int
@@ -808,10 +804,10 @@ control(int argc, char *argv[])
 
 	if (load_config_file(NULL, 1) < 0)
 		fprintf(stderr, "failed to load %s. use default value\n",
-			gl_conf->config_file);
+		    gl_conf->config_file);
 
 	sbc = bsearch(argv[0], subcommand_table, nitems(subcommand_table),
-		      sizeof(subcommand_table[0]), compare_subcommand);
+	    sizeof(subcommand_table[0]), compare_subcommand);
 	if (sbc == NULL)
 		return usage(oargc, oargv);
 

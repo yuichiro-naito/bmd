@@ -29,9 +29,9 @@
 #define _BMD_PLUGIN_H_
 
 #include <sys/types.h>
+#include <sys/nv.h>
 #include <sys/queue.h>
 #include <sys/tree.h>
-#include <sys/nv.h>
 
 #include <stdbool.h>
 #include <syslog.h>
@@ -48,17 +48,13 @@ struct vm_conf;
 struct vm;
 
 enum BOOT {
-	NO,       // Do not boot VM
-	YES,      // Boot when daemon starts
-	ONESHOT,  // Boot when daemon starts, do not reboot on VM exit
-	ALWAYS    // Keep on running VM although VM terminates
+	NO,	 // Do not boot VM
+	YES,	 // Boot when daemon starts
+	ONESHOT, // Boot when daemon starts, do not reboot on VM exit
+	ALWAYS	 // Keep on running VM although VM terminates
 };
 
-enum HOSTBRIDGE_TYPE {
-	NONE,
-	INTEL,
-	AMD
-};
+enum HOSTBRIDGE_TYPE { NONE, INTEL, AMD };
 
 enum STATE {
 	TERMINATE, // bhyve is terminated
@@ -71,30 +67,24 @@ enum STATE {
 	POSTSTOP   // after stopping VM
 };
 
-#define DISK_CONF_FOREACH(dc, conf)	   \
-	for ((dc) = get_disk_conf((conf)); \
-	     (dc) != NULL;		   \
+#define DISK_CONF_FOREACH(dc, conf)                      \
+	for ((dc) = get_disk_conf((conf)); (dc) != NULL; \
 	     (dc) = next_disk_conf((dc)))
 
-#define ISO_CONF_FOREACH(ic, conf)	  \
-	for ((ic) = get_iso_conf((conf)); \
-	     (ic) != NULL;		  \
+#define ISO_CONF_FOREACH(ic, conf)                      \
+	for ((ic) = get_iso_conf((conf)); (ic) != NULL; \
 	     (ic) = next_iso_conf((ic)))
 
-#define NET_CONF_FOREACH(nc, conf)	  \
-	for ((nc) = get_net_conf((conf)); \
-	     (nc) != NULL;		  \
+#define NET_CONF_FOREACH(nc, conf)                      \
+	for ((nc) = get_net_conf((conf)); (nc) != NULL; \
 	     (nc) = next_net_conf((nc)))
 
-#define SHAREFS_CONF_FOREACH(sc, conf)	  \
-	for ((sc) = get_sharefs_conf((conf)); \
-	     (sc) != NULL;		  \
+#define SHAREFS_CONF_FOREACH(sc, conf)                      \
+	for ((sc) = get_sharefs_conf((conf)); (sc) != NULL; \
 	     (sc) = next_net_conf((sc)))
 
-#define TAPS_FOREACH(nc, vm)		  \
-	for ((nc) = get_taps((vm));	  \
-	     (nc) != NULL;		  \
-	     (nc) = next_net_conf((nc)))
+#define TAPS_FOREACH(nc, vm) \
+	for ((nc) = get_taps((vm)); (nc) != NULL; (nc) = next_net_conf((nc)))
 
 int get_infd(struct vm *);
 int get_outfd(struct vm *);
@@ -231,16 +221,16 @@ struct vm_method {
 /*
   Plugin Description
 
-           version: must set PLUGIN_VERSION
-              name: plugin name
-        initialize: a function called after plugin is loaded.
-          finalize: a function called before plugin is removed.
+	   version: must set PLUGIN_VERSION
+	      name: plugin name
+	initialize: a function called after plugin is loaded.
+	  finalize: a function called before plugin is removed.
   on_status_change: a function called when VM state changed. (*1)
       parse_config: a function called while parsing VM configuratin (*1)
   on_reload_config: copy plugin data while reloading VM configuration (*1)
-           prehook: a function called before executing loader and bhyve (*1)
-          prestart: a function called before starting VM.
-          poststop: a function called after stopping VM.
+	   prehook: a function called before executing loader and bhyve (*1)
+	  prestart: a function called before starting VM.
+	  poststop: a function called after stopping VM.
 
   *1: The nvlist_t pointer and struct vm pointer are available while VM is
       existing, unless VM is removed from the config file nor VM configuration

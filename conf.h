@@ -208,10 +208,9 @@ struct vm {
 	int ntaps;
 };
 
-#define ARRAY_FOREACH(p, a) \
-	for (p = &a[0]; p < &a[nitems(a)]; p++)
+#define ARRAY_FOREACH(p, a)	for (p = &a[0]; p < &a[nitems(a)]; p++)
 
-#define CONF_COM_NUM(com, base)  ((com) - (base) + 1)
+#define CONF_COM_NUM(com, base) ((com) - (base) + 1)
 
 void free_vartree(struct vartree *);
 void free_passthru_conf(struct passthru_conf *);
@@ -220,9 +219,9 @@ void free_iso_conf(struct iso_conf *);
 void free_net_conf(struct net_conf *);
 void free_sharefs_conf(struct sharefs_conf *);
 void free_vm_conf(struct vm_conf *);
-#define free_bhyveload_env(p)  free(p)
-#define free_bhyve_env(p)  free(p)
-#define free_cpu_pin(p)   free(p)
+#define free_bhyveload_env(p) free(p)
+#define free_bhyve_env(p)     free(p)
+#define free_cpu_pin(p)	      free(p)
 void free_fbuf(struct fbuf *);
 void clear_passthru_conf(struct vm_conf *);
 void clear_disk_conf(struct vm_conf *);
@@ -234,11 +233,11 @@ void clear_bhyve_env(struct vm_conf *);
 void clear_cpu_pin(struct vm_conf *);
 
 int add_passthru_conf(struct vm_conf *, const char *);
-int add_disk_conf(struct vm_conf *, const char *, const char *,
-		  bool, bool, bool, bool);
+int add_disk_conf(struct vm_conf *, const char *, const char *, bool, bool,
+    bool, bool);
 int add_iso_conf(struct vm_conf *, const char *, const char *);
 int add_net_conf(struct vm_conf *, const char *, const char *, const char *);
-int add_sharefs_conf(struct vm_conf *, const char *, const char *,  bool);
+int add_sharefs_conf(struct vm_conf *, const char *, const char *, bool);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);
 int add_cpu_pin(struct vm_conf *, int, int);
@@ -269,7 +268,7 @@ int set_install(struct vm_conf *, bool);
 int set_fbuf_enable(struct fbuf *, bool);
 int set_fbuf_ipaddr(struct fbuf *, const char *);
 int set_fbuf_port(struct fbuf *, int);
-int set_fbuf_res(struct fbuf *, int , int);
+int set_fbuf_res(struct fbuf *, int, int);
 int set_fbuf_vgaconf(struct fbuf *, const char *);
 int set_fbuf_wait(struct fbuf *, int);
 int set_fbuf_password(struct fbuf *, const char *);
@@ -303,6 +302,5 @@ void free_id_list(void);
 
 int set_string(char **, const char *);
 int vm_conf_export_env(struct vm_conf *);
-
 
 #endif

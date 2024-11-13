@@ -28,11 +28,12 @@
  * $FreeBSD$
  */
 
-#include <sys/param.h>
 #include <sys/types.h>
+#include <sys/param.h>
 #include <sys/jail.h>
 #include <sys/queue.h>
 #include <sys/time.h>
+
 #include <stdio.h>
 
 #include "y.tab.h"
@@ -45,74 +46,74 @@ enum CF_TYPE {
 };
 
 struct cfexpr {
-	enum CF_TYPE		type;
-	char			op, *val;
-	struct cfexpr		*left, *right;
+	enum CF_TYPE type;
+	char op, *val;
+	struct cfexpr *left, *right;
 };
 
 STAILQ_HEAD(cftokens, cftoken);
 
 struct cftoken {
-	STAILQ_ENTRY(cftoken)	next;
-	enum CF_TYPE		type;
-	char 			*s;
-	size_t			len;
-	struct cfexpr		*expr;
-	char 			*filename;
-	int 			lineno;
+	STAILQ_ENTRY(cftoken) next;
+	enum CF_TYPE type;
+	char *s;
+	size_t len;
+	struct cfexpr *expr;
+	char *filename;
+	int lineno;
 };
 
 STAILQ_HEAD(cfargdefs, cfargdef);
 
 struct cfargdef {
-	STAILQ_ENTRY(cfargdef)   next;
-	char                     *name;
-	struct cftokens		tokens;
+	STAILQ_ENTRY(cfargdef) next;
+	char *name;
+	struct cftokens tokens;
 };
 
 STAILQ_HEAD(cfargs, cfarg);
 
 struct cfarg {
-	STAILQ_ENTRY(cfarg)      next;
-	struct cftokens		tokens;
+	STAILQ_ENTRY(cfarg) next;
+	struct cftokens tokens;
 };
 
 STAILQ_HEAD(cftargets, cftarget);
 
 struct cftarget {
-	STAILQ_ENTRY(cftarget)	next;
-	struct cftokens		tokens;
-	struct cfargs           args;
+	STAILQ_ENTRY(cftarget) next;
+	struct cftokens tokens;
+	struct cfargs args;
 };
 
 STAILQ_HEAD(cfvalues, cfvalue);
 
 struct cfvalue {
-	STAILQ_ENTRY(cfvalue)	next;
-	struct cftokens		tokens;
+	STAILQ_ENTRY(cfvalue) next;
+	struct cftokens tokens;
 };
 
 STAILQ_HEAD(cfparams, cfparam);
 
 struct cfparam {
-	STAILQ_ENTRY(cfparam)	next;
-	struct cftoken		*key;
-	struct cftargets        targets;
-	struct cfvalues		vals;
-	int			operator;
+	STAILQ_ENTRY(cfparam) next;
+	struct cftoken *key;
+	struct cftargets targets;
+	struct cfvalues vals;
+	int operator;
 };
 
 STAILQ_HEAD(cfsections, cfsection);
 
 struct cfsection {
-	STAILQ_ENTRY(cfsection)	next;
-	char			*name;
-	struct cfparams		params;
-	struct cfargdefs        argdefs;
-	int			applied;
-	int			duplicate;
-	uid_t                   owner;
-	char                    *filename;
+	STAILQ_ENTRY(cfsection) next;
+	char *name;
+	struct cfparams params;
+	struct cfargdefs argdefs;
+	int applied;
+	int duplicate;
+	uid_t owner;
+	char *filename;
 };
 
 STAILQ_HEAD(cffiles, cffile);
@@ -124,11 +125,7 @@ struct cffile {
 	STAILQ_ENTRY(cffile) next;
 };
 
-enum mpool_error {
-	MPERR_NONE,
-	MPERR_ALLOC,
-	MPERR_FATAL
-};
+enum mpool_error { MPERR_NONE, MPERR_ALLOC, MPERR_FATAL };
 
 STAILQ_HEAD(mpools, mpool);
 
@@ -137,19 +134,19 @@ struct mpool {
 	void *end;
 	void *used;
 	void *last_used;
-	enum mpool_error   error_number;
-	int   dummy;
+	enum mpool_error error_number;
+	int dummy;
 	char data[0];
 };
 
-#define DEFAULT_MMAP_SIZE  (PAGE_SIZE * 64)
+#define DEFAULT_MMAP_SIZE (PAGE_SIZE * 64)
 
 struct parser_context {
 	struct cfsections cfglobals;
 	struct cfsections cftemplates;
 	struct cfsections cfvms;
-	struct cffiles    cffiles;
-	struct cffile    *cur_file;
+	struct cffiles cffiles;
+	struct cffile *cur_file;
 };
 
 extern int yydebug;
@@ -173,7 +170,7 @@ char *peek_filename(void);
 uid_t peek_fileowner(void);
 
 void *mpool_alloc(size_t);
-#define objalloc(t)    mpool_alloc(sizeof(struct t))
+#define objalloc(t) mpool_alloc(sizeof(struct t))
 
 void free_cfexpr(struct cfexpr *);
 void free_cftoken(struct cftoken *);

@@ -27,8 +27,8 @@
  */
 #include <sys/queue.h>
 #include <sys/socket.h>
-#include <sys/ucred.h>
 #include <sys/stat.h>
+#include <sys/ucred.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 
@@ -37,6 +37,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,7 +45,6 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
-#include <pwd.h>
 
 #include "bmd.h"
 #include "log.h"
@@ -77,7 +77,7 @@ static struct sock_buf *
 lookup_sock_buf(sock_buf_id id)
 {
 	struct sock_buf *p;
-	LIST_FOREACH (p, &sock_list, next)
+	LIST_FOREACH(p, &sock_list, next)
 		if (p->id == id)
 			return p;
 	return NULL;
@@ -98,7 +98,7 @@ create_sock_buf(int fd)
 	r->cid = -1;
 
 	sz = sizeof(r->peer);
-	if  (getsockopt(fd, SOL_LOCAL, LOCAL_PEERCRED, &r->peer, &sz) < 0)
+	if (getsockopt(fd, SOL_LOCAL, LOCAL_PEERCRED, &r->peer, &sz) < 0)
 		r->peer.cr_uid = UID_NOBODY;
 
 	r->res_fd = -1;
@@ -151,7 +151,7 @@ calc_timeout(int timeout, struct timespec *ts)
 		return NULL;
 
 	s = LIST_FIRST(&sock_list)->event_time;
-	LIST_FOREACH (p, &sock_list, next)
+	LIST_FOREACH(p, &sock_list, next)
 		if (p->event_time < s)
 			s = p->event_time;
 
@@ -169,7 +169,7 @@ close_timeout_sock_buf(int timeout)
 	struct sock_buf *p, *n;
 	time_t now = time(NULL);
 
-	LIST_FOREACH_SAFE (p, &sock_list, next, n)
+	LIST_FOREACH_SAFE(p, &sock_list, next, n)
 		if (p->event_time + timeout <= now) {
 			if (p->cid == -1)
 				destroy_sock_buf(p);
@@ -391,7 +391,7 @@ is_server_alive(struct addrinfo *r)
 	int s;
 
 	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
-			   r->ai_protocol)) < 0)
+		    r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
@@ -406,7 +406,6 @@ err:
 	if (s != -1)
 		close(s);
 	return false;
-
 }
 
 int
@@ -431,7 +430,7 @@ create_command_server(const struct global_conf *gc)
 	}
 
 	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
-			   r->ai_protocol)) < 0)
+		    r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
@@ -489,7 +488,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		return -1;
 	}
 
-	LIST_FOREACH_SAFE (conf_ent, &list, next, cen)
+	LIST_FOREACH_SAFE(conf_ent, &list, next, cen)
 		if (strcmp(conf_ent->conf.name, name) == 0)
 			ret = conf_ent;
 		else
@@ -509,9 +508,10 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		INFO("changes are found. update %s configuration\n", name);
 	} else {
 		free_vm_conf_entry(ret);
-		INFO("no changes are found for %s. keep existing configurations.\n", name);
+		INFO(
+		    "no changes are found for %s. keep existing configurations.\n",
+		    name);
 	}
-
 
 	return 0;
 }
@@ -523,8 +523,7 @@ get_peer_comport(const char *comport)
 	char *peer;
 
 	/* A null modem device has at least 11 characters. */
-	if (comport == NULL ||
-	    (i = strlen(comport) - 1 ) < 10)
+	if (comport == NULL || (i = strlen(comport) - 1) < 10)
 		return NULL;
 
 	if ((peer = strdup(comport)) == NULL)
@@ -585,7 +584,7 @@ struct com_opener *
 lookup_com_opener(com_opener_id id)
 {
 	struct com_opener *p;
-	LIST_FOREACH (p, &com_opener_list, next)
+	LIST_FOREACH(p, &com_opener_list, next)
 		if (p->id == id)
 			return p;
 	return NULL;
@@ -627,7 +626,7 @@ on_exit_open_comport(int ident __unused, void *data)
 	while (waitpid(cp->pid, &status, 0) < 0)
 		if (errno != EINTR)
 			break;
-	if (! WIFEXITED(status) || WEXITSTATUS(status) != 0)
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
 		cp->fd = -1;
 
 	close(cp->sock);
@@ -671,7 +670,8 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 	int socks[2];
 	struct com_opener *cp;
 	struct kevent kev[2];
-	static event_call_back cb[2] = {on_read_open_comport, on_exit_open_comport};
+	static event_call_back cb[2] = { on_read_open_comport,
+		on_exit_open_comport };
 	void *data[2];
 	sigset_t nmask;
 
@@ -706,10 +706,9 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 	cp->res = res;
 	cp->sock = socks[0];
 	cp->sid = sb->id;
-	EV_SET(&kev[0], socks[0], EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0,
-	       NULL);
+	EV_SET(&kev[0], socks[0], EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
 	EV_SET(&kev[1], pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0,
-	       NULL);
+	    NULL);
 	data[0] = cp;
 	data[1] = cp;
 
@@ -813,20 +812,20 @@ ret:
 }
 
 static nvlist_t *
-boot_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
+boot_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 {
 	return boot0_command(s, nv, 0, ucred);
 }
 
 static nvlist_t *
-install_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
+install_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 {
 	return boot0_command(s, nv, 1, ucred);
 }
 
 static nvlist_t *
 showconsole_command(struct sock_buf *s, const nvlist_t *nv,
-		    struct xucred *ucred)
+    struct xucred *ucred)
 {
 	const char *name, *port, *reason;
 	struct vm_entry *vm_ent;
@@ -853,7 +852,8 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 	}
 	pnum = port[3] - '1';
 
-	cons = VM_ASCOM(vm_ent)[pnum] ? VM_ASCOM(vm_ent)[pnum] : VM_CONF(vm_ent)->com[pnum];
+	cons = VM_ASCOM(vm_ent)[pnum] ? VM_ASCOM(vm_ent)[pnum] :
+					VM_CONF(vm_ent)->com[pnum];
 	cons = get_peer_comport(cons);
 	if (VM_STATE(vm_ent) == PRESTART || VM_STATE(vm_ent) == LOAD ||
 	    VM_STATE(vm_ent) == RUN) {
@@ -867,8 +867,8 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 		if (nvlist_exists_number(nv, "sigtrigger_pid") &&
 		    nvlist_exists_number(nv, "sigtrigger_num"))
 			register_signal_target(vm_ent,
-					       nvlist_get_number(nv, "sigtrigger_pid"),
-					       nvlist_get_number(nv, "sigtrigger_num"));
+			    nvlist_get_number(nv, "sigtrigger_pid"),
+			    nvlist_get_number(nv, "sigtrigger_num"));
 	}
 
 	nvlist_add_string(res, "console", cons ? cons : "(null)");
@@ -903,8 +903,7 @@ showvgaport_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 
 	if (VM_CONF(vm_ent)->fbuf->enable &&
 	    snprintf(vgaport, sizeof(vgaport), "%s %d",
-		     VM_CONF(vm_ent)->fbuf->ipaddr,
-		     VM_CONF(vm_ent)->fbuf->port) > 0)
+		VM_CONF(vm_ent)->fbuf->ipaddr, VM_CONF(vm_ent)->fbuf->port) > 0)
 		nvlist_add_string(res, "vgaport", vgaport);
 	else
 		nvlist_add_string(res, "vgaport", "(disabled)");
@@ -918,7 +917,7 @@ ret:
 
 static nvlist_t *
 list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
-	     struct xucred *ucred)
+    struct xucred *ucred)
 {
 	size_t i, count = 0;
 	const char *reason;
@@ -928,12 +927,12 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 	bool error = false;
 	struct passwd *pwd;
 	const static char *state_string[] = { "STOP", "LOAD", "RUN",
-					      "TERMINATING", "TERMINATING", "REBOOTING",
-					      "PRESTART", "POSTSTOP"};
+		"TERMINATING", "TERMINATING", "REBOOTING", "PRESTART",
+		"POSTSTOP" };
 
 	res = nvlist_create(0);
 
-	SLIST_FOREACH (vm_ent, &vm_list, next) {
+	SLIST_FOREACH(vm_ent, &vm_list, next) {
 		if (check_owner(vm_ent, ucred) != 0)
 			continue;
 		count++;
@@ -949,7 +948,7 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 	}
 
 	i = 0;
-	SLIST_FOREACH (vm_ent, &vm_list, next) {
+	SLIST_FOREACH(vm_ent, &vm_list, next) {
 		if (check_owner(vm_ent, ucred) != 0)
 			continue;
 		p = nvlist_create(0);
@@ -958,9 +957,8 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 		nvlist_add_stringf(p, "ncpu", "%d", VM_CONF(vm_ent)->ncpu);
 		nvlist_add_string(p, "memory", VM_CONF(vm_ent)->memory);
 		nvlist_add_string(p, "loader",
-				  VM_CONF(vm_ent)->loader ?
-				  VM_CONF(vm_ent)->loader :
-				  VM_CONF(vm_ent)->backend);
+		    VM_CONF(vm_ent)->loader ? VM_CONF(vm_ent)->loader :
+					      VM_CONF(vm_ent)->backend);
 		nvlist_add_string(p, "state", state_string[VM_STATE(vm_ent)]);
 		if ((pwd = getpwuid(VM_CONF(vm_ent)->owner)) == NULL)
 			nvlist_add_string(p, "owner", "nobody");
@@ -979,7 +977,7 @@ ret:
 
 static nvlist_t *
 vm_down_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
-		int how, struct xucred *ucred)
+    int how, struct xucred *ucred)
 {
 	const char *name, *reason;
 	struct vm_entry *vm_ent;
@@ -1029,25 +1027,25 @@ ret:
 }
 
 static nvlist_t *
-shutdown_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
+shutdown_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 {
 	return vm_down_command(s, nv, 0, ucred);
 }
 
 static nvlist_t *
-reset_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
+reset_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 {
 	return vm_down_command(s, nv, 1, ucred);
 }
 
 static nvlist_t *
-poweroff_command(struct sock_buf *s, const nvlist_t *nv,  struct xucred *ucred)
+poweroff_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 {
 	return vm_down_command(s, nv, 2, ucred);
 }
 
-typedef nvlist_t *(*cfunc)(struct sock_buf *s, const nvlist_t *nv,
-			   struct xucred *ucred);
+typedef nvlist_t *(
+    *cfunc)(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred);
 
 struct command_entry {
 	const char *name;
@@ -1077,7 +1075,6 @@ compare_command_entry(const void *a, const void *b)
 static cfunc
 get_command_function(const char *name)
 {
-
 	struct command_entry *p;
 
 	p = bsearch(name, command_list, nitems(command_list),
@@ -1110,7 +1107,8 @@ recv_command(struct sock_buf *sb)
 	}
 
 	sb->res_fd = nvlist_exists_number(res, FD_KEY) ?
-		nvlist_take_number(res, FD_KEY) : -1;
+	    nvlist_take_number(res, FD_KEY) :
+	    -1;
 
 	sb->res_buf = nvlist_pack(res, &sb->res_size);
 	if (sb->res_buf == NULL) {

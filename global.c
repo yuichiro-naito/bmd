@@ -25,12 +25,13 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <string.h>
 #include <stdlib.h>
-#include "conf.h"
-#include "server.h"
+#include <string.h>
+
 #include "bmd.h"
 #include "bmd_plugin.h"
+#include "conf.h"
+#include "server.h"
 
 /*
   Default global configuration.
@@ -41,16 +42,14 @@ static char gl0_vars_dir[] = LOCALBASE "/var/cache/bmd";
 static char gl0_pid_path[] = "/var/run/bmd.pid";
 static char gl0_cmd_socket_path[] = "/var/run/bmd.sock";
 static char gl0_cmd_socket_mode[] = "0600";
-static struct global_conf gl_conf0 = {
-	.config_file = gl0_config_file,
+static struct global_conf gl_conf0 = { .config_file = gl0_config_file,
 	.plugin_dir = gl0_plugin_dir,
 	.vars_dir = gl0_vars_dir,
 	.pid_path = gl0_pid_path,
 	.cmd_socket_path = gl0_cmd_socket_path,
 	.unix_domain_socket_mode = gl0_cmd_socket_mode,
 	.nmdm_offset = DEFAULT_NMDM_OFFSET,
-	.foreground = 0
-};
+	.foreground = 0 };
 
 struct global_conf *gl_conf = &gl_conf0;
 
@@ -80,9 +79,9 @@ init_gl_conf(void)
 	struct global_conf *t;
 	if ((t = calloc(1, sizeof(*t))) == NULL)
 		return -1;
-#define COPY_ATTR_STRING(attr) \
-	if (gl_conf0.attr != NULL &&				\
-	    (t->attr = strdup(gl_conf0.attr)) == NULL)		\
+#define COPY_ATTR_STRING(attr)                         \
+	if (gl_conf0.attr != NULL &&                   \
+	    (t->attr = strdup(gl_conf0.attr)) == NULL) \
 		goto err;
 #define COPY_ATTR_INT(attr) t->attr = gl_conf0.attr
 
@@ -108,15 +107,15 @@ err:
 int
 merge_global_conf(struct global_conf *gc)
 {
-#define REPLACE_STR(attr)	\
-	if (gc->attr) {							\
-		if (gl_conf->attr)					\
-			free(gl_conf->attr);				\
-		gl_conf->attr = gc->attr;				\
-		gc->attr = NULL;					\
+#define REPLACE_STR(attr)                    \
+	if (gc->attr) {                      \
+		if (gl_conf->attr)           \
+			free(gl_conf->attr); \
+		gl_conf->attr = gc->attr;    \
+		gc->attr = NULL;             \
 	}
 #define REPLACE_INT(attr)  \
-	if (gc->attr != 0)			\
+	if (gc->attr != 0) \
 		gl_conf->attr = gc->attr;
 
 	REPLACE_STR(config_file);

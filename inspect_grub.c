@@ -26,6 +26,7 @@
  * SUCH DAMAGE.
  */
 #include <sys/param.h>
+#include <sys/queue.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -35,12 +36,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/queue.h>
 #if __FreeBSD_version >= 1400095
 #include <sys/queue_mergesort.h>
 #endif
 #include <sys/sysctl.h>
 #include <sys/wait.h>
+
 #include <unistd.h>
 
 #include "conf.h"
@@ -72,8 +73,8 @@ struct disk_info {
 
 SLIST_HEAD(disk_info_head, disk_info);
 
-#define NEWLINE  "\r"
-#define PROMPT   "grub> "
+#define NEWLINE "\r"
+#define PROMPT	"grub> "
 
 static struct disk_info *
 create_disk_info(void)
@@ -105,10 +106,7 @@ static int
 pp_poll_read(struct proc_pipe *pp, int timeout)
 {
 	int rc;
-	struct pollfd pfd = {
-		.fd = pp->fd,
-		.events = POLLIN
-	};
+	struct pollfd pfd = { .fd = pp->fd, .events = POLLIN };
 
 	while ((rc = poll(&pfd, 1, timeout)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
@@ -126,10 +124,11 @@ strip_csi(char *str, size_t size)
 	while (p < e) {
 		if (p[0] == '\e' && p + 1 < e && p[1] == '[') {
 			for (r = p + 2; (r < e) && (isnumber(*r) || *r == ';');
-			     r++);
+			     r++)
+				;
 			if (r == e)
 				break;
-			switch(*r) {
+			switch (*r) {
 			case 'A':
 			case 'B':
 			case 'C':
@@ -173,7 +172,7 @@ pp_read(struct proc_pipe *pp)
 		if (rc == 0)
 			goto ret;
 		while ((n = read(pp->fd, &pp->buf[pp->nread],
-				 pp->size - pp->nread)) < 0)
+			    pp->size - pp->nread)) < 0)
 			if (errno != EAGAIN && errno != EINTR)
 				break;
 		if (n < 0)
@@ -281,10 +280,10 @@ pp_close(struct proc_pipe *pp)
 	close(pp->fd);
 	wait4(pp->pid, &status, WEXITED, NULL);
 	sysctlbyname("hw.vmm.destroy", NULL, 0, pp->vm_name,
-		     strlen(pp->vm_name));
+	    strlen(pp->vm_name));
 }
 
-#define pp_printf(p, fmt, ...)  dprintf((p)->fd, fmt, __VA_ARGS__)
+#define pp_printf(p, fmt, ...) dprintf((p)->fd, fmt, __VA_ARGS__)
 
 static void
 pp_free(struct proc_pipe *pp)
@@ -332,7 +331,8 @@ spawn_grub(struct proc_pipe *pp)
 		    "-e\n"
 		    "-m\n"
 		    "%s\n"
-		    "%s\n", pp->mapfile, pp->vm_name);
+		    "%s\n",
+		    pp->mapfile, pp->vm_name);
 		funlockfile(fp);
 		fclose(fp);
 		argv = split_args(bp);
@@ -344,7 +344,7 @@ spawn_grub(struct proc_pipe *pp)
 		dup2(pfd[1], 1);
 		dup2(pfd[1], 2);
 
-		execv(LOCALBASE"/sbin/grub-bhyve", argv);
+		execv(LOCALBASE "/sbin/grub-bhyve", argv);
 		exit(1);
 	}
 	pp->pid = pid;
@@ -425,9 +425,11 @@ sort_disk_info_list(struct disk_info_head *list, int nlist)
 		array[i++] = di;
 
 #if __FreeBSD_version < 1400071
-	qsort_r(array, nlist, sizeof(struct disk_info *), NULL, compare_disk_info);
+	qsort_r(array, nlist, sizeof(struct disk_info *), NULL,
+	    compare_disk_info);
 #else
-	qsort_r(array, nlist, sizeof(struct disk_info *), compare_disk_info, NULL);
+	qsort_r(array, nlist, sizeof(struct disk_info *), compare_disk_info,
+	    NULL);
 #endif
 	for (i = 0; i < nlist - 1; i++)
 		SLIST_NEXT(array[i], next) = array[i + 1];
@@ -456,12 +458,14 @@ parse_disks(char *line, struct disk_info_head *list, int nlist __unused)
 
 	e = line;
 	while (*e != '\0') {
-		for (; *e != '(' && *e != '\0'; e++);
+		for (; *e != '(' && *e != '\0'; e++)
+			;
 		if (*e == '\0' || e[1] == '\0')
 			break;
 		e++;
 		s = e;
-		for (; *e != ')'  && *e != '\0'; e++);
+		for (; *e != ')' && *e != '\0'; e++)
+			;
 		if (*e == '\0')
 			break;
 
@@ -478,13 +482,15 @@ parse_disks(char *line, struct disk_info_head *list, int nlist __unused)
 			goto err;
 		if ((token = strsep(&s, ",")) == NULL)
 			goto next;
-		for (n = token; !(isnumber(*n)) && *n != '\0'; n++);
+		for (n = token; !(isnumber(*n)) && *n != '\0'; n++)
+			;
 		if ((di->part_name = strndup(token, n - token)) == NULL)
 			goto err;
 		di->part_index = strtol(n, NULL, 10);
 		if ((token = strsep(&s, ",")) == NULL)
 			goto next;
-		for (n = token; !(isnumber(*n)) && *n != '\0'; n++);
+		for (n = token; !(isnumber(*n)) && *n != '\0'; n++)
+			;
 		if ((di->slice_name = strndup(token, n - token)) == NULL)
 			goto err;
 		di->slice_index = strtol(n, NULL, 10);
@@ -559,11 +565,12 @@ inspect_with_grub(struct inspection *ins)
 	const static struct {
 		const char *kernel;
 		const char *method;
-	} *p, kernels[] = {
-		{OPENBSD_UPGRADE_KERNEL, "kopenbsd"},
-		{OPENBSD_KERNEL, "kopenbsd"},
-		{NETBSD_KERNEL, "knetbsd"},
-	};
+	} *p,
+	    kernels[] = {
+		    { OPENBSD_UPGRADE_KERNEL, "kopenbsd" },
+		    { OPENBSD_KERNEL, "kopenbsd" },
+		    { NETBSD_KERNEL, "knetbsd" },
+	    };
 
 	if ((pp = pp_create()) == NULL)
 		return -1;
@@ -584,9 +591,8 @@ inspect_with_grub(struct inspection *ins)
 
 	SLIST_FOREACH(di, &list, next) {
 		if (strcmp(di->disk_name, "hd0") ||
-		    (di->part_name &&
-		     strcmp(di->part_name, "openbsd") &&
-		     strcmp(di->part_name, "gpt")))
+		    (di->part_name && strcmp(di->part_name, "openbsd") &&
+			strcmp(di->part_name, "gpt")))
 			continue;
 		if (pp_printf(pp, "ls (%s)/\n", di->orig_name) < 0 ||
 		    pp_expect(pp, NEWLINE, NULL, 0) < 0 ||
@@ -599,12 +605,10 @@ inspect_with_grub(struct inspection *ins)
 			if ((dn = get_diskname(p->kernel, di)) == NULL)
 				goto err;
 			if (asprintf(&ins->load_cmd,
-				     "%s%s -h com0 -r %s (%s)/%s"
-				     "\nboot\n",
-				     p->method,
-				     ins->single_user ? " -s" : "",
-				     dn,
-				     di->orig_name, p->kernel) < 0) {
+				"%s%s -h com0 -r %s (%s)/%s"
+				"\nboot\n",
+				p->method, ins->single_user ? " -s" : "", dn,
+				di->orig_name, p->kernel) < 0) {
 				free(dn);
 				goto err;
 			}

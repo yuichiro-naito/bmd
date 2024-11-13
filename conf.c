@@ -26,18 +26,21 @@
  * SUCH DAMAGE.
  */
 #include <sys/param.h>
-#include <stdlib.h>
-#include <string.h>
+
 #include <ctype.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "log.h"
-#include "conf.h"
-#include "bmd_plugin.h"
 #include "bmd.h"
+#include "bmd_plugin.h"
+#include "conf.h"
+#include "log.h"
 
-#define CMP(a,b)    ((a) < (b) ? -1 : ((a) == (b) ? 0 : 1))
-#define CMP_RETURN(a,b)  if ((a) != (b)) return (a) < (b) ? -1 : 1
+#define CMP(a, b) ((a) < (b) ? -1 : ((a) == (b) ? 0 : 1))
+#define CMP_RETURN(a, b) \
+	if ((a) != (b))  \
+	return (a) < (b) ? -1 : 1
 
 struct id_entry {
 	SLIST_ENTRY(id_entry) next;
@@ -54,101 +57,89 @@ static int compare_variable_key(struct conf_var *, struct conf_var *);
 RB_GENERATE_STATIC(vartree, conf_var, entry, compare_variable_key);
 struct vartree *global_vars = NULL;
 
-#define generate_list_getter(type, member)		\
-	struct type *get_##type(struct vm_conf *conf)	\
-	{						\
-		return STAILQ_FIRST(&conf->member);	\
-	}						\
-	struct type *next_##type(struct type *p)	\
-	{						\
-		return STAILQ_NEXT(p, next);		\
+#define generate_list_getter(type, member)            \
+	struct type *get_##type(struct vm_conf *conf) \
+	{                                             \
+		return STAILQ_FIRST(&conf->member);   \
+	}                                             \
+	struct type *next_##type(struct type *p)      \
+	{                                             \
+		return STAILQ_NEXT(p, next);          \
 	}
 
 #define generate_member_getter(rtype, type, member) \
-	rtype					    \
-	get_##type##_##member(struct type *p)	    \
-	{					    \
-		return p->member;		    \
+	rtype get_##type##_##member(struct type *p) \
+	{                                           \
+		return p->member;                   \
 	}
 
-#define generate_member_bool(type, member)	    \
-	bool					    \
-	is_##type##_##member(struct type *p)	    \
-	{					    \
-		return p->member;		    \
+#define generate_member_bool(type, member)        \
+	bool is_##type##_##member(struct type *p) \
+	{                                         \
+		return p->member;                 \
 	}
 
-#define generate_clear_list(type, member)			\
-	void							\
-	clear_##type(struct vm_conf *vc)			\
-	{							\
-		struct type *p, *pn;				\
-		STAILQ_FOREACH_SAFE (p, &vc->member, next, pn)	\
-			free_##type(p);				\
-		STAILQ_INIT(&vc->member);			\
+#define generate_clear_list(type, member)                     \
+	void clear_##type(struct vm_conf *vc)                 \
+	{                                                     \
+		struct type *p, *pn;                          \
+		STAILQ_FOREACH_SAFE(p, &vc->member, next, pn) \
+			free_##type(p);                       \
+		STAILQ_INIT(&vc->member);                     \
 	}
 
-#define generate_getter(rtype, member)	    \
-	rtype					    \
-	get_##member(struct vm_conf *c)		    \
-	{					    \
-		return c->member;		    \
+#define generate_getter(rtype, member)        \
+	rtype get_##member(struct vm_conf *c) \
+	{                                     \
+		return c->member;             \
 	}
 
-#define generate_string_accessor(member)	    \
-	char *					    \
-	get_##member(struct vm_conf *c)		    \
-	{					    \
-		return c->member;		    \
-	}					    \
-	int						\
-	set_##member(struct vm_conf *c, const char *v)	\
-	{						\
-		if (c == NULL)				\
-			return -1;			\
-		return set_string(&c->member, v);	\
+#define generate_string_accessor(member)                   \
+	char *get_##member(struct vm_conf *c)              \
+	{                                                  \
+		return c->member;                          \
+	}                                                  \
+	int set_##member(struct vm_conf *c, const char *v) \
+	{                                                  \
+		if (c == NULL)                             \
+			return -1;                         \
+		return set_string(&c->member, v);          \
 	}
 
-#define generate_number_accessor(type, member)	    \
-	type					    \
-	get_##member(struct vm_conf *c)		    \
-	{					    \
-		return c->member;		    \
-	}					    \
-	int						\
-	set_##member(struct vm_conf *c, type v)		\
-	{						\
-		if (c == NULL)				\
-			return -1;			\
-		c->member = v;				\
-		return 0;				\
+#define generate_number_accessor(type, member)      \
+	type get_##member(struct vm_conf *c)        \
+	{                                           \
+		return c->member;                   \
+	}                                           \
+	int set_##member(struct vm_conf *c, type v) \
+	{                                           \
+		if (c == NULL)                      \
+			return -1;                  \
+		c->member = v;                      \
+		return 0;                           \
 	}
 
-#define generate_bool_accessor(member)		    \
-	bool					    \
-	is_##member(struct vm_conf *c)		    \
-	{					    \
-		return c->member;		    \
-	}					    \
-	int						\
-	set_##member(struct vm_conf *c, bool v)		\
-	{						\
-		if (c == NULL)				\
-			return -1;			\
-		c->member = v;				\
-		return 0;				\
+#define generate_bool_accessor(member)              \
+	bool is_##member(struct vm_conf *c)         \
+	{                                           \
+		return c->member;                   \
+	}                                           \
+	int set_##member(struct vm_conf *c, bool v) \
+	{                                           \
+		if (c == NULL)                      \
+			return -1;                  \
+		c->member = v;                      \
+		return 0;                           \
 	}
 
-#define generate_vm_accessor(type, member)	    \
-	type					    \
-	get_##member(struct vm *vm)		    \
-	{					    \
-		return vm->member;		    \
-	}					    \
-	void						\
-	set_##member(struct vm *vm, type v)		\
-	{						\
-		vm->member = v;				\
+#define generate_vm_accessor(type, member)       \
+	type get_##member(struct vm *vm)         \
+	{                                        \
+		return vm->member;               \
+	}                                        \
+	void set_##member(struct vm *vm, type v) \
+	{                                        \
+		vm->member = v;                  \
 	}
 
 void
@@ -156,7 +147,7 @@ free_id_list(void)
 {
 	struct id_entry *e, *t;
 
-	SLIST_FOREACH_SAFE (e, &id_list, next, t)
+	SLIST_FOREACH_SAFE(e, &id_list, next, t)
 		free(e);
 	SLIST_INIT(&id_list);
 }
@@ -167,7 +158,7 @@ assign_id(const char *name, unsigned int *id)
 	static unsigned int lastid = 0;
 	struct id_entry *e;
 
-	SLIST_FOREACH (e, &id_list, next)
+	SLIST_FOREACH(e, &id_list, next)
 		if (strcmp(e->name, name) == 0) {
 			*id = e->id;
 			return 0;
@@ -268,7 +259,7 @@ free_vartree(struct vartree *vt)
 {
 	struct conf_var *v, *vn;
 
-	RB_FOREACH_SAFE (v, vartree, vt, vn) {
+	RB_FOREACH_SAFE(v, vartree, vt, vn) {
 		RB_REMOVE(vartree, vt, v);
 		free_var(v);
 	}
@@ -342,7 +333,7 @@ generate_member_getter(char *, passthru_conf, devid);
 
 int
 add_disk_conf(struct vm_conf *conf, const char *type, const char *path,
-	      bool nocache, bool direct, bool readonly, bool nodelete)
+    bool nocache, bool direct, bool readonly, bool nodelete)
 {
 	struct disk_conf *t;
 	char *y, *p;
@@ -411,7 +402,7 @@ generate_member_getter(char *, iso_conf, path);
 
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
-	     const char *bridge)
+    const char *bridge)
 {
 	bool is_vale;
 	struct net_conf *t;
@@ -434,8 +425,8 @@ add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
 	}
 
 	if (is_vale) {
-		if (asprintf(&t->vale_port, "vm%dp%d", conf->id,
-			     conf->nnets) < 0)
+		if (asprintf(&t->vale_port, "vm%dp%d", conf->id, conf->nnets) <
+		    0)
 			goto err;
 		t->vale = b;
 	} else
@@ -464,7 +455,7 @@ generate_member_getter(char *, net_conf, vale_port);
 
 int
 add_sharefs_conf(struct vm_conf *conf, const char *name, const char *path,
-		 bool ro)
+    bool ro)
 {
 	struct sharefs_conf *t;
 	char *n, *p;
@@ -500,8 +491,7 @@ add_bhyveload_env(struct vm_conf *conf, const char *env)
 	if (conf == NULL)
 		return 0;
 
-	if (env == NULL ||
-	    (be = malloc(sizeof(*be) + strlen(env) + 1)) == NULL)
+	if (env == NULL || (be = malloc(sizeof(*be) + strlen(env) + 1)) == NULL)
 		return -1;
 	strcpy(be->env, env);
 
@@ -521,8 +511,7 @@ add_bhyve_env(struct vm_conf *conf, const char *env)
 	if (conf == NULL)
 		return 0;
 
-	if (env == NULL ||
-	    (be = malloc(sizeof(*be) + strlen(env) + 1)) == NULL)
+	if (env == NULL || (be = malloc(sizeof(*be) + strlen(env) + 1)) == NULL)
 		return -1;
 	strcpy(be->env, env);
 
@@ -562,8 +551,8 @@ copy_net_conf(const struct net_conf *nc)
 	struct net_conf *ret;
 	char *y, *b, *t, *v, *m, *vp;
 
-#define DUPLICATE_STRING(str) (str) ? strdup(str) : NULL
-#define CHECK_DUP_ERR(src, dst)  (src != NULL && dst == NULL)
+#define DUPLICATE_STRING(str)	(str) ? strdup(str) : NULL
+#define CHECK_DUP_ERR(src, dst) (src != NULL && dst == NULL)
 	ret = malloc(sizeof(struct net_conf));
 	y = strdup(nc->type);
 	b = DUPLICATE_STRING(nc->bridge);
@@ -695,8 +684,8 @@ set_fbuf_ipaddr(struct fbuf *fb, const char *ipaddr)
 	return ret;
 }
 
-char
-*get_fbuf_ipaddr(struct vm_conf *conf)
+char *
+get_fbuf_ipaddr(struct vm_conf *conf)
 {
 	return conf->fbuf->ipaddr;
 }
@@ -904,7 +893,6 @@ get_taps(struct vm *vm)
 	return STAILQ_FIRST(&vm->taps);
 }
 
-
 struct fbuf *
 create_fbuf(void)
 {
@@ -952,8 +940,7 @@ create_vm_conf(const char *vm_name)
 	ret->vars.local = local;
 	ret->vars.args = NULL;
 	if (set_var0(local, "NAME", name) < 0)
-		ERR("failed to set \"NAME\" variable! (%s)\n",
-		    strerror(errno));
+		ERR("failed to set \"NAME\" variable! (%s)\n", strerror(errno));
 	if (assign_id(name, &id) == 0) {
 		snprintf(idnum, sizeof(idnum), "%u", id);
 		if (set_var0(local, "ID", idnum) < 0)
@@ -1058,21 +1045,25 @@ vm_conf_export_env(struct vm_conf *conf)
 	struct cpu_pin *cp;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
-				       "always", "reboot" };
-	const static char *hostbridge_str[] = {"none", "intel", "amd"};
-	const static char *bool_str[] ={"false", "true"};
+		"always", "reboot" };
+	const static char *hostbridge_str[] = { "none", "intel", "amd" };
+	const static char *bool_str[] = { "false", "true" };
 	char **com, buf[32];
 	struct vm_entry *vm_ent;
 	struct vm *vm;
 
 	if ((vm_ent = lookup_vm_by_name(conf->name)) == NULL)
-	    return -1;
+		return -1;
 	vm = VM_PTR(vm_ent);
 
-#define ENV_PREFIX      "VM_"
-#define VPUTSTR(v)   vputenv(ENV_PREFIX"%s=%s", capitalize(buf, sizeof(buf), #v), conf->v)
-#define VPUTINT(v)   vputenv(ENV_PREFIX"%s=%d", capitalize(buf, sizeof(buf), #v), conf->v)
-#define VPUTBOOL(v)   vputenv(ENV_PREFIX"%s=%s", capitalize(buf, sizeof(buf), #v), bool_str[conf->v])
+#define ENV_PREFIX "VM_"
+#define VPUTSTR(v) \
+	vputenv(ENV_PREFIX "%s=%s", capitalize(buf, sizeof(buf), #v), conf->v)
+#define VPUTINT(v) \
+	vputenv(ENV_PREFIX "%s=%d", capitalize(buf, sizeof(buf), #v), conf->v)
+#define VPUTBOOL(v)                                                   \
+	vputenv(ENV_PREFIX "%s=%s", capitalize(buf, sizeof(buf), #v), \
+	    bool_str[conf->v])
 
 	VPUTINT(id);
 	VPUTSTR(name);
@@ -1082,7 +1073,8 @@ vm_conf_export_env(struct vm_conf *conf)
 	VPUTINT(ncpu_pins);
 	i = 1;
 	STAILQ_FOREACH(cp, &conf->cpu_pins, next)
-		vputenv(ENV_PREFIX"CPU_PIN%d=%d:%d", i++, cp->vcpu, cp->hostcpu);
+		vputenv(ENV_PREFIX "CPU_PIN%d=%d:%d", i++, cp->vcpu,
+		    cp->hostcpu);
 	VPUTSTR(memory);
 	VPUTBOOL(wired_memory);
 	VPUTBOOL(utctime);
@@ -1094,10 +1086,9 @@ vm_conf_export_env(struct vm_conf *conf)
 	ARRAY_FOREACH(com, vm->assigned_com)
 		if (*com != NULL)
 			vputenv(ENV_PREFIX "COM%ld=%s",
-				CONF_COM_NUM(com, vm->assigned_com),
-				*com);
+			    CONF_COM_NUM(com, vm->assigned_com), *com);
 	VPUTSTR(debug_port);
-	vputenv(ENV_PREFIX"BOOT=%s", btype[conf->boot]);
+	vputenv(ENV_PREFIX "BOOT=%s", btype[conf->boot]);
 	VPUTINT(boot_delay);
 	VPUTINT(loader_timeout);
 	VPUTINT(stop_timeout);
@@ -1105,21 +1096,21 @@ vm_conf_export_env(struct vm_conf *conf)
 	VPUTSTR(bhyveload_loader);
 	VPUTINT(nbhyveload_envs);
 	i = 1;
-	STAILQ_FOREACH (be, &conf->bhyveload_envs, next)
-		vputenv(ENV_PREFIX"BHYVE_LOADENV%d=%s", i++, be->env);
+	STAILQ_FOREACH(be, &conf->bhyveload_envs, next)
+		vputenv(ENV_PREFIX "BHYVE_LOADENV%d=%s", i++, be->env);
 	VPUTINT(nbhyve_envs);
 	i = 1;
-	STAILQ_FOREACH (ev, &conf->bhyve_envs, next)
-		vputenv(ENV_PREFIX"BHYVE_ENV%d=%s", i++, ev->env);
+	STAILQ_FOREACH(ev, &conf->bhyve_envs, next)
+		vputenv(ENV_PREFIX "BHYVE_ENV%d=%s", i++, ev->env);
 	VPUTSTR(loadcmd);
 	VPUTSTR(installcmd);
 	VPUTSTR(err_logfile);
-	vputenv(ENV_PREFIX"HOSTBRIDGE=%s", hostbridge_str[conf->hostbridge]);
+	vputenv(ENV_PREFIX "HOSTBRIDGE=%s", hostbridge_str[conf->hostbridge]);
 
 	VPUTINT(npassthrues);
 	i = 1;
-	STAILQ_FOREACH (pc, &conf->passthrues, next)
-		vputenv(ENV_PREFIX"PASSTHRUES%d=%s", i++, pc->devid);
+	STAILQ_FOREACH(pc, &conf->passthrues, next)
+		vputenv(ENV_PREFIX "PASSTHRUES%d=%s", i++, pc->devid);
 
 	if (conf->tpm_dev) {
 		VPUTSTR(tpm_dev);
@@ -1128,57 +1119,58 @@ vm_conf_export_env(struct vm_conf *conf)
 
 	VPUTINT(ndisks);
 	i = 1;
-	STAILQ_FOREACH (dc, &conf->disks, next) {
-		vputenv(ENV_PREFIX"DISK%d_TYPE=%s", i, dc->type);
-		vputenv(ENV_PREFIX"DISK%d_PATH=%s", i, dc->path);
+	STAILQ_FOREACH(dc, &conf->disks, next) {
+		vputenv(ENV_PREFIX "DISK%d_TYPE=%s", i, dc->type);
+		vputenv(ENV_PREFIX "DISK%d_PATH=%s", i, dc->path);
 		vputenv(ENV_PREFIX "DISK%d_NOCACHE=%s", i,
-			bool_str[dc->nocache]);
-		vputenv(ENV_PREFIX "DISK%d_DIRECT=%s", i,
-			bool_str[dc->direct]);
+		    bool_str[dc->nocache]);
+		vputenv(ENV_PREFIX "DISK%d_DIRECT=%s", i, bool_str[dc->direct]);
 		vputenv(ENV_PREFIX "DISK%d_READONLY=%s", i,
-			bool_str[dc->readonly]);
+		    bool_str[dc->readonly]);
 		vputenv(ENV_PREFIX "DISK%d_NODELETE=%s", i,
-			bool_str[dc->nodelete]);
+		    bool_str[dc->nodelete]);
 	}
 	VPUTINT(nsharefs);
 	i = 1;
-	STAILQ_FOREACH (sc, &conf->sharefss, next) {
-		vputenv(ENV_PREFIX"SHAREFS%d_NAME=%s", i, sc->name);
-		vputenv(ENV_PREFIX"SHAREFS%d_PATH=%s", i, sc->path);
+	STAILQ_FOREACH(sc, &conf->sharefss, next) {
+		vputenv(ENV_PREFIX "SHAREFS%d_NAME=%s", i, sc->name);
+		vputenv(ENV_PREFIX "SHAREFS%d_PATH=%s", i, sc->path);
 		vputenv(ENV_PREFIX "DISK%d_READONLY=%s", i,
-			bool_str[sc->readonly]);
+		    bool_str[sc->readonly]);
 	}
 	VPUTINT(nisoes);
 	i = 1;
-	STAILQ_FOREACH (ic, &conf->isoes, next) {
-		vputenv(ENV_PREFIX"ISO%d_TYPE=%s", i, ic->type);
-		vputenv(ENV_PREFIX"ISO%d_PATH=%s", i++, ic->path);
+	STAILQ_FOREACH(ic, &conf->isoes, next) {
+		vputenv(ENV_PREFIX "ISO%d_TYPE=%s", i, ic->type);
+		vputenv(ENV_PREFIX "ISO%d_PATH=%s", i++, ic->path);
 	}
-	vputenv(ENV_PREFIX"NNETWORKS=%d", conf->nnets);
+	vputenv(ENV_PREFIX "NNETWORKS=%d", conf->nnets);
 	i = 1;
-	STAILQ_FOREACH (nc, &vm->taps, next) {
-		vputenv(ENV_PREFIX"NETWORK%d_TYPE=%s", i, nc->type);
+	STAILQ_FOREACH(nc, &vm->taps, next) {
+		vputenv(ENV_PREFIX "NETWORK%d_TYPE=%s", i, nc->type);
 		if (nc->mac)
-			vputenv(ENV_PREFIX"NETWORK%d_MAC=%s", i, nc->mac);
+			vputenv(ENV_PREFIX "NETWORK%d_MAC=%s", i, nc->mac);
 		if (nc->tap)
-			vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->tap);
+			vputenv(ENV_PREFIX "NETWORK%d_TAP=%s", i, nc->tap);
 		else if (nc->vale_port)
-			vputenv(ENV_PREFIX"NETWORK%d_TAP=%s", i, nc->vale_port);
+			vputenv(ENV_PREFIX "NETWORK%d_TAP=%s", i,
+			    nc->vale_port);
 		if (nc->bridge)
-			vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i, nc->bridge);
+			vputenv(ENV_PREFIX "NETWORK%d_BRIDGE=%s", i,
+			    nc->bridge);
 		else if (nc->vale)
-			vputenv(ENV_PREFIX"NETWORK%d_BRIDGE=%s", i, nc->vale);
+			vputenv(ENV_PREFIX "NETWORK%d_BRIDGE=%s", i, nc->vale);
 		i++;
 	}
 	fb = conf->fbuf;
-	vputenv(ENV_PREFIX"GRAPHICS=%s", bool_str[fb->enable]);
+	vputenv(ENV_PREFIX "GRAPHICS=%s", bool_str[fb->enable]);
 	if (fb->enable) {
-		vputenv(ENV_PREFIX"GRAPHICS_LISTEN=%s", fb->ipaddr);
-		vputenv(ENV_PREFIX"GRAPHICS_PASSWORD=%s", fb->password);
-		vputenv(ENV_PREFIX"GRAPHICS_RES=%dx%d", fb->width, fb->height);
-		vputenv(ENV_PREFIX"GRAPHICS_VGA=%s", fb->vgaconf);
-		vputenv(ENV_PREFIX"GRAPHICS_WAIT=%s", bool_str[fb->wait]);
-		vputenv(ENV_PREFIX"XHCI_MOUSE=%s", conf->mouse);
+		vputenv(ENV_PREFIX "GRAPHICS_LISTEN=%s", fb->ipaddr);
+		vputenv(ENV_PREFIX "GRAPHICS_PASSWORD=%s", fb->password);
+		vputenv(ENV_PREFIX "GRAPHICS_RES=%dx%d", fb->width, fb->height);
+		vputenv(ENV_PREFIX "GRAPHICS_VGA=%s", fb->vgaconf);
+		vputenv(ENV_PREFIX "GRAPHICS_WAIT=%s", bool_str[fb->wait]);
+		vputenv(ENV_PREFIX "XHCI_MOUSE=%s", conf->mouse);
 		VPUTSTR(keymap);
 	}
 
@@ -1199,9 +1191,9 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct cpu_pin *cp;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
-				       "always", "reboot" };
-	const static char *hostbridge_str[] = {"none", "intel", "amd"};
-	const static char *bool_str[] ={"false", "true"};
+		"always", "reboot" };
+	const static char *hostbridge_str[] = { "none", "intel", "amd" };
+	const static char *bool_str[] = { "false", "true" };
 	const static char *fmt = "%18s = %s\n";
 	const static char *dfmt = "%18s = %d\n";
 	const static char *lfmt = "%18s = %s,%s\n";
@@ -1228,7 +1220,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	ARRAY_FOREACH(com, conf->com)
 		if (*com != NULL) {
 			snprintf(buf, sizeof(buf), "com%ld",
-				 CONF_COM_NUM(com, conf->com));
+			    CONF_COM_NUM(com, conf->com));
 			fprintf(fp, fmt, buf, *com);
 		}
 	fprintf(fp, fmt, "debug_port", conf->debug_port);
@@ -1239,12 +1231,12 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, fmt, "loader", conf->loader);
 	fprintf(fp, fmt, "bhyveload_loader", conf->bhyveload_loader);
 	i = 0;
-	STAILQ_FOREACH (be, &conf->bhyveload_envs, next) {
+	STAILQ_FOREACH(be, &conf->bhyveload_envs, next) {
 		snprintf(buf, sizeof(buf), "bhyveload_env%d", i++);
 		fprintf(fp, fmt, buf, be->env);
 	}
 	i = 0;
-	STAILQ_FOREACH (ev, &conf->bhyve_envs, next) {
+	STAILQ_FOREACH(ev, &conf->bhyve_envs, next) {
 		snprintf(buf, sizeof(buf), "bhyve_env%d", i++);
 		fprintf(fp, fmt, buf, ev->env);
 	}
@@ -1255,8 +1247,8 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fprintf(fp, fmt, "virt_random", bool_str[conf->virt_random]);
 
 	if (!STAILQ_EMPTY(&conf->passthrues)) {
-		fprintf(fp, "%18s =" , "passthru");
-		STAILQ_FOREACH (pc, &conf->passthrues, next)
+		fprintf(fp, "%18s =", "passthru");
+		STAILQ_FOREACH(pc, &conf->passthrues, next)
 			fprintf(fp, " %s", pc->devid);
 		fprintf(fp, "\n");
 	}
@@ -1264,14 +1256,14 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	if (conf->tpm_dev) {
 		if (conf->tpm_version)
 			fprintf(fp, "%18s = %s:%s:%s\n", "tpm", conf->tpm_type,
-				conf->tpm_dev, conf->tpm_version);
+			    conf->tpm_dev, conf->tpm_version);
 		else
 			fprintf(fp, "%18s = %s:%s\n", "tpm", conf->tpm_type,
-				conf->tpm_dev);
+			    conf->tpm_dev);
 	}
 
 	i = 0;
-	STAILQ_FOREACH (dc, &conf->disks, next) {
+	STAILQ_FOREACH(dc, &conf->disks, next) {
 		snprintf(buf, sizeof(buf), "disk%d", i++);
 		fprintf(fp, "%18s = %s", buf, dc->type);
 		if (dc->nocache)
@@ -1285,19 +1277,18 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 		fprintf(fp, ":%s\n", dc->path);
 	}
 	i = 0;
-	STAILQ_FOREACH (sc, &conf->sharefss, next) {
+	STAILQ_FOREACH(sc, &conf->sharefss, next) {
 		snprintf(buf, sizeof(buf), "sharefs%d", i++);
 		fprintf(fp, "%18s = %s%s=%s\n", buf,
-			(sc->readonly) ? "readonly:": "",
-			sc->name, sc->path);
+		    (sc->readonly) ? "readonly:" : "", sc->name, sc->path);
 	}
 	i = 0;
-	STAILQ_FOREACH (ic, &conf->isoes, next) {
+	STAILQ_FOREACH(ic, &conf->isoes, next) {
 		snprintf(buf, sizeof(buf), "iso%d", i++);
 		fprintf(fp, lfmt, buf, ic->type, ic->path);
 	}
 	i = 0;
-	STAILQ_FOREACH (nc, &conf->nets, next) {
+	STAILQ_FOREACH(nc, &conf->nets, next) {
 		p = nc->bridge ? nc->bridge : nc->vale;
 		snprintf(buf, sizeof(buf), "net%d", i++);
 		if (nc->mac)
@@ -1308,8 +1299,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	fb = conf->fbuf;
 	if (fb->enable) {
 		fprintf(fp, "%18s = %s:%d, %dx%d, %s, %s\n", "graphics",
-		    fb->ipaddr,
-		    fb->port, fb->width, fb->height, fb->vgaconf,
+		    fb->ipaddr, fb->port, fb->width, fb->height, fb->vgaconf,
 		    fb->wait ? "wait" : "nowait");
 		fprintf(fp, fmt, "xhci_mouse", bool_str[conf->mouse]);
 		fprintf(fp, fmt, "keymap", conf->keymap);
@@ -1331,10 +1321,10 @@ compare_string(const char *a, const char *b)
 
 #define CMP_NUM(t)                       \
 	if ((rc = (a)->t - (b)->t) != 0) \
-		return rc
+	return rc
 #define CMP_STR(t)                                      \
 	if ((rc = compare_string((a)->t, (b)->t)) != 0) \
-		return rc
+	return rc
 
 static int
 compare_fbuf(const struct fbuf *a, const struct fbuf *b)
@@ -1354,7 +1344,8 @@ compare_fbuf(const struct fbuf *a, const struct fbuf *b)
 }
 
 static int
-compare_passthru_conf(const struct passthru_conf *a, const struct passthru_conf *b)
+compare_passthru_conf(const struct passthru_conf *a,
+    const struct passthru_conf *b)
 {
 	int rc;
 
@@ -1422,7 +1413,8 @@ compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 }
 
 static int
-compare_bhyveload_env(const struct bhyveload_env *a, const struct bhyveload_env *b)
+compare_bhyveload_env(const struct bhyveload_env *a,
+    const struct bhyveload_env *b)
 {
 	int rc;
 
@@ -1448,20 +1440,20 @@ compare_cpu_pin(const struct cpu_pin *a, const struct cpu_pin *b)
 	return 0;
 }
 
-#define CMP_LIST(type, member)						\
-	do {								\
-		struct type *ea, *eb;					\
-		for (ea = STAILQ_FIRST(&a->member),			\
-			     eb = STAILQ_FIRST(&b->member);		\
-		     ea != NULL && eb != NULL;				\
+#define CMP_LIST(type, member)                                               \
+	do {                                                                 \
+		struct type *ea, *eb;                                        \
+		for (ea = STAILQ_FIRST(&a->member),                          \
+		    eb = STAILQ_FIRST(&b->member);                           \
+		     ea != NULL && eb != NULL;                               \
 		     ea = STAILQ_NEXT(ea, next), eb = STAILQ_NEXT(eb, next)) \
-			if ((rc = compare_##type(ea, eb)) != 0)		\
-				return rc;				\
-		if (ea != NULL)						\
-			return 1;					\
-		if (eb != NULL)						\
-			return -1;					\
-	} while(0)
+			if ((rc = compare_##type(ea, eb)) != 0)              \
+				return rc;                                   \
+		if (ea != NULL)                                              \
+			return 1;                                            \
+		if (eb != NULL)                                              \
+			return -1;                                           \
+	} while (0)
 
 int
 compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
@@ -1482,7 +1474,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_NUM(ncpu_threads);
 	CMP_STR(memory);
 	CMP_STR(name);
-	for(i = 0; i < nitems(a->com); i++)
+	for (i = 0; i < nitems(a->com); i++)
 		CMP_STR(com[i]);
 	CMP_NUM(boot);
 	CMP_STR(loader);
@@ -1543,7 +1535,7 @@ del_var(struct vartree *vars, const char *k)
 
 	if (k == NULL)
 		return -1;
-	key = (struct conf_var){.key = strdup(k), .val = NULL};
+	key = (struct conf_var) { .key = strdup(k), .val = NULL };
 	if (key.key == NULL)
 		return -1;
 
@@ -1564,7 +1556,7 @@ set_var0(struct vartree *vars, const char *k, const char *v)
 	if (k == NULL || v == NULL)
 		return -1;
 
-	key = (struct conf_var){.key = strdup(k), .val = NULL};
+	key = (struct conf_var) { .key = strdup(k), .val = NULL };
 	if (key.key == NULL)
 		return -1;
 
@@ -1637,7 +1629,7 @@ free_global_vars(void)
 char *
 get_var0(struct vartree *vars, char *k)
 {
-	struct conf_var *r, key = {.key = k, .val = NULL};
+	struct conf_var *r, key = { .key = k, .val = NULL };
 
 	if (vars == NULL)
 		return NULL;
@@ -1773,7 +1765,7 @@ compare_nvlist_number_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 static int
 compare_nvlist_string_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
-	const char * const *da, * const *db;
+	const char *const *da, *const *db;
 	size_t i, sa, sb;
 	int rc;
 
@@ -1789,7 +1781,7 @@ compare_nvlist_string_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 static int
 compare_nvlist_nvlist_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 {
-	const nvlist_t * const *da, * const *db;
+	const nvlist_t *const *da, *const *db;
 	size_t i, sa, sb;
 	int rc;
 
@@ -1803,7 +1795,8 @@ compare_nvlist_nvlist_array(const nvlist_t *a, const char *k, const nvlist_t *b)
 }
 
 static int
-compare_nvlist_descriptor_array(const nvlist_t *a, const char *k, const nvlist_t *b)
+compare_nvlist_descriptor_array(const nvlist_t *a, const char *k,
+    const nvlist_t *b)
 {
 	const int *da, *db;
 	size_t i, sa, sb;
@@ -1847,7 +1840,7 @@ compare_nvlist(const nvlist_t *a, const nvlist_t *b)
 	if (b == NULL || nvlist_error(b))
 		return 1;
 	while ((k = nvlist_next(a, &t, &cookie)) != NULL) {
-		if (! nvlist_exists_type(b, k, t))
+		if (!nvlist_exists_type(b, k, t))
 			return 1;
 		if (t < 0 || t > (int)nitems(cfuncs))
 			continue;
@@ -1857,7 +1850,7 @@ compare_nvlist(const nvlist_t *a, const nvlist_t *b)
 
 	cookie = NULL;
 	while ((k = nvlist_next(b, &t, &cookie)) != NULL)
-		if (! nvlist_exists_type(a, k, t))
+		if (!nvlist_exists_type(a, k, t))
 			return -1;
 
 	return 0;

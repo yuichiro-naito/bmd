@@ -25,6 +25,16 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <sys/types.h>
+#include <sys/dirent.h>
+#include <sys/ioccom.h>
+#include <sys/mdioctl.h>
+#include <sys/mount.h>
+#include <sys/queue.h>
+#include <sys/stat.h>
+#include <sys/sysctl.h>
+#include <sys/uio.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -32,21 +42,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/dirent.h>
-#include <sys/ioccom.h>
-#include <sys/mdioctl.h>
-#include <sys/mount.h>
-#include <sys/queue.h>
-#include <sys/sysctl.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 #include "bmd_plugin.h"
 #include "conf.h"
-#include "vm.h"
 #include "inspect.h"
+#include "vm.h"
 
 static struct inspection *
 create_inspection(struct vm_conf *conf)
@@ -57,8 +58,8 @@ create_inspection(struct vm_conf *conf)
 		return NULL;
 	ins->md_unit = -1;
 	ins->single_user = is_single_user(conf);
-        if (asprintf(&ins->mount_point,
-		     "/tmp/bmd.ins.%d.XXXXXX", getpid()) < 0 ||
+	if (asprintf(&ins->mount_point, "/tmp/bmd.ins.%d.XXXXXX", getpid()) <
+		0 ||
 	    mkdtemp(ins->mount_point) == NULL)
 		goto err;
 
@@ -147,26 +148,25 @@ mddetach(long unit)
 	return rc;
 }
 
-#define	IOV_ENTRY_DECONST(v) { .iov_base = strdup(v), .iov_len = strlen(v) + 1 }
-#define	IOV_LAST_ENTRY(v)	(v)[nitems(v) - 1]
+#define IOV_ENTRY_DECONST(v)                                    \
+	{                                                       \
+		.iov_base = strdup(v), .iov_len = strlen(v) + 1 \
+	}
+#define IOV_LAST_ENTRY(v) (v)[nitems(v) - 1]
 
 static int
 mount_iso(struct inspection *ins)
 {
 	size_t i;
 	int rc;
-	struct iovec iov[] = {
-		IOV_ENTRY_DECONST("fstype"),
-		IOV_ENTRY_DECONST("cd9660"),
-		IOV_ENTRY_DECONST("fspath"),
-		IOV_ENTRY_DECONST(ins->mount_point),
-		IOV_ENTRY_DECONST("from"),
-		IOV_ENTRY_DECONST("/dev/mdNNNNNNNNNN")
-	};
+	struct iovec iov[] = { IOV_ENTRY_DECONST("fstype"),
+		IOV_ENTRY_DECONST("cd9660"), IOV_ENTRY_DECONST("fspath"),
+		IOV_ENTRY_DECONST(ins->mount_point), IOV_ENTRY_DECONST("from"),
+		IOV_ENTRY_DECONST("/dev/mdNNNNNNNNNN") };
 
 	/* XXX: The last .iov_len will be a bit longer. */
 	if (snprintf(IOV_LAST_ENTRY(iov).iov_base, IOV_LAST_ENTRY(iov).iov_len,
-	    "/dev/md%d", (unsigned)ins->md_unit) < 0) {
+		"/dev/md%d", (unsigned)ins->md_unit) < 0) {
 		rc = -1;
 		goto ret;
 	}
@@ -184,14 +184,10 @@ mount_ufs(struct inspection *ins, char *path)
 {
 	size_t i;
 	int rc;
-	struct iovec iov[] = {
-		IOV_ENTRY_DECONST("fstype"),
-		IOV_ENTRY_DECONST("ufs"),
-		IOV_ENTRY_DECONST("fspath"),
-		IOV_ENTRY_DECONST(ins->mount_point),
-		IOV_ENTRY_DECONST("from"),
-		IOV_ENTRY_DECONST(path)
-	};
+	struct iovec iov[] = { IOV_ENTRY_DECONST("fstype"),
+		IOV_ENTRY_DECONST("ufs"), IOV_ENTRY_DECONST("fspath"),
+		IOV_ENTRY_DECONST(ins->mount_point), IOV_ENTRY_DECONST("from"),
+		IOV_ENTRY_DECONST(path) };
 
 	rc = nmount(iov, nitems(iov), MNT_RDONLY);
 	for (i = 0; i < nitems(iov); i++)
@@ -261,7 +257,8 @@ inspect_netbsd_iso(struct inspection *ins)
 		return -1;
 
 	cmd = "knetbsd -h com0 -r cd0a /" NETBSD_KERNEL "\nboot\n";
-	rc = (is_file(path) && (ins->install_cmd = strdup(cmd)) != NULL) ? 0 : -1;
+	rc = (is_file(path) && (ins->install_cmd = strdup(cmd)) != NULL) ? 0 :
+									   -1;
 	free(path);
 	return rc;
 }
@@ -285,7 +282,8 @@ inspect_openbsd_iso(struct inspection *ins)
 	while ((e = readdir(d)) != NULL) {
 		if (e->d_name[0] == '.')
 			continue;
-		if (is_directory(dirfd(d), e) && match_version_number(e->d_name)) {
+		if (is_directory(dirfd(d), e) &&
+		    match_version_number(e->d_name)) {
 			if (asprintf(&npath, "%s/%s", path, e->d_name) < 0)
 				goto err2;
 			free(path);
@@ -309,7 +307,7 @@ inspect_openbsd_iso(struct inspection *ins)
 			continue;
 		if (is_directory(dirfd(d), e)) {
 			if (asprintf(&npath, "%s/%s/%s", path, e->d_name,
-					    OPENBSD_RAMDISK_KERNEL) < 0)
+				OPENBSD_RAMDISK_KERNEL) < 0)
 				goto err2;
 			free(path);
 			path = npath;
@@ -324,8 +322,8 @@ inspect_openbsd_iso(struct inspection *ins)
 
 	/* look for bsd.rd */
 	if (!is_file(path) ||
-	    asprintf(&ins->install_cmd,
-		     "kopenbsd -h com0 %s\nboot\n", &path[mplen]) < 0)
+	    asprintf(&ins->install_cmd, "kopenbsd -h com0 %s\nboot\n",
+		&path[mplen]) < 0)
 		goto err;
 
 	free(path);
@@ -354,8 +352,7 @@ inspect_iso_image(struct inspection *ins)
 	if (mount_iso(ins) < 0)
 		goto err;
 
-	if (inspect_netbsd_iso(ins) < 0 &&
-	    inspect_openbsd_iso(ins) < 0)
+	if (inspect_netbsd_iso(ins) < 0 && inspect_openbsd_iso(ins) < 0)
 		goto err2;
 
 	unmount(ins->mount_point, 0);
@@ -473,9 +470,9 @@ inspect_openbsd_disk(struct inspection *ins)
 
 	if (is_file(path) &&
 	    (asprintf(&ins->load_cmd,
-		      "kopenbsd -h com0 -r sd0a (hd0,%s)/"
-		      OPENBSD_UPGRADE_KERNEL "\nboot\n",
-		      ins->grub_run_partition)) > 0)
+		"kopenbsd -h com0 -r sd0a (hd0,%s)/" OPENBSD_UPGRADE_KERNEL
+		"\nboot\n",
+		ins->grub_run_partition)) > 0)
 		goto ret;
 	free(path);
 
@@ -485,10 +482,9 @@ inspect_openbsd_disk(struct inspection *ins)
 
 	if (is_file(path) &&
 	    (asprintf(&ins->load_cmd,
-		      "kopenbsd %s -h com0 -r sd0a (hd0,%s)/"
-		      OPENBSD_KERNEL "\nboot\n",
-		      ins->single_user ? "-s" : "",
-		      ins->grub_run_partition)) > 0)
+		"kopenbsd %s -h com0 -r sd0a (hd0,%s)/" OPENBSD_KERNEL
+		"\nboot\n",
+		ins->single_user ? "-s" : "", ins->grub_run_partition)) > 0)
 		goto ret;
 	free(path);
 err:
@@ -508,10 +504,9 @@ inspect_netbsd_disk(struct inspection *ins)
 		goto err;
 
 	cmd = ins->single_user ?
-		"knetbsd -s -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n" :
-		"knetbsd -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n";
-	if (is_file(path) &&
-	    (ins->load_cmd = strdup(cmd)) != NULL) {
+	    "knetbsd -s -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n" :
+	    "knetbsd -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n";
+	if (is_file(path) && (ins->load_cmd = strdup(cmd)) != NULL) {
 		free(path);
 		return 0;
 	}
@@ -544,8 +539,7 @@ inspect_disk_image(struct inspection *ins)
 	if (mount_blockdev(ins) < 0)
 		goto err;
 
-	if (inspect_netbsd_disk(ins) < 0 &&
-	    inspect_openbsd_disk(ins) < 0)
+	if (inspect_netbsd_disk(ins) < 0 && inspect_openbsd_disk(ins) < 0)
 		goto err2;
 
 	unmount(ins->mount_point, 0);
