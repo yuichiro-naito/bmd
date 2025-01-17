@@ -1289,17 +1289,50 @@ gl_conf_set_params(struct global_conf *gc, struct variables *vars,
 	return 0;
 }
 
+static void
+vm_conf_call_parser(struct vm_conf *conf, struct cfsection *sc,
+    struct cfparam *pr, struct parser_entry *parser, char *key,
+    struct cfvalue *vl)
+{
+	struct cftoken *tk;
+	struct vm_conf_entry *conf_ent = (struct vm_conf_entry *)conf;
+	char *val;
+	int rc;
+
+	val = token_to_string(&conf->vars, &vl->tokens);
+	if (val == NULL)
+		return;
+	if (parser) {
+		if ((*parser->parse)(conf, val) < 0) {
+			tk = STAILQ_FIRST(&vl->tokens);
+			tk = tk ? tk : pr->key;
+			ERR("%s line %d: vm %s: invalid value: %s = %s\n",
+			    tk->filename, tk->lineno, sc->name, key, val);
+		}
+	} else {
+		rc = call_plugin_parser(&conf_ent->pl_data, key, val);
+		if (rc > 0) {
+			ERR("%s line %d: %s: unknown key %s\n",
+			    pr->key->filename, pr->key->lineno, sc->name, key);
+		} else if (rc < 0) {
+			tk = STAILQ_FIRST(&vl->tokens);
+			tk = tk ? tk : pr->key;
+			ERR("%s line %d: %s: invalid value: %s = %s\n",
+			    tk->filename, tk->lineno, sc->name, key, val);
+		}
+	}
+	free(val);
+}
+
+
 static int
 vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 {
 	struct cfparam *pr;
 	struct cfvalue *vl;
 	struct cftarget *gt;
-	struct cftoken *tk;
 	struct parser_entry *parser;
-	struct vm_conf_entry *conf_ent = (struct vm_conf_entry *)conf;
 	char *key, *val;
-	int rc;
 
 	STAILQ_FOREACH(pr, &sc->params, next) {
 		key = pr->key->s;
@@ -1321,37 +1354,10 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 		}
 		parser = bsearch(key, parser_list, nitems(parser_list),
 		    sizeof(parser_list[0]), compare_parser_entry);
-		if (parser && parser->clear != NULL && pr->operator== 0)
+		if (parser && parser->clear != NULL && pr->operator == 0)
 			(*parser->clear)(conf);
-		STAILQ_FOREACH(vl, &pr->vals, next) {
-			val = token_to_string(&conf->vars, &vl->tokens);
-			if (val == NULL)
-				continue;
-			if (parser) {
-				if ((*parser->parse)(conf, val) < 0) {
-					tk = STAILQ_FIRST(&vl->tokens);
-					tk = tk ? tk : pr->key;
-					ERR("%s line %d: vm %s: invalid value: %s = %s\n",
-					    tk->filename, tk->lineno, sc->name,
-					    key, val);
-				}
-			} else {
-				rc = call_plugin_parser(&conf_ent->pl_data, key,
-				    val);
-				if (rc > 0) {
-					ERR("%s line %d: %s: unknown key %s\n",
-					    pr->key->filename, pr->key->lineno,
-					    sc->name, key);
-				} else if (rc < 0) {
-					tk = STAILQ_FIRST(&vl->tokens);
-					tk = tk ? tk : pr->key;
-					ERR("%s line %d: %s: invalid value: %s = %s\n",
-					    tk->filename, tk->lineno, sc->name,
-					    key, val);
-				}
-			}
-			free(val);
-		}
+		STAILQ_FOREACH(vl, &pr->vals, next)
+			vm_conf_call_parser(conf, sc, pr, parser, key, vl);
 	}
 
 	return 0;
