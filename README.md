@@ -162,7 +162,8 @@ Following keys are available.
 |----:|:------------|:---------|:--------------|
 | boot | One of followings<br>"no": don't boot <br>"yes": boot at daemon start or reload<br>"oneshot": boot at daemon start only<br>"always": always reboot after shutdown VM | no | no |
 | boot_delay | boot delay in seconds | no | 0 |
-| comport | Specify com1 port<br> e.g. /dev/nmdm0B <br> "auto" assigns nmdm number automatically | no | (none) |
+| com[1-4] | Specify com[1-4] port<br> e.g. /dev/nmdm0B <br> "auto" assigns nmdm number automatically | no | (none) |
+| comport | an alias to the com1. | no | (none) |
 | debug_port | gdb debug port | no | (none) |
 | disk | disk image filename(s)<br>e.g.<br>/var/images/vm-disk-0 nvme:/var/images/vm-disk-1 | yes | (none) |
 | sharefs | pathname(s) shared by virtio-9p <br>e.g.<br>homeA=/home/userA | no | (none) |
