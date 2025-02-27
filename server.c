@@ -568,8 +568,15 @@ open_comport(const char *comport)
 {
 	int fd;
 
+	/*
+	 * Note that O_NONBLOCK is not supported by nmdm(4).
+	 */
 	if ((fd = open(comport, O_RDWR)) < 0)
 		goto err;
+	/*
+	 * Call flock(2) separately so as not to be blocked here.
+	 * We want to return an error while the lock is held.
+	 */
 	if (flock(fd, LOCK_EX | LOCK_NB) < 0)
 		goto err2;
 
