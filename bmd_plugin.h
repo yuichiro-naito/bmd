@@ -81,7 +81,7 @@ enum STATE {
 
 #define SHAREFS_CONF_FOREACH(sc, conf)                      \
 	for ((sc) = get_sharefs_conf((conf)); (sc) != NULL; \
-	     (sc) = next_net_conf((sc)))
+	     (sc) = next_sharefs_conf((sc)))
 
 #define TAPS_FOREACH(nc, vm) \
 	for ((nc) = get_taps((vm)); (nc) != NULL; (nc) = next_net_conf((nc)))
