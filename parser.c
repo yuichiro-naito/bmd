@@ -25,6 +25,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -1669,6 +1670,32 @@ compare_fstat(int fd, struct stat *old)
 	} while (0)
 
 static int
+wait_for_child_and_signal(pid_t cid)
+{
+	int rc;
+	struct kevent ev[3], r;
+#if __FreeBSD_version >= 1400088 || \
+    (__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
+	int q = kqueue1(O_CLOEXEC);
+#else
+	int q = kqueue();
+#endif
+	if (q < 0)
+		return -1;
+
+	EV_SET(&ev[0], cid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+	EV_SET(&ev[1], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&ev[2], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+
+	while ((rc = kevent(q, ev, nitems(ev), &r, 1, NULL)) < 0)
+		if (errno != EINTR)
+			break;
+
+	close(q);
+	return (rc > 0 && r.filter == EVFILT_PROC) ? 0 : -1;
+}
+
+static int
 parse(struct cffile *file)
 {
 	FILE *fp;
@@ -1711,10 +1738,11 @@ retry:
 		fclose(fp);
 		yylex_destroy();
 		exit(rc);
-	} else
-		waitpid(pid, &status, 0);
+	}
 
-	if (!WIFEXITED(status))
+	if (wait_for_child_and_signal(pid) < 0 ||
+	    waitpid(pid, &status, 0) < 0 ||
+	    (!WIFEXITED(status)))
 		return -1;
 	if (WEXITSTATUS(status) != 0) {
 		switch (mpool_get_error()) {
