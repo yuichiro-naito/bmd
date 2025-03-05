@@ -1326,7 +1326,6 @@ vm_conf_call_parser(struct vm_conf *conf, struct cfsection *sc,
 	free(val);
 }
 
-
 static int
 vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 {
@@ -1356,7 +1355,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 		}
 		parser = bsearch(key, parser_list, nitems(parser_list),
 		    sizeof(parser_list[0]), compare_parser_entry);
-		if (parser && parser->clear != NULL && pr->operator == 0)
+		if (parser && parser->clear != NULL && pr->operator== 0)
 			(*parser->clear)(conf);
 		STAILQ_FOREACH(vl, &pr->vals, next)
 			vm_conf_call_parser(conf, sc, pr, parser, key, vl);
@@ -1676,7 +1675,7 @@ wait_for_child_and_signal(pid_t cid)
 	int rc;
 	struct kevent *ev, e[3], r;
 	int evlen;
-	struct timespec *timeo, tv = {0, 100000000};
+	struct timespec *timeo, tv = { 0, 100000000 };
 #if __FreeBSD_version >= 1400088 || \
     (__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
 	int q = kqueue1(O_CLOEXEC);
@@ -1760,8 +1759,7 @@ retry:
 	}
 
 	if (wait_for_child_and_signal(pid) < 0 ||
-	    waitpid(pid, &status, 0) < 0 ||
-	    (!WIFEXITED(status)))
+	    waitpid(pid, &status, 0) < 0 || (!WIFEXITED(status)))
 		return -1;
 	if (WEXITSTATUS(status) != 0) {
 		switch (mpool_get_error()) {
