@@ -40,6 +40,7 @@
 #include <libgen.h>
 #include <pwd.h>
 #include <regex.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -1673,7 +1674,9 @@ static int
 wait_for_child_and_signal(pid_t cid)
 {
 	int rc;
-	struct kevent ev[3], r;
+	struct kevent *ev, e[3], r;
+	int evlen;
+	struct timespec *timeo, tv = {0, 100000000};
 #if __FreeBSD_version >= 1400088 || \
     (__FreeBSD_version < 1400000 && __FreeBSD_version >= 1302505)
 	int q = kqueue1(O_CLOEXEC);
@@ -1683,13 +1686,24 @@ wait_for_child_and_signal(pid_t cid)
 	if (q < 0)
 		return -1;
 
-	EV_SET(&ev[0], cid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
-	EV_SET(&ev[1], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
-	EV_SET(&ev[2], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
-
-	while ((rc = kevent(q, ev, nitems(ev), &r, 1, NULL)) < 0)
+	timeo = NULL;
+	EV_SET(&e[0], cid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+	EV_SET(&e[1], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&e[2], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	ev = e;
+	evlen = nitems(e);
+retry:
+	while ((rc = kevent(q, ev, evlen, &r, 1, timeo)) < 0)
 		if (errno != EINTR)
 			break;
+
+	if (timeo == NULL && rc > 0 && r.filter == EVFILT_SIGNAL) {
+		kill(cid, SIGTERM);
+		timeo = &tv;
+		ev = NULL;
+		evlen = 0;
+		goto retry;
+	}
 
 	close(q);
 	return (rc > 0 && r.filter == EVFILT_PROC) ? 0 : -1;
@@ -1702,6 +1716,7 @@ parse(struct cffile *file)
 	struct stat st, lst;
 	int rc, status;
 	pid_t pid;
+	sigset_t nmask;
 
 retry:
 	mpool_snapshot();
@@ -1710,6 +1725,10 @@ retry:
 	if ((pid = fork()) < 0)
 		return -1;
 	if (pid == 0) {
+		sigemptyset(&nmask);
+		sigaddset(&nmask, SIGTERM);
+		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
+
 		if (stat(file->original_name, &st) < 0 ||
 		    (!S_ISREG(st.st_mode))) {
 			ERR("%s is not a file\n", file->original_name);
