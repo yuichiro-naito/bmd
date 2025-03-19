@@ -1646,6 +1646,9 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 			return -1;
 		}
 
+	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
+		VM_LOGFD(vm_ent) = open_err_logfile(conf);
+
 	if (VM_STATE(vm_ent) == TERMINATE) {
 		init_plugin_results(vm_ent);
 		if (assign_taps(VM_PTR(vm_ent)) < 0)
@@ -1668,6 +1671,8 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 			goto force_kill;
 		if (rc <= 0)
 			return rc;
+		if (wait_for_vm_output(vm_ent) < 0)
+			return -1;
 		/* FALLTHROUGH */
 	}
 
@@ -1687,9 +1692,6 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 		INFO("start vm %s\n", name);
 
 	call_plugins(vm_ent);
-
-	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
-		VM_LOGFD(vm_ent) = open_err_logfile(conf);
 
 	return 0;
 

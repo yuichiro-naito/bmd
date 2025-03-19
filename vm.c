@@ -47,6 +47,7 @@
 #include <strings.h>
 #include <unistd.h>
 
+#include "bmd_plugin.h"
 #include "conf.h"
 #include "inspect.h"
 #include "log.h"
@@ -83,7 +84,7 @@ redirect_to_com(struct vm *vm, bool redirect_stdin)
 	if (redirect_stdin)
 		dup2(fd, 0);
 	dup2(fd, 1);
-	dup2(fd, 2);
+	dup2(get_logfd(vm) != -1 ? get_logfd(vm) : fd, 2);
 
 	return 0;
 }
@@ -379,6 +380,16 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			ERR("malloc: %s\n", strerror(errno));
 			exit(1);
 		}
+		if (get_logfd(vm) != -1) {
+			char **t;
+			if ((fp = fdopen(get_logfd(vm), "a")) != NULL) {
+				for (t = argv; *t != NULL; t++)
+					fprintf(fp, "%s ", *t);
+				fprintf(fp, "\n");
+				fflush(fp);
+				fdclose(fp, NULL);
+			}
+		}
 		execv(argv[0], argv);
 		ERR("cannot exec %s\n", argv[0]);
 		exit(1);
@@ -482,6 +493,13 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		if (argv == NULL) {
 			ERR("malloc %s\n", strerror(errno));
 			exit(1);
+		}
+		if (dopipe) {
+			char **t;
+			for (t = argv; *t != NULL; t++)
+				printf("%s ", *t);
+			printf("\n");
+			fflush(stdout);
 		}
 		execv(argv[0], argv);
 		ERR("cannot exec %s\n", argv[0]);
