@@ -1,3 +1,6 @@
+* 3.3
+	- Report loader error messages to the 'err_logfile'.
+	  (503b7c7907c115b77c1ed86eacb3867dc2eb1986)
 * 3.2
 	- Add support of 'x2apic'.
 	- Add support of 'virt-random'.
