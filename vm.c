@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
+#include <sys/wait.h>
 
 #include <machine/vmm.h>
 #include <machine/vmm_dev.h>
@@ -49,6 +50,7 @@
 
 #include "bmd_plugin.h"
 #include "conf.h"
+#include "server.h"
 #include "inspect.h"
 #include "log.h"
 #include "vm.h"
@@ -56,38 +58,6 @@
 #define UEFI_CSM_FIRMWARE  LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
 #define UEFI_FIRMWARE	   LOCALBASE "/share/uefi-firmware/BHYVE_UEFI.fd"
 #define UEFI_FIRMWARE_VARS LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
-
-static int
-redirect_to_com(struct vm *vm, bool redirect_stdin)
-{
-	int fd, flag;
-	const char *com;
-
-	if ((com = get_assigned_com(vm, 0)) == NULL)
-		com = "/dev/null";
-
-	flag = (redirect_stdin) ? O_RDWR : O_WRONLY;
-
-	/*
-	  Set O_NONBLOCK not to wait for peer connects to this nmdm.
-	  The kernel sometimes fails to open with ENOENT, retry open it.
-	  Basically the nmdm device is automatically created, I'm not sure why
-	  ENOENT is returned.
-	 */
-	while ((fd = open(com, flag | O_NONBLOCK)) < 0)
-		if (errno != EINTR && errno != ENOENT)
-			break;
-	if (fd < 0) {
-		ERR("can't open %s (%s)\n", com, strerror(errno));
-		return -1;
-	}
-	if (redirect_stdin)
-		dup2(fd, 0);
-	dup2(fd, 1);
-	dup2(get_logfd(vm) != -1 ? get_logfd(vm) : fd, 2);
-
-	return 0;
-}
 
 int
 write_mapfile(struct vm_conf *conf, char **mapfile)
@@ -296,61 +266,141 @@ grub_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
 }
 
 static int
+wait_process(int ident __unused, void *data)
+{
+	int status;
+	struct vm *vm = data;
+	long pid = get_load_cmd_supplier(vm);
+	if (pid != -1) {
+		waitpid(pid, &status, 0);
+		set_load_cmd_supplier(vm, -1);
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+			ERR("%s\n", "load_cmd_supplier failed!");
+	}
+	return 0;
+}
+
+static int
+kill_process(int ident __unused, void *data)
+{
+	struct vm *vm = data;
+	long pid = get_load_cmd_supplier(vm);
+	if (pid != -1)
+		kill(pid, SIGTERM);
+	return 0;
+}
+
+static int
+supply_grub_cmd(struct vm *vm, char *cmd, size_t cmdlen)
+{
+	int fd;
+	char *nmdm;
+	pid_t pid;
+	sigset_t nmask;
+
+	pid = fork();
+	if (pid < 0)
+		return -1;
+	if (pid == 0) {
+		/* child process */
+		sigemptyset(&nmask);
+		sigaddset(&nmask, SIGTERM);
+		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
+		nmdm = get_peer_comport(get_assigned_com(vm, 0));
+		if (nmdm == NULL || (fd = open(nmdm, O_RDWR)) < 0 ||
+		    write(fd, cmd, cmdlen) < 0)
+			exit(1);
+		close(fd);
+		exit(0);
+	}
+	set_load_cmd_supplier(vm, pid);
+	plugin_set_timer(10, kill_process, vm);
+	plugin_wait_for_process(pid, wait_process, vm);
+	return 0;
+}
+
+static int
 grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-	int ifd[2], rc;
+	int ifd[2], ofd[2], efd[2], rc;
 	pid_t pid;
 	struct vm_conf *conf = vm_get_conf(vm);
 	size_t len;
-	char *cmd, *mapfile = NULL;
-	bool doredirect = (get_assigned_com(vm, 0) == NULL) ||
-	    (strcasecmp(get_assigned_com(vm, 0), "stdio") != 0);
+	char *cmd, *mapfile = NULL, *com = get_assigned_com(vm, 0);
+	bool dopipe = (com == NULL) || (strcasecmp(com, "stdio") != 0);
+
+	if (dopipe) {
+		if (pipe(ofd) < 0) {
+			ERR("cannot create pipe (%s)\n", strerror(errno));
+			return -1;
+		}
+
+		if (pipe(efd) < 0) {
+			ERR("cannot create pipe (%s)\n", strerror(errno));
+			close(ofd[0]);
+			close(ofd[1]);
+			return -1;
+		}
+	}
 
 	if (write_mapfile(conf, &mapfile) < 0)
-		return -1;
+		goto err;
+
 	if (mapfile != NULL) {
 		if (get_mapfile(vm))
 			unlink(get_mapfile(vm));
 		rc = set_mapfile(vm, mapfile);
 		free(mapfile);
 		if (rc < 0)
-			return -1;
+			goto err;
 	}
 
 	cmd = create_load_command(conf, &len);
-
-	if (cmd != NULL && pipe(ifd) < 0) {
+	if (cmd != NULL && dopipe && pipe(ifd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
 		free(cmd);
-		return -1;
+		goto err;
 	}
 
 	pid = fork();
 	if (pid > 0) {
 		set_pid(vm, pid);
 		set_state(vm, LOAD);
-		if (cmd != NULL) {
-			close(ifd[1]);
-			set_infd(vm, ifd[0]);
-		} else
+		if (dopipe) {
+			if (cmd != NULL) {
+				close(ifd[1]);
+				set_infd(vm, ifd[0]);
+			}
+			close(ofd[1]);
+			set_outfd(vm, ofd[0]);
+			close(efd[1]);
+			set_errfd(vm, efd[0]);
+		} else {
 			set_infd(vm, -1);
-		set_outfd(vm, -1);
-		set_errfd(vm, -1);
+			set_outfd(vm, -1);
+			set_errfd(vm, -1);
+		}
 		if (cmd != NULL) {
-			write(ifd[0], cmd, len + 1);
+			if (com != NULL && strcasecmp(com, "stdio") != 0)
+				supply_grub_cmd(vm, cmd, len);
+			else if (dopipe)
+				write(ifd[0], cmd, len);
 			free(cmd);
 		}
 	} else if (pid == 0) {
 		FILE *fp;
 		char **argv, *bp;
 
-		if (cmd != NULL) {
-			close(ifd[0]);
-			dup2(ifd[1], 0);
+		if (dopipe) {
+			if (cmd != NULL) {
+				close(ifd[0]);
+				dup2(ifd[1], 0);
+			}
+			close(ofd[0]);
+			close(efd[0]);
+			dup2(ofd[1], 1);
+			dup2(efd[1], 1);
 		}
-		if (doredirect)
-			redirect_to_com(vm, (cmd == NULL));
-
 		fp = open_memstream(&bp, &len);
 		if (fp == NULL) {
 			ERR("cannot open memstream (%s)\n", strerror(errno));
@@ -362,6 +412,8 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		fprintf(fp, LOCALBASE "/sbin/grub-bhyve\n");
 		if (is_wired_memory(conf))
 			fprintf(fp, "-S\n");
+		if (com != NULL && strcasecmp(com, "stdio") != 0)
+			fprintf(fp, "-c\n%s\n", com);
 		fprintf(fp, "-r\n");
 		if (is_install(conf))
 			fprintf(fp, "cd0\n");
@@ -380,25 +432,30 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			ERR("malloc: %s\n", strerror(errno));
 			exit(1);
 		}
-		if (get_logfd(vm) != -1) {
+		if (dopipe) {
 			char **t;
-			if ((fp = fdopen(get_logfd(vm), "a")) != NULL) {
-				for (t = argv; *t != NULL; t++)
-					fprintf(fp, "%s ", *t);
-				fprintf(fp, "\n");
-				fflush(fp);
-				fdclose(fp, NULL);
-			}
+			for (t = argv; *t != NULL; t++)
+				printf("%s ", *t);
+			printf("\n");
+			fflush(stdout);
 		}
 		execv(argv[0], argv);
 		ERR("cannot exec %s\n", argv[0]);
 		exit(1);
 	} else {
 		ERR("cannot fork (%s)\n", strerror(errno));
-		return -1;
+		goto err;
 	}
 
 	return 0;
+err:
+	if (dopipe) {
+		close(ofd[0]);
+		close(ofd[1]);
+		close(efd[0]);
+		close(efd[1]);
+	}
+	return -1;
 }
 
 static int
@@ -422,8 +479,8 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	int outfd[2], errfd[2];
 	struct bhyveload_env *be;
 	struct vm_conf *conf = vm->conf;
-	bool dopipe = (vm->assigned_com[0] == NULL) ||
-	    (strcasecmp(vm->assigned_com[0], "stdio") != 0);
+	char *com = vm->assigned_com[0];
+	bool dopipe = (com == NULL || strcasecmp(com, "stdio") != 0);
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
@@ -478,9 +535,7 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "-e\n%s\n", &be->env[0]);
 		if (conf->bhyveload_loader)
 			fprintf(fp, "-l\n%s\n", conf->bhyveload_loader);
-		fprintf(fp, "-c\n%s\n",
-		    (vm->assigned_com[0] != NULL) ? vm->assigned_com[0] :
-						    "stdio");
+		fprintf(fp, "-c\n%s\n", com != NULL ? com : "stdio");
 		fprintf(fp, "-m\n%s\n", conf->memory);
 		fprintf(fp, "-d\n%s\n",
 		    (conf->install) ? STAILQ_FIRST(&conf->isoes)->path :
@@ -617,8 +672,8 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	pid_t pid;
 	int pcid;
 	int outfd[2], errfd[2];
-	bool dopipe = ((vm->assigned_com[0] == NULL) ||
-	    (strcasecmp(vm->assigned_com[0], "stdio") != 0));
+	char *com0 = vm->assigned_com[0];
+	bool dopipe = (com0 == NULL || strcasecmp(com0, "stdio") != 0);
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {

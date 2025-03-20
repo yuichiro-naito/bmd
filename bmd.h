@@ -147,6 +147,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_SET_RESTART(v)   ((v)->restart) = true
 #define VM_CLEAR_RESTART(v) ((v)->restart) = false
 #define VM_ISSET_RESTART(v) ((v)->restart)
+#define VM_LDCMD_SUPPLIER(v)	  ((v)->vm.load_cmd_supplier)
 
 /*
   Entry of vm list.

@@ -1450,6 +1450,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_OUTFD(vm_ent) = -1;
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
+	VM_LDCMD_SUPPLIER(vm_ent) = -1;
 	STAILQ_INIT(VM_TAPS(vm_ent));
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 	LIST_INIT(&vm_ent->signal_targets);

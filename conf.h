@@ -206,6 +206,7 @@ struct vm {
 	int errfd;
 	int logfd;
 	int ntaps;
+	id_t load_cmd_supplier;
 };
 
 #define ARRAY_FOREACH(p, a)	for (p = &a[0]; p < &a[nitems(a)]; p++)

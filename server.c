@@ -516,7 +516,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 	return 0;
 }
 
-static char *
+char *
 get_peer_comport(const char *comport)
 {
 	int i;

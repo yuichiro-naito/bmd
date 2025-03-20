@@ -792,6 +792,7 @@ generate_vm_accessor(int, infd);
 generate_vm_accessor(int, outfd);
 generate_vm_accessor(int, errfd);
 generate_vm_accessor(int, logfd);
+generate_vm_accessor(id_t, load_cmd_supplier);
 generate_vm_accessor(enum STATE, state);
 
 char *
