@@ -402,7 +402,7 @@ generate_member_getter(char *, iso_conf, path);
 
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
-    const char *bridge)
+    const char *bridge, bool wol)
 {
 	bool is_vale;
 	struct net_conf *t;
@@ -433,6 +433,7 @@ add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
 		t->bridge = b;
 	t->type = y;
 	t->tap = NULL;
+	t->wol = wol;
 
 	STAILQ_INSERT_TAIL(&conf->nets, t, next);
 	conf->nnets++;
@@ -452,6 +453,7 @@ generate_member_getter(char *, net_conf, mac);
 generate_member_getter(char *, net_conf, tap);
 generate_member_getter(char *, net_conf, vale);
 generate_member_getter(char *, net_conf, vale_port);
+generate_member_getter(bool, net_conf, wol);
 
 int
 add_sharefs_conf(struct vm_conf *conf, const char *name, const char *path,
@@ -1149,6 +1151,7 @@ vm_conf_export_env(struct vm_conf *conf)
 	i = 1;
 	STAILQ_FOREACH(nc, &vm->taps, next) {
 		vputenv(ENV_PREFIX "NETWORK%d_TYPE=%s", i, nc->type);
+		vputenv(ENV_PREFIX "NETWORK%d_WOL=%s", i, bool_str[nc->wol]);
 		if (nc->mac)
 			vputenv(ENV_PREFIX "NETWORK%d_MAC=%s", i, nc->mac);
 		if (nc->tap)
@@ -1198,7 +1201,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	const static char *fmt = "%18s = %s\n";
 	const static char *dfmt = "%18s = %d\n";
 	const static char *lfmt = "%18s = %s,%s\n";
-	const static char *nfmt = "%18s = %s,%s,%s\n";
+	const static char *nfmt = "%18s = %s%s%s%s,%s\n";
 	char *p, **com, buf[32];
 
 	fprintf(fp, fmt, "name", conf->name);
@@ -1292,10 +1295,8 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	STAILQ_FOREACH(nc, &conf->nets, next) {
 		p = nc->bridge ? nc->bridge : nc->vale;
 		snprintf(buf, sizeof(buf), "net%d", i++);
-		if (nc->mac)
-			fprintf(fp, nfmt, buf, nc->type, nc->mac, p);
-		else
-			fprintf(fp, lfmt, buf, nc->type, p);
+		fprintf(fp, nfmt, buf, nc->wol ? "wol," : "",
+		    nc->mac ? nc->mac : "", nc->mac ? "," : "", nc->type, p);
 	}
 	fb = conf->fbuf;
 	if (fb->enable) {
@@ -1402,6 +1403,7 @@ compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 	CMP_STR(bridge);
 	CMP_STR(mac);
 	CMP_STR(vale);
+	CMP_NUM(wol);
 	/*
 	 * We don't need to compare tap.
 	 * Because it is not written in the vm config file.

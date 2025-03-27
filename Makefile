@@ -1,5 +1,5 @@
 MK_DEBUG_FILES?=	no
-SUBDIR=		rc.d
+SUBDIR=		wol rc.d
 BINDIR=		$(LOCALBASE)/sbin
 MANDIR=		$(LOCALBASE)/share/man/man
 DIRS=		UEFIVARDIR PLUGINDIR
@@ -9,8 +9,8 @@ PROG=		bmd
 MAN=		bmd.8 bmdctl.8 bmd.conf.5
 LINKS=  	${BINDIR}/bmd ${BINDIR}/bmdctl
 SRCS=		bmd.c conf.c tap.c parser.c vm.c server.c control.c inspect.c \
-		global.c console.c inspect_grub.c confparse.h confparse.y \
-		conflex.l y.tab.h
+		global.c console.c inspect_grub.c wolmonitor.c confparse.h \
+		confparse.y conflex.l y.tab.h
 CFLAGS+=	-Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LDADD=		-lnv
 LDFLAGS=	-Xlinker -dynamic-list=export.symbols

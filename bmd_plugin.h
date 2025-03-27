@@ -133,6 +133,7 @@ char *get_net_conf_mac(struct net_conf *);
 char *get_net_conf_tap(struct net_conf *);
 char *get_net_conf_vale(struct net_conf *);
 char *get_net_conf_vale_port(struct net_conf *);
+bool get_net_conf_wol(struct net_conf *);
 struct sharefs_conf *get_sharefs_conf(struct vm_conf *);
 struct sharefs_conf *next_sharefs_conf(struct sharefs_conf *);
 char *get_sharefs_conf_name(struct sharefs_conf *);
@@ -292,6 +293,10 @@ extern PLUGIN_DESC plugin_desc;
 /*
   Plugin utilities.
  */
+int plugin_wait_for_read_fd(int, plugin_call_back, void *);
+int plugin_wait_for_write_fd(int, plugin_call_back, void *);
+void plugin_stop_waiting_read_fd(int, void *);
+void plugin_stop_waiting_write_fd(int, void *);
 int plugin_wait_for_process(pid_t, plugin_call_back, void *);
 int plugin_set_timer(int, plugin_call_back, void *);
 int plugin_start_virtualmachine(PLUGIN_DESC *, struct vm *);

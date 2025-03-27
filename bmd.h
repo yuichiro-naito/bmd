@@ -246,4 +246,7 @@ int register_signal_target(struct vm_entry *, pid_t, int);
 int control(int, char *[]);
 struct vm_conf_entry *lookup_vm_conf(const char *);
 
+/* implemented in wolmonitor.c */
+int start_wol_monitor(void);
+int stop_wol_monitor(void);
 #endif

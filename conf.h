@@ -81,6 +81,7 @@ struct net_conf {
 	char *vale;
 	char *vale_port;
 	char *mac;
+	bool wol;
 };
 
 struct sharefs_conf {
@@ -237,7 +238,8 @@ int add_passthru_conf(struct vm_conf *, const char *);
 int add_disk_conf(struct vm_conf *, const char *, const char *, bool, bool,
     bool, bool);
 int add_iso_conf(struct vm_conf *, const char *, const char *);
-int add_net_conf(struct vm_conf *, const char *, const char *, const char *);
+int add_net_conf(struct vm_conf *, const char *, const char *, const char *,
+		 bool);
 int add_sharefs_conf(struct vm_conf *, const char *, const char *, bool);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);

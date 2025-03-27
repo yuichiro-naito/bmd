@@ -505,6 +505,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 		VM_CONF(vm_ent) = &ret->conf;
+		start_wol_monitor();
 		INFO("changes are found. update %s configuration\n", name);
 	} else {
 		free_vm_conf_entry(ret);

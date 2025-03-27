@@ -336,6 +336,16 @@ When `loadcmd` or `installcmd` is set to `auto`, bmd inspects disk and iso
 images and generates loadcmd and installcmd values. This feature supports
 NetBSD and OpenBSD disk and iso images for now, and requires `loader=grub;`.
 
+# Wake on LAN
+
+If the 'wol' flag is set and a MAC address is supplied for a network interface,
+the bmd spawns a monitoring daemon for Wake on LAN. The WOL monitor daemon
+watches the specified bridge and/or vale and reports which WoL packets are
+received for the bmd. If the WoL packet is for the VM and the VM is terminated,
+the bmd starts the VM. The WoL monitor daemon is named 'bmdwolmon'.
+
+A WoL password is not supported by the bmd and bmdwolmon.
+
 # plugins
 
 ## hook command plugin
@@ -426,3 +436,7 @@ Following subcommands are available.
 ## 1. Configuration keys are condensed compared to bhyve
 
 It's under development.
+
+## 2. WoL password is ignored.
+
+The bmd doesn't support a password phrase for Wake on LAN.

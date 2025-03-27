@@ -283,7 +283,7 @@ must be smaller than
 .Ar hw.ncpu
 .Xr sysctl 8
 value.
-.It Cm network = (+=) Oo Ar type : Oc Oo Ar [ MAC address ] : Oc Ar bridge ;
+.It Cm network = (+=) Oo Ar type : Oc Oo Ar wol : Oc Oo Ar [ MAC address ] : Oc Ar bridge ;
 The
 .Ar type
 is one of
@@ -292,7 +292,12 @@ is one of
 or can be omitted to specify
 the default type
 .Qq virtio-net .
-The
+If the
+.Ar wol
+flag is set, the daemon waits for a Wake on LAN packet and boots the VM if
+received. The
+.Ar wol
+flag requires a MAC address to be supplied. The
 .Ar MAC address
 is an ASCII string in
 .Xr ethers 5

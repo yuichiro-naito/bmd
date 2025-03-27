@@ -50,6 +50,7 @@ get_net_conf_mac;
 get_net_conf_tap;
 get_net_conf_vale;
 get_net_conf_vale_port;
+get_net_conf_wol;
 get_bhyveload_loader;
 get_bhyveload_env;
 next_bhyveload_env;

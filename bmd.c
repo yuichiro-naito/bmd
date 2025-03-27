@@ -290,6 +290,74 @@ plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 	return 0;
 }
 
+struct plugin_fd_filter {
+	int fd;
+	short filter;
+	void *data;
+};
+
+static bool
+plugin_fd(struct event *ev, void *data)
+{
+	struct kevent *k = &ev->kev;
+	struct plugin_fd_filter *f = data;
+
+	return ev->data == f->data && k->filter == f->filter &&
+		ev->type == PLUGIN && ((int)k->ident == f->fd);
+}
+
+void
+plugin_stop_waiting_read_fd(int fd, void *data)
+{
+	struct plugin_fd_filter filter = {
+		.fd = fd,
+		.filter = EVFILT_READ,
+		.data = data,
+	};
+
+	stop_waiting_for(plugin_fd, &filter);
+}
+
+int
+plugin_wait_for_read_fd(int fd, plugin_call_back cb, void *data)
+{
+	struct kevent kev;
+
+	EV_SET(&kev, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+
+	if (register_plugin_event(&kev, cb, data) < 0) {
+		ERR("failed to wait plugin read fd (%s)\n", strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+void
+plugin_stop_waiting_write_fd(int fd, void *data)
+{
+	struct plugin_fd_filter filter = {
+		.fd = fd,
+		.filter = EVFILT_WRITE,
+		.data = data,
+	};
+
+	stop_waiting_for(plugin_fd, &filter);
+}
+
+int
+plugin_wait_for_write_fd(int fd, plugin_call_back cb, void *data)
+{
+	struct kevent kev;
+
+	EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
+
+	if (register_plugin_event(&kev, cb, data) < 0) {
+		ERR("failed to wait plugin write fd (%s)\n", strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
 int
 plugin_set_timer(int second, plugin_call_back cb, void *data)
 {
@@ -1924,7 +1992,7 @@ reload_virtual_machines(void)
 
 	LIST_INIT(&vm_conf_list);
 	LIST_CONCAT(&vm_conf_list, &new_list, vm_conf_entry, next);
-
+	start_wol_monitor();
 	return 0;
 }
 
@@ -2119,7 +2187,8 @@ main(int argc, char *argv[])
 
 	INFO("%s\n", "start daemon");
 
-	if (start_virtual_machines() < 0 || wait_for_cmd_sock(cmd_sock) < 0)
+	if (start_virtual_machines() < 0 || wait_for_cmd_sock(cmd_sock) < 0 ||
+	    start_wol_monitor() < 0)
 		ERR("%s\n", "failed to start virtual machines");
 	else
 		event_loop();
@@ -2127,6 +2196,7 @@ main(int argc, char *argv[])
 	unlink(gl_conf->cmd_socket_path);
 	close(cmd_sock);
 
+	stop_wol_monitor();
 	stop_virtual_machines();
 	free_vm_list();
 	close(eventq);

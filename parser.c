@@ -405,6 +405,7 @@ static int
 parse_net(struct vm_conf *conf, char *val)
 {
 	int i, rc;
+	bool wol = false;
 	regoff_t ep = 0;
 	struct ether_addr *ea;
 	char *p, *type = NULL, etheraddr[ETHER_FORMAT_LEN + 1] = { 0 };
@@ -435,6 +436,12 @@ parse_net(struct vm_conf *conf, char *val)
 	if (type == NULL && (type = strdup("virtio-net")) == NULL)
 		return -1;
 
+	if ((p = strstr(val, "wol:")) != NULL) {
+		wol = true;
+		if ((p + 4 - val) > ep)
+			ep = p + 4 - val;
+	}
+
 	if (regexec(&net_patterns[2].reg, val, 1, &matched, 0) == 0) {
 		strncpy(etheraddr, &val[matched.rm_so + 1], ETHER_FORMAT_LEN);
 		if ((p = strchr(etheraddr, ']')) != NULL)
@@ -456,7 +463,7 @@ parse_net(struct vm_conf *conf, char *val)
 			ep = matched.rm_eo + 1;
 	}
 
-	rc = add_net_conf(conf, type, etheraddr, &val[ep]);
+	rc = add_net_conf(conf, type, etheraddr, &val[ep], wol);
 	free(type);
 	return rc;
 }
