@@ -50,9 +50,9 @@
 
 #include "bmd_plugin.h"
 #include "conf.h"
-#include "server.h"
 #include "inspect.h"
 #include "log.h"
+#include "server.h"
 #include "vm.h"
 
 #define UEFI_CSM_FIRMWARE  LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
@@ -88,13 +88,13 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 
 	i = 0;
 	DISK_CONF_FOREACH(dc, conf)
-	if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
-		goto err;
+		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
+			goto err;
 
 	i = 0;
 	ISO_CONF_FOREACH(ic, conf)
-	if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
-		goto err;
+		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
+			goto err;
 
 	fclose(fp);
 	return 0;
