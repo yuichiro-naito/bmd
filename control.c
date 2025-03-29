@@ -680,9 +680,7 @@ sub_showvgaport(int argc, char *argv[])
 static int
 sub_showconfig(int argc, char *argv[])
 {
-	if (argc < 2)
-		return 2;
-	return do_showconfig(argv[1]);
+	return do_showconfig(argc > 1 ? argv[1] : NULL);
 }
 
 static int
