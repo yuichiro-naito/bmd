@@ -1,4 +1,6 @@
 * 3.3
+	- Bugfix: `bmdctl showconfig` shows all configurations by default.
+	  (eb2b213e2567c8fa2f477365117361a86284005b)
 	- Report loader error messages to the 'err_logfile'.
 	  (503b7c7907c115b77c1ed86eacb3867dc2eb1986)
 * 3.2
