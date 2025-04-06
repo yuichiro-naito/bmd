@@ -44,6 +44,7 @@ struct bhyveload_env;
 struct bhyve_env;
 struct cpu_pin;
 struct sharefs_conf;
+struct hda_conf;
 struct vm_conf;
 struct vm;
 
@@ -82,6 +83,10 @@ enum STATE {
 #define SHAREFS_CONF_FOREACH(sc, conf)                      \
 	for ((sc) = get_sharefs_conf((conf)); (sc) != NULL; \
 	     (sc) = next_sharefs_conf((sc)))
+
+#define HDA_CONF_FOREACH(hc, conf)                      \
+	for ((hc) = get_hda_conf((conf)); (hc) != NULL; \
+	     (hc) = next_hda_conf((hc)))
 
 #define TAPS_FOREACH(nc, vm) \
 	for ((nc) = get_taps((vm)); (nc) != NULL; (nc) = next_net_conf((nc)))
@@ -138,6 +143,10 @@ struct sharefs_conf *get_sharefs_conf(struct vm_conf *);
 struct sharefs_conf *next_sharefs_conf(struct sharefs_conf *);
 char *get_sharefs_conf_name(struct sharefs_conf *);
 char *get_sharefs_conf_path(struct sharefs_conf *);
+struct hda_conf *get_hda_conf(struct vm_conf *);
+struct hda_conf *next_hda_conf(struct hda_conf *);
+char *get_hda_conf_play_dev(struct hda_conf *);
+char *get_hda_conf_rec_dev(struct hda_conf *);
 bool is_sharefs_conf_readonly(struct sharefs_conf *);
 struct bhyveload_env *get_bhyveload_env(struct vm_conf *);
 struct bhyveload_env *next_bhyveload_env(struct bhyveload_env *);

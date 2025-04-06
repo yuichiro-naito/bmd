@@ -200,6 +200,7 @@ Following keys are available.
 | wired_memory | set "yes" to wire VM memory | no | no |
 | x2apic | "yes": enable x2APIC | no | no |
 | xhci_mouse | set "yes" to use xhci tablet | no | no |
+| hda | set High Definition Audio devices. (play & rec)<br>e.g. /dev/dsp0:/dev/dsp0 | no | no |
 
 ### Global Configurations
 
@@ -435,7 +436,12 @@ Following subcommands are available.
 
 ## 1. Configuration keys are condensed compared to bhyve
 
-It's under development.
+The following devices are unsupported for now. If you desire to use these
+devices, feel free to create an issue in this GitHub repository.
+
+* virtio-scsi
+* virtio-console
+* virtio-input
 
 ## 2. WoL password is ignored.
 

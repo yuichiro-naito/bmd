@@ -395,6 +395,20 @@ Set
 .Qq yes
 to use xhci tablet. The default is
 .Qq no .
+.It Cm hda = (+=) Oo Ar play_dev Oc Op : Ar rec_dev Oc ;
+Set High Definition Audio devices. Typically,
+.Sq /dev/dsp0
+is used for both
+.Ar play_dev
+and
+.Ar rec_dev .
+The
+.Ar rec_dev
+must follow a colon (:). If you omit a
+.Ar play_dev ,
+start with a colon, and
+.Ar rec_dev
+follows.
 .El
 .Ss String format
 Parameter values, including vm names and template names, can be single tokens

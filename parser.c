@@ -27,6 +27,7 @@
  */
 #include <sys/fcntl.h>
 #include <sys/mman.h>
+#include <sys/queue.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/wait.h>
@@ -469,6 +470,22 @@ parse_net(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_hda(struct vm_conf *conf, char *val)
+{
+	char *c, *s;
+	if ((s = strdup(val)) == NULL)
+		return -1;
+	if ((c = strchr(s, ':')) == NULL)
+		add_hda_conf(conf, s, "");
+	else {
+		*c++ = '\0';
+		add_hda_conf(conf, s, c);
+	}
+	free(s);
+	return 0;
+}
+
+static int
 parse_loadcmd(struct vm_conf *conf, char *val)
 {
 	set_loadcmd(conf, val);
@@ -668,8 +685,8 @@ parse_tpm(struct vm_conf *conf, char *val)
 		return -1;
 
 	for (i = 0, p = val2;
-	     (i < nitems(tpm) - 1) && (q = strchr(p, ':')) != NULL;
-	     i++, p = q + 1) {
+	    (i < nitems(tpm) - 1) && (q = strchr(p, ':')) != NULL;
+	    i++, p = q + 1) {
 		*q = '\0';
 		tpm[i] = p;
 	}
@@ -941,6 +958,7 @@ static struct parser_entry parser_list[] = {
 	{ "graphics_vga", &parse_graphics_vga, NULL },
 	{ "graphics_wait", &parse_graphics_wait, NULL },
 	{ "grub_run_partition", &parse_grub_run_partition, NULL },
+	{ "hda", &parse_hda, &clear_hda_conf },
 	{ "hostbridge", &parse_hostbridge, NULL },
 	{ "install", &parse_install, NULL },
 	{ "installcmd", &parse_installcmd, NULL },
@@ -996,10 +1014,25 @@ check_disks(struct vm_conf *conf)
 }
 
 static int
+check_hda_dev(const char *name, const char *path)
+{
+	struct stat st;
+	if (*path == '\0')
+		return 0;
+
+	if (stat(path, &st) < 0 || !S_ISCHR(st.st_mode)) {
+		ERR("%s: hda: %s is not a device file\n", name, path);
+		return -1;
+	}
+	return 0;
+}
+
+static int
 check_conf(struct vm_conf *conf)
 {
 	char *name = conf->name;
 	struct cpu_pin *cp;
+	struct hda_conf *hc;
 	int hw_ncpu, vmm_maxcpu;
 
 	if (name == NULL) {
@@ -1055,6 +1088,11 @@ check_conf(struct vm_conf *conf)
 			return -1;
 		}
 	}
+
+	STAILQ_FOREACH(hc, &conf->hdas, next)
+		if (check_hda_dev(name, hc->play_dev) < 0 ||
+		    check_hda_dev(name, hc->rec_dev) < 0)
+			return -1;
 
 	return 0;
 }

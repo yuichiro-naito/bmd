@@ -52,6 +52,12 @@ struct global_conf {
 	int foreground;
 };
 
+struct hda_conf {
+	STAILQ_ENTRY(hda_conf) next;
+	char *play_dev;
+	char *rec_dev;
+};
+
 struct passthru_conf {
 	STAILQ_ENTRY(passthru_conf) next;
 	char *devid;
@@ -191,6 +197,8 @@ struct vm_conf {
 	int nsharefs;
 	bool virt_random;
 	bool x2apic;
+	int nhdas;
+	STAILQ_HEAD(, hda_conf) hdas;
 };
 
 struct vm {
@@ -220,6 +228,7 @@ void free_disk_conf(struct disk_conf *);
 void free_iso_conf(struct iso_conf *);
 void free_net_conf(struct net_conf *);
 void free_sharefs_conf(struct sharefs_conf *);
+void free_hda_conf(struct hda_conf *);
 void free_vm_conf(struct vm_conf *);
 #define free_bhyveload_env(p) free(p)
 #define free_bhyve_env(p)     free(p)
@@ -230,6 +239,7 @@ void clear_disk_conf(struct vm_conf *);
 void clear_iso_conf(struct vm_conf *);
 void clear_net_conf(struct vm_conf *);
 void clear_sharefs_conf(struct vm_conf *);
+void clear_hda_conf(struct vm_conf *);
 void clear_bhyveload_env(struct vm_conf *);
 void clear_bhyve_env(struct vm_conf *);
 void clear_cpu_pin(struct vm_conf *);
@@ -241,6 +251,7 @@ int add_iso_conf(struct vm_conf *, const char *, const char *);
 int add_net_conf(struct vm_conf *, const char *, const char *, const char *,
 		 bool);
 int add_sharefs_conf(struct vm_conf *, const char *, const char *, bool);
+int add_hda_conf(struct vm_conf *, const char *, const char *);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);
 int add_cpu_pin(struct vm_conf *, int, int);

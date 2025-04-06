@@ -669,6 +669,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	struct net_conf *nc;
 	struct bhyve_env *be;
 	struct cpu_pin *cp;
+	struct hda_conf *hc;
 	pid_t pid;
 	int pcid;
 	int outfd[2], errfd[2];
@@ -814,6 +815,14 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 		STAILQ_FOREACH(pc, &conf->passthrues, next)
 			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);
+		STAILQ_FOREACH(hc, &conf->hdas, next) {
+			fprintf(fp, "-s\n%d,hda", pcid++);
+			if (*hc->play_dev != '\0')
+				fprintf(fp, ",play=%s", hc->play_dev);
+			if (*hc->rec_dev != '\0')
+				fprintf(fp, ",rec=%s", hc->rec_dev);
+			fprintf(fp, "\n");
+		}
 		if (conf->fbuf->enable) {
 			struct fbuf *fb = conf->fbuf;
 			fprintf(fp, "-s\n%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",

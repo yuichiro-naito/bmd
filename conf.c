@@ -235,6 +235,16 @@ free_fbuf(struct fbuf *f)
 	free(f);
 }
 
+void
+free_hda_conf(struct hda_conf *c)
+{
+	if (c == NULL)
+		return;
+	free(c->play_dev);
+	free(c->rec_dev);
+	free(c);
+}
+
 generate_clear_list(passthru_conf, passthrues);
 generate_clear_list(disk_conf, disks);
 generate_clear_list(iso_conf, isoes);
@@ -243,6 +253,7 @@ generate_clear_list(sharefs_conf, sharefss);
 generate_clear_list(bhyveload_env, bhyveload_envs);
 generate_clear_list(bhyve_env, bhyve_envs);
 generate_clear_list(cpu_pin, cpu_pins);
+generate_clear_list(hda_conf, hdas);
 
 static void
 free_var(struct conf_var *c)
@@ -369,6 +380,36 @@ generate_member_bool(disk_conf, nocache);
 generate_member_bool(disk_conf, direct);
 generate_member_bool(disk_conf, readonly);
 generate_member_bool(disk_conf, nodelete);
+
+int
+add_hda_conf(struct vm_conf *conf, const char *play, const char *rec)
+{
+	struct hda_conf *h;
+	char *p, *r;
+	if (conf == NULL)
+		return 0;
+
+	h = malloc(sizeof(struct hda_conf));
+	p = strdup(play);
+	r = strdup(rec);
+	if (h == NULL || p == NULL || r == NULL)
+		goto err;
+	h->play_dev = p;
+	h->rec_dev = r;
+
+	STAILQ_INSERT_TAIL(&conf->hdas, h, next);
+	conf->nhdas++;
+	return 0;
+err:
+	free(h);
+	free(p);
+	free(r);
+	return -1;
+}
+
+generate_list_getter(hda_conf, hdas);
+generate_member_getter(char *, hda_conf, play_dev);
+generate_member_getter(char *, hda_conf, rec_dev);
 
 int
 add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
@@ -977,6 +1018,7 @@ create_vm_conf(const char *vm_name)
 	STAILQ_INIT(&ret->bhyveload_envs);
 	STAILQ_INIT(&ret->bhyve_envs);
 	STAILQ_INIT(&ret->cpu_pins);
+	STAILQ_INIT(&ret->hdas);
 
 	return ret;
 err:
@@ -1046,6 +1088,7 @@ vm_conf_export_env(struct vm_conf *conf)
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
 	struct cpu_pin *cp;
+	struct hda_conf *hc;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
 		"always", "reboot" };
@@ -1166,6 +1209,16 @@ vm_conf_export_env(struct vm_conf *conf)
 			vputenv(ENV_PREFIX "NETWORK%d_BRIDGE=%s", i, nc->vale);
 		i++;
 	}
+	VPUTINT(nhdas);
+	i = 1;
+	STAILQ_FOREACH(hc, &conf->hdas, next) {
+		if (*hc->play_dev != '\0')
+			vputenv(ENV_PREFIX "HDA%d_PLAY_DEV=%s", i,
+			    hc->play_dev);
+		if (*hc->rec_dev != '\0')
+			vputenv(ENV_PREFIX "HDA%d_REC_DEV=%s", i++,
+			    hc->rec_dev);
+	}
 	fb = conf->fbuf;
 	vputenv(ENV_PREFIX "GRAPHICS=%s", bool_str[fb->enable]);
 	if (fb->enable) {
@@ -1193,11 +1246,13 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
 	struct cpu_pin *cp;
+	struct hda_conf *hc;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
 		"always", "reboot" };
 	const static char *hostbridge_str[] = { "none", "intel", "amd" };
 	const static char *bool_str[] = { "false", "true" };
+	const static char *hdr = "%18s = ";
 	const static char *fmt = "%18s = %s\n";
 	const static char *dfmt = "%18s = %d\n";
 	const static char *lfmt = "%18s = %s,%s\n";
@@ -1297,6 +1352,18 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 		snprintf(buf, sizeof(buf), "net%d", i++);
 		fprintf(fp, nfmt, buf, nc->wol ? "wol," : "",
 		    nc->mac ? nc->mac : "", nc->mac ? "," : "", nc->type, p);
+	}
+	i = 0;
+	STAILQ_FOREACH(hc, &conf->hdas, next) {
+		snprintf(buf, sizeof(buf), "hda%d", i++);
+		if (*hc->play_dev == '\0' && *hc->rec_dev == '\0')
+			continue;
+		fprintf(fp, hdr, buf);
+		if (*hc->play_dev != '\0')
+			fprintf(fp, "%s", hc->play_dev);
+		if (*hc->rec_dev != '\0')
+			fprintf(fp, ":%s", hc->rec_dev);
+		fprintf(fp, "\n");
 	}
 	fb = conf->fbuf;
 	if (fb->enable) {
@@ -1416,6 +1483,17 @@ compare_net_conf(const struct net_conf *a, const struct net_conf *b)
 }
 
 static int
+compare_hda_conf(const struct hda_conf *a, const struct hda_conf *b)
+{
+	int rc;
+
+	CMP_STR(play_dev);
+	CMP_STR(rec_dev);
+
+	return 0;
+}
+
+static int
 compare_bhyveload_env(const struct bhyveload_env *a,
     const struct bhyveload_env *b)
 {
@@ -1512,6 +1590,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_LIST(bhyveload_env, bhyveload_envs);
 	CMP_LIST(bhyve_env, bhyve_envs);
 	CMP_LIST(cpu_pin, cpu_pins);
+	CMP_LIST(hda_conf, hdas);
 	CMP_STR(tpm_dev);
 	CMP_STR(tpm_type);
 	CMP_STR(tpm_version);
