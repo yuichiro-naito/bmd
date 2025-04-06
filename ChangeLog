@@ -1,4 +1,6 @@
 * 3.3
+	- Add support of High Definition Audio Controller.
+	  (a7cf4f5efb79796d43f843e4c612ffaa07646c3d)
 	- Bugfix: `bmdctl showconfig` shows all configurations by default.
 	  (eb2b213e2567c8fa2f477365117361a86284005b)
 	- Report loader error messages to the 'err_logfile'.
