@@ -28,6 +28,7 @@
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/queue.h>
 #include <sys/wait.h>
 #include <net/bpf.h>
@@ -95,6 +96,7 @@ struct watch_target {
 	bool unique;
 	char interface[IF_NAMESIZE];
 	struct ether_addr mac;
+	size_t tag_len;
 	char tag[0];
 };
 
@@ -139,8 +141,9 @@ static int
 create_watch_target(char *tag, char *intf, char *addr)
 {
 	struct watch_target *t;
+	size_t len = strlen(tag);
 
-	t = malloc(sizeof(*t) + strlen(tag) + 1);
+	t = malloc(sizeof(*t) + len + 2);
 	if (t == NULL)
 		return -1;
 	if (ether_aton_r(addr, &t->mac) == NULL) {
@@ -149,6 +152,7 @@ create_watch_target(char *tag, char *intf, char *addr)
 	}
 	strncpy(t->interface, intf, sizeof(t->interface));
 	strcpy(t->tag, tag);
+	t->tag_len = len;
 	t->unique = true;
 
 	SLIST_INSERT_HEAD(&watch_list, t, next);
@@ -359,6 +363,8 @@ static int
 notify(struct ether_addr *addr, struct capture_interface *ci)
 {
 	struct watch_target *t;
+	struct iovec iov[2];
+	static char nl[] = "\n";
 
 	if ((t = lookup_watch_target(addr, ci->interface)) == NULL)
 		return 0;
@@ -367,9 +373,13 @@ notify(struct ether_addr *addr, struct capture_interface *ci)
 	    t->mac.octet[0], t->mac.octet[1], t->mac.octet[2],
 	    t->mac.octet[3], t->mac.octet[4], t->mac.octet[5],
 	    t->tag);
-	fprintf(stdout, "%s\n", t->tag);
-	fflush(stdout);
-	return 0;
+
+	iov[0].iov_base = t->tag;
+	iov[0].iov_len = t->tag_len;
+	iov[1].iov_base = nl;
+	iov[1].iov_len = strlen(nl);
+
+	return writev(1, iov, 2);
 }
 
 static int
