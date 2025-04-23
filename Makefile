@@ -1,5 +1,5 @@
 MK_DEBUG_FILES?=	no
-SUBDIR=		wol rc.d
+SUBDIR=		rc.d
 BINDIR=		$(LOCALBASE)/sbin
 MANDIR=		$(LOCALBASE)/share/man/man
 DIRS=		UEFIVARDIR PLUGINDIR
