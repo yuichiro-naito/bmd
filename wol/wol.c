@@ -58,34 +58,14 @@
 
 /*
   BPF instructions for WoL packet filter. This is compiled from
-  "ether dst ff:ff:ff:ff:ff:ff and (ether[12:2] = 0x0842 or ether[12:2] =
-   0x0000 or udp port 9)"
+  "ether dst ff:ff:ff:ff:ff:ff"
  */
+
 static struct bpf_insn wol_filter[] = {
 	BPF_STMT(BPF_LD + BPF_W + BPF_ABS, 2),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffffffff, 0, 23),
+	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffffffff, 0, 3),
 	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 0),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffff, 0, 21),
-	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 12),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x842, 18, 0),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x0, 17, 0),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x86dd, 0, 6),
-	BPF_STMT(BPF_LD + BPF_W + BPF_ABS, 20),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x11, 0, 15),
-	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 54),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x9, 12, 0),
-	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 56),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x9, 10, 11),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x800, 0, 10),
-	BPF_STMT(BPF_LD + BPF_B + BPF_ABS, 23),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x11, 0, 8),
-	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 20),
-	BPF_JUMP(BPF_JMP + BPF_JSET + BPF_K, 0x1fff, 6, 0),
-	BPF_STMT(BPF_LDX + BPF_B + BPF_MSH, 14),
-	BPF_STMT(BPF_LD + BPF_H + BPF_IND, 14),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x9, 3, 0),
-	BPF_STMT(BPF_LD + BPF_H + BPF_IND, 16),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0x9, 0, 1),
+	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffff, 0, 1),
 	BPF_STMT(BPF_RET + BPF_K, BUFSIZE),
 	BPF_STMT(BPF_RET + BPF_K, 0),
 };
@@ -267,10 +247,7 @@ parse_udp(const char *buf, size_t size, struct ether_addr *addr)
 	} else
 		return -1;
 
-	if (udp.uh_dport == 9)
-		return parse_wol(np, size - (np - buf), addr);
-
-	return -1;
+	return parse_wol(np, size - (np - buf), addr);
 }
 static int
 parse_ipv4(const char *buf, size_t size, struct ether_addr *addr)
@@ -289,10 +266,10 @@ parse_ipv4(const char *buf, size_t size, struct ether_addr *addr)
 	if (np > buf + size)
 		return -1;
 
-	if (ip.ip_p == IPPROTO_UDP)
-		return parse_udp(np, size - (np - buf), addr);
+	if (ip.ip_p != IPPROTO_UDP)
+		return -1;
 
-	return -1;
+	return parse_udp(np, size - (np - buf), addr);
 }
 
 static int
@@ -310,10 +287,10 @@ parse_ipv6(const char *buf, size_t size, struct ether_addr *addr)
 	} else
 		return -1;
 
-	if (ip6.ip6_nxt == IPPROTO_UDP)
-		return parse_udp(np, size - (np - buf), addr);
+	if (ip6.ip6_nxt != IPPROTO_UDP)
+		return -1;
 
-	return -1;
+	return parse_udp(np, size - (np - buf), addr);
 }
 
 static int
@@ -336,13 +313,12 @@ parse_packet(const char *buf, size_t size, struct ether_addr *addr)
 		return -1;
 
 	switch (ether.ether_type) {
-	case ETHERTYPE_FREEBSD_WAKE:
-	case ETHERTYPE_AMD_MAGIC:
-		return parse_wol(np, size - (np - buf), addr);
 	case ETHERTYPE_IP:
 		return parse_ipv4(np, size - (np - buf), addr);
 	case ETHERTYPE_IPV6:
 		return parse_ipv6(np, size - (np - buf), addr);
+	default:
+		return parse_wol(np, size - (np - buf), addr);
 	}
 	return -1;
 }
@@ -387,10 +363,9 @@ capture_bpf(struct capture_interface *ci)
 	sz = read(ci->fd, buf, sizeof(buf));
 	if (sz < 0)
 		return -1;
-	if (parse_bpf(buf, sz, &addr) < 0) {
-		ERR("%s\n", "parse error");
-		return -1;
-	}
+	/* Don't warn a non WoL packet. */
+	if (parse_bpf(buf, sz, &addr) < 0)
+		return 0;
 
 	return notify(&addr, ci);
 }
