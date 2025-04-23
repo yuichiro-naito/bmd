@@ -332,6 +332,9 @@ parse_packet(const char *buf, size_t size, struct ether_addr *addr)
 	} else
 		return -1;
 
+	if (! ETHER_IS_BROADCAST(ether.ether_dhost))
+		return -1;
+
 	switch (ether.ether_type) {
 	case ETHERTYPE_FREEBSD_WAKE:
 	case ETHERTYPE_AMD_MAGIC:
