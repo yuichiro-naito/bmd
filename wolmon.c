@@ -526,7 +526,7 @@ wolmon_main(int sock, struct watch_targets *wl, struct capture_interfaces *cl)
 	struct capture_interface *ci;
 	cap_rights_t bpfrights;
 
-	setproctitle("bmdwolmon");
+	setproctitle("wolmon");
 
 	if ((kq = kqueue()) < 0) {
 		ERR("kqueue: %s\n", strerror(errno));

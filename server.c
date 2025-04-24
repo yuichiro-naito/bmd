@@ -699,6 +699,7 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 	}
 
 	if (pid == 0) {
+		setproctitle("com opener");
 		sigemptyset(&nmask);
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);

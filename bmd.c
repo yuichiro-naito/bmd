@@ -618,6 +618,7 @@ open_err_logfile(struct vm_conf *conf)
 	}
 
 	if (pid == 0) {
+		setproctitle("err_logfile opener");
 		close(socks[0]);
 		if (conf->owner > 0) {
 			if ((group = conf->group) == -1)
@@ -2150,6 +2151,8 @@ main(int argc, char *argv[])
 
 	if (strendswith(argv[0], "ctl"))
 		return control(argc, argv);
+
+	setproctitle("main");
 
 	if (parse_opt(argc, argv) < 0)
 		return 1;

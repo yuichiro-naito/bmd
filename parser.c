@@ -1769,6 +1769,7 @@ retry:
 	if ((pid = fork()) < 0)
 		return -1;
 	if (pid == 0) {
+		setproctitle("parser");
 		sigemptyset(&nmask);
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
