@@ -58,32 +58,12 @@
 #include "bmd_plugin.h"
 #include "log.h"
 
+static LIST_HEAD(, wol_monitor) monitor_list = LIST_HEAD_INITIALIZER();
 struct wol_monitor {
 	LIST_ENTRY(wol_monitor) next;
 	pid_t pid;
 	int outfd;
 	bool timer_is_set;
-};
-
-#define MAX_WOL_MONITORS 10
-static int nwolmon = 0;
-static unsigned int wolmonid = 0;
-static LIST_HEAD(, wol_monitor) monitor_list = LIST_HEAD_INITIALIZER();
-
-#define BUFSIZE		       262144
-
-/*
-  BPF instructions for WoL packet filter. This is compiled from
-  "ether dst ff:ff:ff:ff:ff:ff"
- */
-
-static struct bpf_insn wol_filter[] = {
-	BPF_STMT(BPF_LD + BPF_W + BPF_ABS, 2),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffffffff, 0, 3),
-	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 0),
-	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffff, 0, 1),
-	BPF_STMT(BPF_RET + BPF_K, BUFSIZE),
-	BPF_STMT(BPF_RET + BPF_K, 0),
 };
 
 SLIST_HEAD(watch_targets, watch_target);
@@ -105,6 +85,26 @@ struct capture_interface {
 	struct nm_desc *nmd;
 	struct netmap_ring *rx, *tx;
 	int (*callback)(int, struct watch_targets *, struct capture_interface *);
+};
+
+#define MAX_WOL_MONITORS 10
+static int nwolmon = 0;
+static unsigned int wolmonid = 0;
+
+#define BUFSIZE		       262144
+
+/*
+  BPF instructions for WoL packet filter. This is compiled from
+  "ether dst ff:ff:ff:ff:ff:ff"
+ */
+
+static struct bpf_insn wol_filter[] = {
+	BPF_STMT(BPF_LD + BPF_W + BPF_ABS, 2),
+	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffffffff, 0, 3),
+	BPF_STMT(BPF_LD + BPF_H + BPF_ABS, 0),
+	BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, 0xffff, 0, 1),
+	BPF_STMT(BPF_RET + BPF_K, BUFSIZE),
+	BPF_STMT(BPF_RET + BPF_K, 0),
 };
 
 static struct watch_target *
