@@ -43,6 +43,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -128,16 +129,16 @@ lookup_watch_target(const struct ether_addr *addr, const char *interface)
 }
 
 static void
-free_watch_target(void)
+free_watch_targets(struct watch_targets *wl)
 {
 	struct watch_target *t, *tn;
 
-	SLIST_FOREACH_SAFE(t, &watch_list, next, tn)
+	SLIST_FOREACH_SAFE(t, wl, next, tn)
 		free(t);
-	SLIST_INIT(&watch_list);
+	SLIST_INIT(wl);
 }
 
-static int
+static struct watch_target *
 create_watch_target(char *tag, char *intf, char *addr)
 {
 	struct watch_target *t;
@@ -145,10 +146,10 @@ create_watch_target(char *tag, char *intf, char *addr)
 
 	t = malloc(sizeof(*t) + len + 2);
 	if (t == NULL)
-		return -1;
+		return NULL;
 	if (ether_aton_r(addr, &t->mac) == NULL) {
 		free(t);
-		return -1;
+		return NULL;
 	}
 	strncpy(t->interface, intf, sizeof(t->interface));
 	strcpy(t->tag, tag);
@@ -156,7 +157,7 @@ create_watch_target(char *tag, char *intf, char *addr)
 	t->unique = true;
 
 	SLIST_INSERT_HEAD(&watch_list, t, next);
-	return 0;
+	return t;
 }
 
 static int
@@ -465,16 +466,17 @@ capture_netmap(struct capture_interface *ci)
 }
 
 static void
-free_capture_interfaces(void)
+free_capture_interfaces(struct capture_interfaces *cl)
 {
 	struct capture_interface *ci, *cin;
-	SLIST_FOREACH_SAFE(ci, &interface_list, next, cin) {
+	SLIST_FOREACH_SAFE(ci, cl, next, cin) {
 		if (ci->nmd)
 			nm_close(ci->nmd);
 		else
 			close(ci->fd);
 		free(ci);
 	}
+	SLIST_INIT(cl);
 }
 
 static int
@@ -498,26 +500,25 @@ bind_if_to_bpf(const char *ifname, int bpf)
 	return 0;
 }
 
-static int
+static struct capture_interface *
 create_bpf(const char *interface)
 {
 	struct capture_interface *ci;
 
-	ci = malloc(sizeof(*ci));
-	if (ci == NULL)
-		return -1;
+	if ((ci = malloc(sizeof(*ci))) == NULL)
+		return NULL;
 
 	ci->fd = open("/dev/bpf0", O_RDONLY);
 	if (ci->fd < 0) {
 		ERR("/dev/bpf0: %s\n", strerror(errno));
 		free(ci);
-		return -1;
+		return NULL;
 	}
 
 	if (bind_if_to_bpf(interface, ci->fd) < 0) {
 		ERR("failed to bind %s (%s)\n", interface, strerror(errno));
 		free(ci);
-		return -1;
+		return NULL;
 	}
 
 	ci->interface = interface;
@@ -525,11 +526,10 @@ create_bpf(const char *interface)
 	ci->callback = capture_bpf;
 	EV_SET(&ci->kev, ci->fd, EVFILT_READ, EV_ADD, 0, 0, ci);
 
-	SLIST_INSERT_HEAD(&interface_list, ci, next);
-	return 0;
+	return ci;
 }
 
-static int
+static struct capture_interface *
 create_netmap(const char *interface)
 {
 	struct capture_interface *ci;
@@ -538,7 +538,7 @@ create_netmap(const char *interface)
 	char *valeport;
 
 	if ((ci = malloc(sizeof(*ci))) == NULL)
-		return -1;
+		return NULL;
 
 	if ((num = getenv("WOL_MON_ID")) == NULL)
 		num = "a"; /* any characters except numbers are OK. */
@@ -560,22 +560,27 @@ create_netmap(const char *interface)
 	ci->callback = capture_netmap;
 	EV_SET(&ci->kev, ci->fd, EVFILT_READ, EV_ADD, 0, 0, ci);
 
-	SLIST_INSERT_HEAD(&interface_list, ci, next);
-	return 0;
+	return ci;
 err2:
 	free(valeport);
 err:
 	free(ci);
-	return -1;
+	return NULL;
 }
 
 static int
-create_capture_interface(const char *interface)
+create_capture_interface(const char *intf, struct capture_interfaces *l)
 {
-	if (strncmp(interface, "vale", 4) == 0)
-		return create_netmap(interface);
+	struct capture_interface *ci;
 
-	return create_bpf(interface);
+	ci = (strncmp(intf, "vale", 4) == 0) ?
+		create_netmap(intf) : create_bpf(intf);
+
+	if (ci == NULL)
+		return -1;
+
+	SLIST_INSERT_HEAD(l, ci, next);
+	return 0;
 }
 
 static int
@@ -601,7 +606,7 @@ number_of_unique_interfaces(void)
 	}
 
 	SLIST_FOREACH(p, &watch_list, next)
-		if (p->unique && create_capture_interface(p->interface) >= 0)
+		if (p->unique && create_capture_interface(p->interface, &interface_list) >= 0)
 			count++;
 
 	return count;
@@ -623,7 +628,6 @@ wolmon_main(int argc, char *const argv[])
 	int kq, i, n, sock = -1;
 	struct kevent *evs, ev;
 	struct capture_interface *ci;
-	sigset_t nmask;
 	cap_rights_t bpfrights;
 	char *es, *fname = NULL;
 
@@ -662,17 +666,11 @@ wolmon_main(int argc, char *const argv[])
 	}
 
 	INFO("%s\n", "start");
-	sigemptyset(&nmask);
-	sigaddset(&nmask, SIGTERM);
-	sigaddset(&nmask, SIGINT);
-	sigaddset(&nmask, SIGPIPE);
-	sigprocmask(SIG_UNBLOCK, &nmask, NULL);
 
 	if (parse_params(sock) < 0) {
 		ERR("%s\n", "failed to parse");
 		goto err2;
 	}
-	sigprocmask(SIG_BLOCK, &nmask, NULL);
 	n = number_of_unique_interfaces();
 
 	caph_enter();
@@ -713,15 +711,15 @@ wolmon_main(int argc, char *const argv[])
 
 end:
 	INFO("%s\n", "quit");
-	free_capture_interfaces();
-	free_watch_target();
+	free_capture_interfaces(&interface_list);
+	free_watch_targets(&watch_list);
 	close(kq);
 	LOG_CLOSE();
 	return 0;
 err:
-	free_capture_interfaces();
+	free_capture_interfaces(&interface_list);
 err2:
-	free_watch_target();
+	free_watch_targets(&watch_list);
 	close(kq);
 err3:
 	LOG_CLOSE();
@@ -885,6 +883,73 @@ check_wol(void)
 }
 
 static int
+make_capture_interfaces(struct watch_targets *wl,
+    struct capture_interfaces *cl)
+{
+	struct watch_target *p, *q;
+
+	SLIST_FOREACH(p, wl, next) {
+		if (!p->unique)
+			continue;
+		q = p;
+		/*
+		  Do not use SLIST_NEXT(p) here. The last element triggers
+		  'SLIST_FOREACH_FROM' starts at the fisrt of the list.
+		 */
+		SLIST_FOREACH_FROM(q, wl, next) {
+			if (q == p)
+				continue;
+			if (strcmp(p->interface, q->interface) == 0)
+				q->unique = false;
+		}
+	}
+
+	SLIST_FOREACH(p, wl, next)
+		if (p->unique)
+			if (create_capture_interface(p->interface, cl) < 0)
+				goto err;
+
+	return 0;
+err:
+	free_capture_interfaces(cl);
+	return -1;
+}
+
+static int
+insert_watch_target(struct watch_targets *list, struct vm_entry *v,
+    struct net_conf *n)
+{
+	struct watch_target *t;
+
+	if ((t = create_watch_target(VM_CONF(v)->name,
+		    n->vale ? n->vale : n->bridge, n->mac)) == NULL)
+		return -1;
+	SLIST_INSERT_HEAD(list, t, next);
+	return 0;
+}
+
+static int
+make_watch_targets(struct watch_targets *list)
+{
+	struct vm_entry *v;
+	struct net_conf *n;
+	struct watch_target *t, *tn;
+
+	SLIST_FOREACH(v, &vm_list, next)
+		NET_CONF_FOREACH(n, get_vm_conf(v))
+			if (is_wol_enable(n))
+				if (insert_watch_target(list, v, n) < 0)
+					goto err;
+
+	return 0;
+err:
+	SLIST_FOREACH_SAFE(t, list, next, tn)
+		free(t);
+	SLIST_INIT(list);
+	return -1;
+}
+
+static int
 make_wol_list(struct wol_monitor *wm)
 {
 	struct vm_entry *v;
@@ -933,6 +998,8 @@ int
 start_wol_monitor(void)
 {
 	struct wol_monitor *mon;
+	struct watch_targets wl = SLIST_HEAD_INITIALIZER(wl);
+	struct capture_interfaces cl = SLIST_HEAD_INITIALIZER(cl);
 
 	if (!check_wol()) {
 		kill_monitors();
@@ -941,6 +1008,10 @@ start_wol_monitor(void)
 
 	if (nwolmon >= MAX_WOL_MONITORS)
 		return 0;
+
+	if (make_watch_targets(&wl) < 0 ||
+	    make_capture_interfaces(&wl, &cl) < 0)
+		return -1;
 
 	if ((mon = exec_wol_monitor()) == NULL)
 		return -1;
@@ -958,6 +1029,9 @@ start_wol_monitor(void)
 
 	LIST_INSERT_HEAD(&monitor_list, mon, next);
 	nwolmon++;
+
+	free_capture_interfaces(&cl);
+	free_watch_targets(&wl);
 	return 0;
 }
 
