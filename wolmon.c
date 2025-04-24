@@ -521,7 +521,7 @@ create_capture_interface(const char *intf, struct capture_interfaces *l)
 static int
 wolmon_main(int sock, struct watch_targets *wl, struct capture_interfaces *cl)
 {
-	int kq, i, n;
+	int kq, i;
 	struct kevent *evs, ev;
 	struct capture_interface *ci;
 	cap_rights_t bpfrights;
@@ -533,16 +533,15 @@ wolmon_main(int sock, struct watch_targets *wl, struct capture_interfaces *cl)
 		goto err3;
 	}
 
-	n = 0;
-	SLIST_FOREACH(ci, cl, next)
-		n++;
-
 	caph_enter();
 	cap_rights_init(&bpfrights, CAP_READ, CAP_EVENT);
-	SLIST_FOREACH(ci, cl, next)
+	i = 0;
+	SLIST_FOREACH(ci, cl, next) {
 		caph_rights_limit(ci->fd, &bpfrights);
+		i++;
+	}
 
-	evs = malloc(sizeof(struct kevent) * (n + 3));
+	evs = malloc(sizeof(struct kevent) * (i + 3));
 	if (evs == NULL) {
 		ERR("%s\n", "malloc failed\n");
 		goto err;
@@ -644,14 +643,12 @@ exec_wol_monitor(struct watch_targets *wl, struct capture_interfaces *cl)
 	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sk) < 0)
 		goto err;
 
-	pid = fork();
-	if (pid < 0)
+	if ((pid = fork()) < 0)
 		goto err2;
 
 	if (pid == 0) {
 		close(sk[0]);
-		wolmon_main(sk[1], wl, cl);
-		exit(1);
+		exit(wolmon_main(sk[1], wl, cl));
 	}
 	close(sk[1]);
 	mon->pid = pid;
