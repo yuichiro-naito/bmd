@@ -34,7 +34,7 @@
 	- Non-block opening a nmdm device.
 	- Set 'wired_memory' true if 'passthru' is configured.
 	  (ba23700b80cd4d66680303a616e78434b5f8c66f)
-	- Add value(4) support
+	- Add vale(4) support
 	  (08cd760604c1f03c9521504241d090a11b053b91)
 * 2.5
 	- Add 'ahci' disk type.
