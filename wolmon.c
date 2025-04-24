@@ -225,9 +225,6 @@ parse_ipv4(const char *buf, size_t size, struct ether_addr *addr)
 	} else
 		return -1;
 
-	if (np > buf + size)
-		return -1;
-
 	if (ip.ip_p != IPPROTO_UDP)
 		return -1;
 
