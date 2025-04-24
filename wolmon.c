@@ -178,19 +178,16 @@ read_uint8(const char *p)
 static int
 parse_wol(const char *buf, size_t size, struct ether_addr *addr)
 {
-	static const struct ether_addr bcast = { 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff };
-	struct ether_addr target;
+	const struct ether_addr *t = (const struct ether_addr *)buf;
 	int i;
-	if (size < ETHER_ADDR_LEN * 17)
+
+	if (size < ETHER_ADDR_LEN * 17 || !ETHER_IS_BROADCAST(t[0].octet))
 		return -1;
-	if (memcmp(buf, &bcast, ETHER_ADDR_LEN))
-		return -1;
-	memcpy(&target, &buf[ETHER_ADDR_LEN], ETHER_ADDR_LEN);
+
 	for (i = 2; i < 17; i++)
-		if (memcmp(&target, &buf[ETHER_ADDR_LEN * i], ETHER_ADDR_LEN))
+		if (memcmp(&t[1], &t[i], ETHER_ADDR_LEN))
 			return -1;
-	*addr = target;
+	*addr = t[1];
 	return 0;
 }
 
