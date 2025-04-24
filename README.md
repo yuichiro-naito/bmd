@@ -341,11 +341,11 @@ NetBSD and OpenBSD disk and iso images for now, and requires `loader=grub;`.
 
 If the 'wol' flag is set and a MAC address is supplied for a network interface,
 the bmd spawns a monitoring daemon for Wake on LAN. The WOL monitor daemon
-watches the specified bridge and/or vale and reports which WoL packets are
+watches the specified bridges and/or vales and reports which WoL packets are
 received for the bmd. If the WoL packet is for the VM and the VM is terminated,
-the bmd starts the VM. The WoL monitor daemon is named 'bmdwolmon'.
+the bmd wil start the VM.
 
-A WoL password is not supported by the bmd and bmdwolmon.
+A WoL password is not supported by the bmd.
 
 # plugins
 
