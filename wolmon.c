@@ -27,6 +27,8 @@
  */
 
 #include <sys/cdefs.h>
+#include <sys/fcntl.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/queue.h>
@@ -49,6 +51,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#define NETMAP_WITH_LIBS
+#include <net/netmap_user.h>
+
 #include "bmd.h"
 #include "bmd_plugin.h"
 #include "log.h"
@@ -56,12 +61,8 @@
 struct wol_monitor {
 	LIST_ENTRY(wol_monitor) next;
 	pid_t pid;
-	int infd;
 	int outfd;
 	bool timer_is_set;
-	size_t data_len;
-	size_t sent_len;
-	char *send_data;
 };
 
 #define MAX_WOL_MONITORS 10
@@ -69,13 +70,7 @@ static int nwolmon = 0;
 static unsigned int wolmonid = 0;
 static LIST_HEAD(, wol_monitor) monitor_list = LIST_HEAD_INITIALIZER();
 
-#define NETMAP_WITH_LIBS
-#include <net/netmap_user.h>
-
 #define BUFSIZE		       262144
-
-#define ETHERTYPE_FREEBSD_WAKE 0x0000 /* FreeBSD wake(8) */
-#define ETHERTYPE_AMD_MAGIC    0x0842 /* AMD magic packet format */
 
 /*
   BPF instructions for WoL packet filter. This is compiled from
@@ -109,18 +104,16 @@ struct capture_interface {
 	struct kevent kev;
 	struct nm_desc *nmd;
 	struct netmap_ring *rx, *tx;
-	int (*callback)(struct capture_interface *);
+	int (*callback)(int, struct watch_targets *, struct capture_interface *);
 };
 
-static struct watch_targets watch_list = SLIST_HEAD_INITIALIZER();
-static struct capture_interfaces interface_list = SLIST_HEAD_INITIALIZER();
-
 static struct watch_target *
-lookup_watch_target(const struct ether_addr *addr, const char *interface)
+lookup_watch_target(const struct ether_addr *addr, const char *interface,
+	struct watch_targets *wl)
 {
 	struct watch_target *t;
 
-	SLIST_FOREACH(t, &watch_list, next)
+	SLIST_FOREACH(t, wl, next)
 		if (memcmp(&t->mac, addr, sizeof(t->mac)) == 0 &&
 		    strcmp(t->interface, interface) == 0)
 			return t;
@@ -156,62 +149,7 @@ create_watch_target(char *tag, char *intf, char *addr)
 	t->tag_len = len;
 	t->unique = true;
 
-	SLIST_INSERT_HEAD(&watch_list, t, next);
 	return t;
-}
-
-static int
-get_word(FILE *fp, char *buf, size_t size)
-{
-	int c;
-	bool got_word = false;
-	char *p = buf;
-
-	while (p < buf + size - 1) {
-		switch (c = fgetc(fp)) {
-		case EOF:
-			*p++ = '\0';
-			return p - buf;
-		case ' ':
-		case '\t':
-		case '\n':
-			if (got_word) {
-				*p++ = '\0';
-				return p - buf;
-			}
-			break;
-		default:
-			got_word = true;
-			*p++ = c;
-		}
-	}
-
-	*p++ = '\0';
-	return p - buf;
-}
-
-static int
-parse_params(int fd)
-{
-	char tag[64], intf[16], addr[3 * 5 + 2 + 1];
-	FILE *fp = fdopen(fd, "r");
-	if (fp == NULL)
-		return -1;
-
-	while (true) {
-		if (get_word(fp, tag, sizeof(tag)) == 0 || strlen(tag) == 0)
-			break;
-		if (strcmp(tag, ".end.") == 0)
-			break;
-		if (get_word(fp, intf, sizeof(intf)) == 0 ||
-		    strlen(intf) == 0 ||
-		    get_word(fp, addr, sizeof(addr)) == 0 || strlen(addr) == 0)
-			break;
-		create_watch_target(tag, intf, addr);
-	}
-
-	fdclose(fp, NULL);
-	return 0;
 }
 
 static uint32_t
@@ -361,13 +299,14 @@ parse_bpf(const char *buf, size_t size, struct ether_addr *addr)
 }
 
 static int
-notify(struct ether_addr *addr, struct capture_interface *ci)
+notify(int sock, struct ether_addr *addr, struct watch_targets *wl,
+    struct capture_interface *ci)
 {
 	struct watch_target *t;
 	struct iovec iov[2];
 	static char nl[] = "\n";
 
-	if ((t = lookup_watch_target(addr, ci->interface)) == NULL)
+	if ((t = lookup_watch_target(addr, ci->interface, wl)) == NULL)
 		return 0;
 
 	INFO("WOL %02x:%02x:%02x:%02x:%02x:%02x received for %s\n",
@@ -380,11 +319,11 @@ notify(struct ether_addr *addr, struct capture_interface *ci)
 	iov[1].iov_base = nl;
 	iov[1].iov_len = strlen(nl);
 
-	return writev(1, iov, 2);
+	return writev(sock, iov, 2);
 }
 
 static int
-capture_bpf(struct capture_interface *ci)
+capture_bpf(int sock, struct watch_targets *wl, struct capture_interface *ci)
 {
 	ssize_t sz;
 	char buf[BUFSIZE];
@@ -397,7 +336,7 @@ capture_bpf(struct capture_interface *ci)
 	if (parse_bpf(buf, sz, &addr) < 0)
 		return 0;
 
-	return notify(&addr, ci);
+	return notify(sock, &addr, wl, ci);
 }
 
 static ssize_t
@@ -446,7 +385,7 @@ netmap_recv(struct capture_interface *ci, char *buf, size_t len)
 }
 
 static int
-capture_netmap(struct capture_interface *ci)
+capture_netmap(int sock, struct watch_targets *wl, struct capture_interface *ci)
 {
 	ssize_t sz;
 	char buf[BUFSIZE];
@@ -462,7 +401,7 @@ capture_netmap(struct capture_interface *ci)
 	if (parse_packet(buf, sz, &addr) < 0)
 		return 0;
 
-	return notify(&addr, ci);
+	return notify(sock, &addr, wl, ci);
 }
 
 static void
@@ -508,7 +447,7 @@ create_bpf(const char *interface)
 	if ((ci = malloc(sizeof(*ci))) == NULL)
 		return NULL;
 
-	ci->fd = open("/dev/bpf0", O_RDONLY);
+	ci->fd = open("/dev/bpf0", O_RDONLY | O_CLOEXEC);
 	if (ci->fd < 0) {
 		ERR("/dev/bpf0: %s\n", strerror(errno));
 		free(ci);
@@ -534,22 +473,22 @@ create_netmap(const char *interface)
 {
 	struct capture_interface *ci;
 	struct nm_desc *nmd;
-	const char *num;
 	char *valeport;
 
 	if ((ci = malloc(sizeof(*ci))) == NULL)
 		return NULL;
 
-	if ((num = getenv("WOL_MON_ID")) == NULL)
-		num = "a"; /* any characters except numbers are OK. */
-
-	if (asprintf(&valeport, "%s:_wolmon%s", interface, num) < 0)
+	if (asprintf(&valeport, "%s:_wolmon%u", interface, wolmonid) < 0)
 		goto err;
 
 	nmd = nm_open(valeport, NULL, NETMAP_NO_TX_POLL, NULL);
 	if (nmd == NULL) {
 		ERR("failed to open netmap! (%s)\n", strerror(errno));
 		goto err2;
+	}
+	if (fcntl(nmd->fd, F_SETFD, FD_CLOEXEC) < 0) {
+		ERR("failed to set FD_CLOEXEC! (%s)\n", strerror(errno));
+		goto err3;
 	}
 	free(valeport);
 	ci->nmd = nmd;
@@ -561,6 +500,8 @@ create_netmap(const char *interface)
 	EV_SET(&ci->kev, ci->fd, EVFILT_READ, EV_ADD, 0, 0, ci);
 
 	return ci;
+err3:
+	nm_close(nmd);
 err2:
 	free(valeport);
 err:
@@ -584,98 +525,27 @@ create_capture_interface(const char *intf, struct capture_interfaces *l)
 }
 
 static int
-number_of_unique_interfaces(void)
+wolmon_main(int sock, struct watch_targets *wl, struct capture_interfaces *cl)
 {
-	int count = 0;
-	struct watch_target *p, *q;
-
-	SLIST_FOREACH(p, &watch_list, next) {
-		if (!p->unique)
-			continue;
-		q = p;
-		/*
-		  Do not use SLIST_NEXT(p) here. The last element triggers
-		  'SLIST_FOREACH_FROM' starts at the fisrt of the list.
-		 */
-		SLIST_FOREACH_FROM(q, &watch_list, next) {
-			if (q == p)
-				continue;
-			if (strcmp(p->interface, q->interface) == 0)
-				q->unique = false;
-		}
-	}
-
-	SLIST_FOREACH(p, &watch_list, next)
-		if (p->unique && create_capture_interface(p->interface, &interface_list) >= 0)
-			count++;
-
-	return count;
-}
-
-static int
-usage(int argc __unused, char *const argv[])
-{
-	fprintf(stderr, "usage: %s -f <filename>\n"
-	    "       %s -s <socket number>\n",
-	    argv[0], argv[0]);
-
-	return 1;
-}
-
-static int
-wolmon_main(int argc, char *const argv[])
-{
-	int kq, i, n, sock = -1;
+	int kq, i, n;
 	struct kevent *evs, ev;
 	struct capture_interface *ci;
 	cap_rights_t bpfrights;
-	char *es, *fname = NULL;
 
 	setproctitle("bmdwolmon");
-
-	if ((es = getenv("WOL_PARAM_SOCKET")) != NULL) {
-		n = strtol(es, NULL, 10);
-		sock = (errno == EINVAL) ? -1 : n;
-	}
-
-	while ((n = getopt(argc, argv, "f:s:")) != -1) {
-		switch (n) {
-		case 'f':
-			fname = optarg;
-			break;
-		case 's':
-			sock = atoi(optarg);
-			break;
-		default:
-			return usage(argc, argv);
-		}
-	}
-
-	if (sock == -1) {
-		if (fname == NULL)
-			return usage(argc, argv);
-		if ((sock = open(fname, O_RDONLY)) < 0) {
-			ERR("%s: %s\n", fname, strerror(errno));
-			goto err3;
-		}
-	}
 
 	if ((kq = kqueue()) < 0) {
 		ERR("kqueue: %s\n", strerror(errno));
 		goto err3;
 	}
 
-	INFO("%s\n", "start");
-
-	if (parse_params(sock) < 0) {
-		ERR("%s\n", "failed to parse");
-		goto err2;
-	}
-	n = number_of_unique_interfaces();
+	n = 0;
+	SLIST_FOREACH(ci, cl, next)
+		n++;
 
 	caph_enter();
 	cap_rights_init(&bpfrights, CAP_READ, CAP_EVENT);
-	SLIST_FOREACH(ci, &interface_list, next)
+	SLIST_FOREACH(ci, cl, next)
 		caph_rights_limit(ci->fd, &bpfrights);
 
 	evs = malloc(sizeof(struct kevent) * (n + 3));
@@ -685,7 +555,7 @@ wolmon_main(int argc, char *const argv[])
 	}
 
 	i = 0;
-	SLIST_FOREACH(ci, &interface_list, next)
+	SLIST_FOREACH(ci, cl, next)
 		evs[i++] = ci->kev;
 	EV_SET(&evs[i++], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&evs[i++], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
@@ -704,51 +574,20 @@ wolmon_main(int argc, char *const argv[])
 			goto end;
 		case EVFILT_READ:
 			ci = ev.udata;
-			if ((ci->callback)(ci) < 0)
+			if ((ci->callback)(sock, wl, ci) < 0)
 				ERR("read fail: %s\n", strerror(errno));
 		}
 	}
 
 end:
-	INFO("%s\n", "quit");
-	free_capture_interfaces(&interface_list);
-	free_watch_targets(&watch_list);
 	close(kq);
 	LOG_CLOSE();
 	return 0;
 err:
-	free_capture_interfaces(&interface_list);
-err2:
-	free_watch_targets(&watch_list);
 	close(kq);
 err3:
 	LOG_CLOSE();
 	return 1;
-}
-
-static int
-on_write_fd(int fd, void *data)
-{
-	ssize_t n;
-	struct wol_monitor *wm = data;
-
-	n = write(fd, wm->send_data + wm->sent_len,
-	    wm->data_len - wm->sent_len);
-	if (n < 0) {
-		ERR("%s\n", "failed to send WoL list");
-		kill(wm->pid, SIGTERM);
-		return -1;
-	}
-	if (n == 0)
-		return 0;
-	wm->sent_len += n;
-	if (wm->sent_len >= wm->data_len) {
-		plugin_stop_waiting_write_fd(wm->infd, wm);
-		free(wm->send_data);
-		wm->send_data = NULL;
-	}
-
-	return 0;
 }
 
 static int
@@ -781,12 +620,9 @@ on_monitor_exit(int ident __unused, void *data)
 	waitpid(mon->pid, NULL, 0);
 
 	plugin_stop_waiting_read_fd(mon->outfd, mon);
-	plugin_stop_waiting_write_fd(mon->infd, mon);
-	close(mon->infd);
 	close(mon->outfd);
 
 	LIST_REMOVE(mon, next);
-	free(mon->send_data);
 	free(mon);
 	nwolmon--;
 	return 0;
@@ -802,55 +638,38 @@ on_timer(int ident __unused, void *data)
 }
 
 static struct wol_monitor *
-exec_wol_monitor(void)
+exec_wol_monitor(struct watch_targets *wl, struct capture_interfaces *cl)
 {
 	pid_t pid;
-	int infd[2];
-	int outfd[2];
-	char num[12];
+	int sk[2];
 	struct wol_monitor *mon;
 
 	if ((mon = malloc(sizeof(*mon))) == NULL)
 		return NULL;
 
-	if (pipe(infd) < 0)
+	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sk) < 0)
 		goto err;
-
-	if (pipe(outfd) < 0)
-		goto err1;
 
 	pid = fork();
 	if (pid < 0)
 		goto err2;
 
 	if (pid == 0) {
-		static char binname[] = "bmdwolmon";
-		close(infd[1]);
-		close(outfd[0]);
-		dup2(infd[0], 0);
-		dup2(outfd[1], 1);
-		if (snprintf(num, sizeof(num), "%u", wolmonid) >= 0)
-			setenv("WOL_MON_ID", num, 1);
-		setenv("WOL_PARAM_SOCKET", "0", 1);
-		wolmon_main(2, (char *const[]){binname, NULL});
+		close(sk[0]);
+		wolmon_main(sk[1], wl, cl);
 		exit(1);
 	}
-	close(infd[0]);
-	close(outfd[1]);
+	close(sk[1]);
 	mon->pid = pid;
-	mon->infd = infd[1];
-	mon->outfd = outfd[0];
+	mon->outfd = sk[0];
 	mon->timer_is_set = false;
 	wolmonid++;
 
 	return mon;
 
 err2:
-	close(outfd[0]);
-	close(outfd[1]);
-err1:
-	close(infd[0]);
-	close(infd[1]);
+	close(sk[0]);
+	close(sk[1]);
 err:
 	free(mon);
 	return NULL;
@@ -950,39 +769,6 @@ err:
 }
 
 static int
-make_wol_list(struct wol_monitor *wm)
-{
-	struct vm_entry *v;
-	struct net_conf *n;
-	char *buf;
-	size_t len;
-	FILE *fp;
-
-	if ((fp = open_memstream(&buf, &len)) == NULL)
-		return -1;
-
-	SLIST_FOREACH(v, &vm_list, next)
-		NET_CONF_FOREACH(n, get_vm_conf(v))
-			if (is_wol_enable(n))
-				if (fprintf(fp, "%s\t%s\t%s\n",
-					VM_CONF(v)->name,
-					n->vale ? n->vale : n->bridge,
-					n->mac) < 0)
-					break;
-	if (fprintf(fp, ".end.\n") < 0)
-		goto err;
-	fclose(fp);
-	wm->send_data = buf;
-	wm->data_len = len;
-	wm->sent_len = 0;
-	return 0;
-err:
-	fclose(fp);
-	free(buf);
-	return -1;
-}
-
-static int
 kill_monitors(void)
 {
 	struct wol_monitor *mon;
@@ -1010,18 +796,16 @@ start_wol_monitor(void)
 		return 0;
 
 	if (make_watch_targets(&wl) < 0 ||
-	    make_capture_interfaces(&wl, &cl) < 0)
+	    make_capture_interfaces(&wl, &cl) < 0 ||
+	    (mon = exec_wol_monitor(&wl, &cl)) == NULL) {
+		ERR("%s\n", "failed to start wolmon!");
 		return -1;
+	}
 
-	if ((mon = exec_wol_monitor()) == NULL)
-		return -1;
-
-	if (make_wol_list(mon) < 0 ||
-	    plugin_wait_for_read_fd(mon->outfd, on_read_fd, mon) < 0 ||
-	    plugin_wait_for_write_fd(mon->infd, on_write_fd, mon) < 0 ||
+	if (plugin_wait_for_read_fd(mon->outfd, on_read_fd, mon) < 0 ||
 	    plugin_wait_for_process(mon->pid, on_monitor_exit, mon) < 0 ||
 	    kill_monitors() < 0) {
-		ERR("%s\n", "failed to start WoL monitor!");
+		ERR("%s\n", "failed to wait for wolmon!");
 		kill(mon->pid, SIGTERM);
 		on_monitor_exit(mon->pid, mon);
 		return -1;
