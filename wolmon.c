@@ -93,6 +93,11 @@ static unsigned int wolmonid = 0;
 
 #define BUFSIZE		       262144
 
+#define WOL_FOREACH(v, n)				\
+	SLIST_FOREACH((v), &vm_list, next)		\
+		NET_CONF_FOREACH((n), get_vm_conf((v)))	\
+			if (is_wol_enable((n)))
+
 /*
   BPF instructions for WoL packet filter. This is compiled from
   "ether dst ff:ff:ff:ff:ff:ff"
@@ -197,14 +202,14 @@ parse_udp(const char *buf, size_t size, struct ether_addr *addr)
 	const char *np = buf;
 	struct udphdr udp;
 
-	if (size >= sizeof(udp)) {
-		udp.uh_sport = read_uint16(np);
-		udp.uh_dport = read_uint16(np + 2);
-		udp.uh_ulen = read_uint16(np + 4);
-		udp.uh_sum = read_uint16(np + 6);
-		np += sizeof(udp);
-	} else
+	if (size < sizeof(udp))
 		return -1;
+
+	udp.uh_sport = read_uint16(np);
+	udp.uh_dport = read_uint16(np + 2);
+	udp.uh_ulen = read_uint16(np + 4);
+	udp.uh_sum = read_uint16(np + 6);
+	np += sizeof(udp);
 
 	return parse_wol(np, size - (np - buf), addr);
 }
@@ -214,13 +219,13 @@ parse_ipv4(const char *buf, size_t size, struct ether_addr *addr)
 	const char *np = buf;
 	struct ip ip;
 
-	if (size >= sizeof(ip)) {
-		ip.ip_v = read_uint8(np) >> 4;
-		ip.ip_hl = read_uint8(np) & 0xf;
-		ip.ip_p = read_uint8(np + offsetof(struct ip, ip_p));
-		np += ip.ip_hl * 4;
-	} else
+	if (size < sizeof(ip))
 		return -1;
+
+	ip.ip_v = read_uint8(np) >> 4;
+	ip.ip_hl = read_uint8(np) & 0xf;
+	ip.ip_p = read_uint8(np + offsetof(struct ip, ip_p));
+	np += ip.ip_hl * 4;
 
 	if (ip.ip_p != IPPROTO_UDP)
 		return -1;
@@ -234,14 +239,14 @@ parse_ipv6(const char *buf, size_t size, struct ether_addr *addr)
 	const char *np = buf;
 	struct ip6_hdr ip6;
 
-	if (size >= sizeof(ip6)) {
-		ip6.ip6_flow = read_uint32(np);
-		ip6.ip6_plen = read_uint16(np + 4);
-		ip6.ip6_nxt = read_uint8(np + 6);
-		ip6.ip6_hops = read_uint8(np + 7);
-		np += sizeof(ip6);
-	} else
+	if (size < sizeof(ip6))
 		return -1;
+
+	ip6.ip6_flow = read_uint32(np);
+	ip6.ip6_plen = read_uint16(np + 4);
+	ip6.ip6_nxt = read_uint8(np + 6);
+	ip6.ip6_hops = read_uint8(np + 7);
+	np += sizeof(ip6);
 
 	if (ip6.ip6_nxt != IPPROTO_UDP)
 		return -1;
@@ -255,15 +260,15 @@ parse_packet(const char *buf, size_t size, struct ether_addr *addr)
 	const char *np = buf;
 	struct ether_header ether;
 
-	if (size >= sizeof(ether)) {
-		memcpy(ether.ether_dhost, np, ETHER_ADDR_LEN);
-		np += ETHER_ADDR_LEN;
-		memcpy(ether.ether_shost, np, ETHER_ADDR_LEN);
-		np += ETHER_ADDR_LEN;
-		ether.ether_type = read_uint16(np);
-		np += sizeof(uint16_t);
-	} else
+	if (size < sizeof(ether))
 		return -1;
+
+	memcpy(ether.ether_dhost, np, ETHER_ADDR_LEN);
+	np += ETHER_ADDR_LEN;
+	memcpy(ether.ether_shost, np, ETHER_ADDR_LEN);
+	np += ETHER_ADDR_LEN;
+	ether.ether_type = read_uint16(np);
+	np += sizeof(uint16_t);
 
 	if (! ETHER_IS_BROADCAST(ether.ether_dhost))
 		return -1;
@@ -285,10 +290,12 @@ parse_bpf(const char *buf, size_t size, struct ether_addr *addr)
 	const char *np = buf;
 	struct bpf_hdr bpf;
 
-	if (size >= sizeof(bpf)) {
-		memcpy(&bpf, buf, sizeof(bpf));
-		np += bpf.bh_hdrlen;
-	}
+	if (size < sizeof(bpf))
+		return -1;
+
+	memcpy(&bpf, buf, sizeof(bpf));
+	np += bpf.bh_hdrlen;
+
 	return parse_packet(np, size - (np - buf), addr);
 }
 
@@ -323,8 +330,7 @@ capture_bpf(int sock, struct watch_targets *wl, struct capture_interface *ci)
 	char buf[BUFSIZE];
 	struct ether_addr addr;
 
-	sz = read(ci->fd, buf, sizeof(buf));
-	if (sz < 0)
+	if ((sz = read(ci->fd, buf, sizeof(buf))) < 0)
 		return -1;
 	/* Don't warn a non WoL packet. */
 	if (parse_bpf(buf, sz, &addr) < 0)
@@ -385,8 +391,7 @@ capture_netmap(int sock, struct watch_targets *wl, struct capture_interface *ci)
 	char buf[BUFSIZE];
 	struct ether_addr addr;
 
-	sz = netmap_recv(ci, buf, sizeof(buf));
-	if (sz < 0)
+	if ((sz = netmap_recv(ci, buf, sizeof(buf))) < 0)
 		return -1;
 	if (sz == 0)
 		return 0;
@@ -684,10 +689,8 @@ check_wol(void)
 	struct vm_entry *v;
 	struct net_conf *n;
 
-	SLIST_FOREACH(v, &vm_list, next)
-		NET_CONF_FOREACH(n, get_vm_conf(v))
-			if (is_wol_enable(n))
-				return true;
+	WOL_FOREACH(v, n)
+		return true;
 
 	return false;
 }
@@ -726,36 +729,23 @@ err:
 }
 
 static int
-insert_watch_target(struct watch_targets *list, struct vm_entry *v,
-    struct net_conf *n)
-{
-	struct watch_target *t;
-
-	if ((t = create_watch_target(VM_CONF(v)->name,
-		    n->vale ? n->vale : n->bridge, n->mac)) == NULL)
-		return -1;
-	SLIST_INSERT_HEAD(list, t, next);
-	return 0;
-}
-
-static int
 make_watch_targets(struct watch_targets *list)
 {
 	struct vm_entry *v;
 	struct net_conf *n;
-	struct watch_target *t, *tn;
+	struct watch_target *t;
 
-	SLIST_FOREACH(v, &vm_list, next)
-		NET_CONF_FOREACH(n, get_vm_conf(v))
-			if (is_wol_enable(n))
-				if (insert_watch_target(list, v, n) < 0)
-					goto err;
+	WOL_FOREACH(v, n) {
+		if ((t = create_watch_target(VM_CONF(v)->name,
+			    n->vale ? n->vale : n->bridge,
+			    n->mac)) == NULL)
+			goto err;
+		SLIST_INSERT_HEAD(list, t, next);
+	}
 
 	return 0;
 err:
-	SLIST_FOREACH_SAFE(t, list, next, tn)
-		free(t);
-	SLIST_INIT(list);
+	free_watch_targets(list);
 	return -1;
 }
 
