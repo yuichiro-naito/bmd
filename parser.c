@@ -332,7 +332,7 @@ parse_disk(struct vm_conf *conf, char *val)
 	static const char *const types[] = { "ahci", "ahci-hd", "virtio-blk",
 		"nvme" };
 	static const char *const flags[] = { "nocache", "direct", "readonly",
-		"nodelete" };
+	     "nodelete", "noexist" };
 	bool f[nitems(flags)];
 
 	if ((s = strchr(val, '/')) == NULL)
@@ -362,7 +362,7 @@ parse_disk(struct vm_conf *conf, char *val)
 			op = q + n + 1;
 	}
 
-	return add_disk_conf(conf, types[t], op, f[0], f[1], f[2], f[3]);
+	return add_disk_conf(conf, types[t], op, f[0], f[1], f[2], f[3], f[4]);
 }
 
 static int
@@ -1000,6 +1000,8 @@ check_disks(struct vm_conf *conf)
 	struct stat st;
 
 	STAILQ_FOREACH(dc, &conf->disks, next) {
+		if (dc->noexist)
+			continue;
 		if (stat(dc->path, &st) < 0) {
 			ERR("%s: %s is not found\n", name, dc->path);
 			return -1;

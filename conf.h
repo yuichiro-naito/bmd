@@ -71,6 +71,7 @@ struct disk_conf {
 	bool direct;
 	bool readonly;
 	bool nodelete;
+	bool noexist;
 };
 
 struct iso_conf {
@@ -246,7 +247,7 @@ void clear_cpu_pin(struct vm_conf *);
 
 int add_passthru_conf(struct vm_conf *, const char *);
 int add_disk_conf(struct vm_conf *, const char *, const char *, bool, bool,
-    bool, bool);
+    bool, bool, bool);
 int add_iso_conf(struct vm_conf *, const char *, const char *);
 int add_net_conf(struct vm_conf *, const char *, const char *, const char *,
 		 bool);

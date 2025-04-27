@@ -32,6 +32,7 @@ is_disk_conf_nocache;
 is_disk_conf_direct;
 is_disk_conf_readonly;
 is_disk_conf_nodelete;
+is_disk_conf_noexist;
 get_hda_conf;
 next_hda_conf;
 get_hda_conf_play_dev;

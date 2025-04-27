@@ -344,7 +344,7 @@ generate_member_getter(char *, passthru_conf, devid);
 
 int
 add_disk_conf(struct vm_conf *conf, const char *type, const char *path,
-    bool nocache, bool direct, bool readonly, bool nodelete)
+    bool nocache, bool direct, bool readonly, bool nodelete, bool noexist)
 {
 	struct disk_conf *t;
 	char *y, *p;
@@ -362,6 +362,7 @@ add_disk_conf(struct vm_conf *conf, const char *type, const char *path,
 	t->direct = direct;
 	t->readonly = readonly;
 	t->nodelete = nodelete;
+	t->noexist = noexist;
 
 	STAILQ_INSERT_TAIL(&conf->disks, t, next);
 	conf->ndisks++;
@@ -380,6 +381,7 @@ generate_member_bool(disk_conf, nocache);
 generate_member_bool(disk_conf, direct);
 generate_member_bool(disk_conf, readonly);
 generate_member_bool(disk_conf, nodelete);
+generate_member_bool(disk_conf, noexist);
 
 int
 add_hda_conf(struct vm_conf *conf, const char *play, const char *rec)
@@ -1175,6 +1177,8 @@ vm_conf_export_env(struct vm_conf *conf)
 		    bool_str[dc->readonly]);
 		vputenv(ENV_PREFIX "DISK%d_NODELETE=%s", i,
 		    bool_str[dc->nodelete]);
+		vputenv(ENV_PREFIX "DISK%d_NOEXIST=%s", i,
+		    bool_str[dc->noexist]);
 	}
 	VPUTINT(nsharefs);
 	i = 1;
@@ -1333,6 +1337,8 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 			fprintf(fp, ":readonly");
 		if (dc->nodelete)
 			fprintf(fp, ":nodelete");
+		if (dc->noexist)
+			fprintf(fp, ":noexist");
 		fprintf(fp, ":%s\n", dc->path);
 	}
 	i = 0;
@@ -1434,6 +1440,7 @@ compare_disk_conf(const struct disk_conf *a, const struct disk_conf *b)
 	CMP_NUM(direct);
 	CMP_NUM(readonly);
 	CMP_NUM(nodelete);
+	CMP_NUM(noexist);
 
 	return 0;
 }

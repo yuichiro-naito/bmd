@@ -145,6 +145,10 @@ Force the file to be opened read-only.
 Disable emulation of guest trim requests via
 .Dv DIOCGDELETE
 requests.
+.It Cm noexist
+Disable disk image check while loading the configuration. The bmd will continue
+to load the configuration and boot normally even if the disk image isn't
+present. The disk image must be supplied before VM boot.
 .El
 
 The

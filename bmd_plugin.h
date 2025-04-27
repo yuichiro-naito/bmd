@@ -125,6 +125,7 @@ bool is_disk_conf_nocache(struct disk_conf *);
 bool is_disk_conf_direct(struct disk_conf *);
 bool is_disk_conf_readonly(struct disk_conf *);
 bool is_disk_conf_nodelete(struct disk_conf *);
+bool is_disk_conf_noexist(struct disk_conf *);
 struct iso_conf *get_iso_conf(struct vm_conf *);
 struct iso_conf *next_iso_conf(struct iso_conf *);
 char *get_iso_conf_type(struct iso_conf *);
