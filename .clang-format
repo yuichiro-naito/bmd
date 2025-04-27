@@ -101,6 +101,7 @@ ForEachMacros:
   - TAPS_CONF_FOREACH
   - VM_MAP_ENTRY_FOREACH
   - VM_PAGE_DUMP_FOREACH
+  - WOL_FOREACH
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 IndentCaseLabels: false
 IndentPPDirectives: None
