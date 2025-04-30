@@ -1,4 +1,6 @@
 * 3.3
+	- Introduce 'noexist' option to the 'disk' configuration.
+	  (8171aa3bb5bc6b17a8e92e145ad709d9c206fdab)
 	- Add support of High Definition Audio Controller.
 	  (a7cf4f5efb79796d43f843e4c612ffaa07646c3d)
 	- Add support of Wake on LAN.
