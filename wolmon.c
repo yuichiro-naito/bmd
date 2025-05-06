@@ -70,7 +70,7 @@ SLIST_HEAD(watch_targets, watch_target);
 struct watch_target {
 	SLIST_ENTRY(watch_target) next;
 	bool unique;
-	char *interface;
+	const char *interface;
 	struct ether_addr mac;
 	size_t vmname_len;
 	char *vmname;
@@ -501,25 +501,18 @@ err:
 	return NULL;
 }
 
-static int
-create_capture_interface(const char *intf, struct capture_interfaces *l)
+static struct capture_interface *
+create_capture_interface(const char *intf)
 {
-	struct capture_interface *ci;
-
-	ci = (strncmp(intf, "vale", 4) == 0) ? create_netmap(intf) :
+	return (strncmp(intf, "vale", 4) == 0) ? create_netmap(intf) :
 					       create_bpf(intf);
-
-	if (ci == NULL)
-		return -1;
-
-	SLIST_INSERT_HEAD(l, ci, next);
-	return 0;
 }
 
 static int
 make_capture_interfaces(struct watch_targets *wl, struct capture_interfaces *cl)
 {
 	struct watch_target *p, *q;
+	struct capture_interface *ci;
 
 	SLIST_FOREACH(p, wl, next) {
 		if (!p->unique)
@@ -528,6 +521,8 @@ make_capture_interfaces(struct watch_targets *wl, struct capture_interfaces *cl)
 		/*
 		  Do not use SLIST_NEXT(p) here. The last element triggers
 		  'SLIST_FOREACH_FROM' starts at the fisrt of the list.
+		  We accept that the first comparison of the following loop
+		  is always true.
 		 */
 		SLIST_FOREACH_FROM(q, wl, next) {
 			if (q == p)
@@ -543,7 +538,8 @@ make_capture_interfaces(struct watch_targets *wl, struct capture_interfaces *cl)
 	 */
 	SLIST_FOREACH(p, wl, next)
 		if (p->unique)
-			create_capture_interface(p->interface, cl);
+			if ((ci = create_capture_interface(p->interface)))
+				SLIST_INSERT_HEAD(cl, ci, next);
 
 	/* If no interface succeeded, return an error. Otherwise OK.*/
 	return SLIST_FIRST(cl) ? 0 : -1;
