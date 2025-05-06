@@ -70,10 +70,10 @@ SLIST_HEAD(watch_targets, watch_target);
 struct watch_target {
 	SLIST_ENTRY(watch_target) next;
 	bool unique;
-	char interface[IF_NAMESIZE];
+	char *interface;
 	struct ether_addr mac;
 	size_t tag_len;
-	char tag[0];
+	char *tag;
 };
 
 SLIST_HEAD(capture_interfaces, capture_interface);
@@ -102,7 +102,7 @@ static unsigned int wolmonid = 0;
 
 /*
   BPF instructions for WoL packet filter. This is compiled from
-  "ether dst ff:ff:ff:ff:ff:ff"
+  "ether dst ff:ff:ff:ff:ff:ff" by `tcpdump -d`.
  */
 
 static struct bpf_insn wol_filter[] = {
@@ -139,21 +139,19 @@ free_watch_targets(struct watch_targets *wl)
 }
 
 static struct watch_target *
-create_watch_target(char *tag, char *intf, char *addr)
+create_watch_target(struct vm_entry *v, struct net_conf *n)
 {
 	struct watch_target *t;
-	size_t len = strlen(tag);
 
-	t = malloc(sizeof(*t) + len + 2);
-	if (t == NULL)
+	if ((t = malloc(sizeof(*t))) ==NULL)
 		return NULL;
-	if (ether_aton_r(addr, &t->mac) == NULL) {
+	if (ether_aton_r(n->mac, &t->mac) == NULL) {
 		free(t);
 		return NULL;
 	}
-	strncpy(t->interface, intf, sizeof(t->interface));
-	strcpy(t->tag, tag);
-	t->tag_len = len;
+	t->interface = GET_BRIDGE_NAME(n);
+	t->tag = VM_CONF(v)->name;
+	t->tag_len = strlen(t->tag);
 	t->unique = true;
 
 	return t;
@@ -742,8 +740,7 @@ make_watch_targets(struct watch_targets *list)
 	struct watch_target *t;
 
 	WOL_FOREACH(v, n) {
-		if ((t = create_watch_target(VM_CONF(v)->name,
-			 GET_BRIDGE_NAME(n), n->mac)) == NULL)
+		if ((t = create_watch_target(v, n)) == NULL)
 			goto err;
 		SLIST_INSERT_HEAD(list, t, next);
 	}
