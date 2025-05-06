@@ -72,8 +72,8 @@ struct watch_target {
 	bool unique;
 	char *interface;
 	struct ether_addr mac;
-	size_t tag_len;
-	char *tag;
+	size_t vmname_len;
+	char *vmname;
 };
 
 SLIST_HEAD(capture_interfaces, capture_interface);
@@ -150,8 +150,8 @@ create_watch_target(struct vm_entry *v, struct net_conf *n)
 		return NULL;
 	}
 	t->interface = GET_BRIDGE_NAME(n);
-	t->tag = VM_CONF(v)->name;
-	t->tag_len = strlen(t->tag);
+	t->vmname = VM_CONF(v)->name;
+	t->vmname_len = strlen(t->vmname);
 	t->unique = true;
 
 	return t;
@@ -312,10 +312,10 @@ notify(int sock, struct ether_addr *addr, struct watch_targets *wl,
 
 	INFO("WOL %02x:%02x:%02x:%02x:%02x:%02x received for %s\n",
 	    t->mac.octet[0], t->mac.octet[1], t->mac.octet[2], t->mac.octet[3],
-	    t->mac.octet[4], t->mac.octet[5], t->tag);
+	    t->mac.octet[4], t->mac.octet[5], t->vmname);
 
-	iov[0].iov_base = t->tag;
-	iov[0].iov_len = t->tag_len;
+	iov[0].iov_base = t->vmname;
+	iov[0].iov_len = t->vmname_len;
 	iov[1].iov_base = nl;
 	iov[1].iov_len = strlen(nl);
 
