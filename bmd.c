@@ -1364,7 +1364,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	  Delete & free them for safty.
 	*/
 	stop_waiting_for(vm_entry, vm_ent);
-	LIST_FOREACH_SAFE(t, &vm_ent->signal_targets, next, nt)
+	LIST_FOREACH_SAFE(t, VM_SIGTARGETS(vm_ent), next, nt)
 		free(t);
 	free(VM_MAPFILE(vm_ent));
 	free(VM_BOOTROM(vm_ent));
@@ -1522,7 +1522,7 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_LDCMD_SUPPLIER(vm_ent) = -1;
 	STAILQ_INIT(VM_TAPS(vm_ent));
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
-	LIST_INIT(&vm_ent->signal_targets);
+	LIST_INIT(VM_SIGTARGETS(vm_ent));
 
 	return vm_ent;
 }
