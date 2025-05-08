@@ -238,18 +238,8 @@ static bool
 is_directory(int df, struct dirent *e)
 {
 	struct stat s;
-	int fd;
-	bool rc;
-
-	while ((fd = openat(df, e->d_name, O_RDONLY)) < 0)
-		if (errno != EINTR)
-			break;
-	if (fd < 0)
-		return 0;
-	rc = (fstat(fd, &s) == 0 && S_ISDIR(s.st_mode));
-	close(fd);
-
-	return rc;
+	return (fstatat(df, e->d_name, &s, AT_RESOLVE_BENEATH) == 0 &&
+	    S_ISDIR(s.st_mode));
 }
 
 bool
