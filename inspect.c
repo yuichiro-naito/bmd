@@ -164,6 +164,12 @@ mount_iso(struct inspection *ins)
 		IOV_ENTRY_DECONST(ins->mount_point), IOV_ENTRY_DECONST("from"),
 		IOV_ENTRY_DECONST("/dev/mdNNNNNNNNNN") };
 
+	for (i = 0; i < nitems(iov); i++)
+		if (iov[i].iov_base == NULL) {
+			rc = -1;
+			goto ret;
+		}
+
 	/* XXX: The last .iov_len will be a bit longer. */
 	if (snprintf(IOV_LAST_ENTRY(iov).iov_base, IOV_LAST_ENTRY(iov).iov_len,
 		"/dev/md%d", (unsigned)ins->md_unit) < 0) {
@@ -189,7 +195,14 @@ mount_ufs(struct inspection *ins, char *path)
 		IOV_ENTRY_DECONST(ins->mount_point), IOV_ENTRY_DECONST("from"),
 		IOV_ENTRY_DECONST(path) };
 
+	for (i = 0; i < nitems(iov); i++)
+		if (iov[i].iov_base == NULL) {
+			rc = -1;
+			goto ret;
+		}
+
 	rc = nmount(iov, nitems(iov), MNT_RDONLY);
+ret:
 	for (i = 0; i < nitems(iov); i++)
 		free(iov[i].iov_base);
 
