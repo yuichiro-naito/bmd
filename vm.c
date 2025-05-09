@@ -293,8 +293,8 @@ kill_process(int ident __unused, void *data)
 static int
 supply_grub_cmd(struct vm *vm, char *cmd, size_t cmdlen)
 {
-	int fd;
-	char *nmdm;
+	int fd[2];
+	char *nmdm[2];
 	pid_t pid;
 	sigset_t nmask;
 
@@ -303,14 +303,27 @@ supply_grub_cmd(struct vm *vm, char *cmd, size_t cmdlen)
 		return -1;
 	if (pid == 0) {
 		/* child process */
+		setproctitle("cmd supplier");
 		sigemptyset(&nmask);
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
-		nmdm = get_peer_comport(get_assigned_com(vm, 0));
-		if (nmdm == NULL || (fd = open(nmdm, O_RDWR)) < 0 ||
-		    write(fd, cmd, cmdlen) < 0)
+		nmdm[0] = get_assigned_com(vm, 0);
+		nmdm[1] = get_peer_comport(nmdm[0]);
+		/*
+		  Make sure that the assigned comport is connected while
+		  writing the 'cmd' strings. If the assigned comport is not
+		  connected, the 'cmd' strings will be discarded in the nmdm
+		  device. This case will happen if sending the 'cmd' is faster
+		  than grub-bhyve opens the NMDM device.
+		 */
+		if (nmdm[1] == NULL || (fd[0] = open(nmdm[0], O_RDWR)) < 0 ||
+		    (fd[1] = open(nmdm[1], O_RDWR)) < 0 ||
+		    write(fd[1], cmd, cmdlen) < 0)
 			exit(1);
-		close(fd);
+		close(fd[1]);
+		sleep(1);
+		close(fd[0]);
+		free(nmdm[1]);
 		exit(0);
 	}
 	set_load_cmd_supplier(vm, pid);
