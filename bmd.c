@@ -871,6 +871,7 @@ on_vm_exit(int ident __unused, void *data)
 		break;
 	case RUN:
 		if (VM_CONF(vm_ent)->install == false && WIFEXITED(status) &&
+		    VM_CONF(vm_ent)->boot != ONESHOT &&
 		    (VM_CONF(vm_ent)->boot == ALWAYS ||
 			(strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 			    WEXITSTATUS(status) == 0))) {
