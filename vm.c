@@ -369,7 +369,7 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	}
 
 	cmd = create_load_command(conf, &len);
-	if (cmd != NULL && dopipe && pipe(ifd) < 0) {
+	if (cmd != NULL && pipe(ifd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
 		free(cmd);
 		goto err;
@@ -379,24 +379,23 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	if (pid > 0) {
 		set_pid(vm, pid);
 		set_state(vm, LOAD);
+		if (cmd != NULL) {
+			close(ifd[1]);
+			set_infd(vm, ifd[0]);
+		}
 		if (dopipe) {
-			if (cmd != NULL) {
-				close(ifd[1]);
-				set_infd(vm, ifd[0]);
-			}
 			close(ofd[1]);
 			set_outfd(vm, ofd[0]);
 			close(efd[1]);
 			set_errfd(vm, efd[0]);
 		} else {
-			set_infd(vm, -1);
 			set_outfd(vm, -1);
 			set_errfd(vm, -1);
 		}
 		if (cmd != NULL) {
 			if (com != NULL && strcasecmp(com, "stdio") != 0)
 				supply_grub_cmd(vm, cmd, len);
-			else if (dopipe)
+			else
 				write(ifd[0], cmd, len);
 			free(cmd);
 		}
@@ -404,11 +403,11 @@ grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		FILE *fp;
 		char **argv, *bp;
 
+		if (cmd != NULL) {
+			close(ifd[0]);
+			dup2(ifd[1], 0);
+		}
 		if (dopipe) {
-			if (cmd != NULL) {
-				close(ifd[0]);
-				dup2(ifd[1], 0);
-			}
 			close(ofd[0]);
 			close(efd[0]);
 			dup2(ofd[1], 1);
