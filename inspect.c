@@ -252,18 +252,22 @@ is_file(const char *path)
 static int
 inspect_netbsd_iso(struct inspection *ins)
 {
-	int rc;
 	char *path;
-	const char *cmd;
+	const char *com = get_comport(ins->conf) ? " -h com0" : "";
 
 	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
-		return -1;
+		goto err;
 
-	cmd = "knetbsd -h com0 -r cd0a /" NETBSD_KERNEL "\nboot\n";
-	rc = (is_file(path) && (ins->install_cmd = strdup(cmd)) != NULL) ? 0 :
-									   -1;
+	if (!is_file(path) || (asprintf(&ins->install_cmd,
+		    "knetbsd%s -r cd0a /" NETBSD_KERNEL "\nboot\n", com)) < 0)
+		goto err2;
+
 	free(path);
-	return rc;
+	return 0;
+err2:
+	free(path);
+err:
+	return -1;
 }
 
 static int
@@ -273,6 +277,7 @@ inspect_openbsd_iso(struct inspection *ins)
 	struct dirent *e;
 	char *path, *npath;
 	size_t len, olen, mplen;
+	const char *com = get_comport(ins->conf) ? " -h com0" : "";
 
 	if ((path = strdup(ins->mount_point)) == NULL)
 		return -1;
@@ -325,7 +330,7 @@ inspect_openbsd_iso(struct inspection *ins)
 
 	/* look for bsd.rd */
 	if (!is_file(path) ||
-	    asprintf(&ins->install_cmd, "kopenbsd -h com0 %s\nboot\n",
+	    asprintf(&ins->install_cmd, "kopenbsd%s %s\nboot\n", com,
 		&path[mplen]) < 0)
 		goto err;
 
@@ -464,6 +469,8 @@ static int
 inspect_openbsd_disk(struct inspection *ins)
 {
 	char *path;
+	const char *com = get_comport(ins->conf) ? " -h com0" : "";
+	const char *sgl = ins->single_user ? " -s" : "";
 
 	inspect_openbsd_partition(ins);
 
@@ -473,9 +480,8 @@ inspect_openbsd_disk(struct inspection *ins)
 
 	if (is_file(path) &&
 	    (asprintf(&ins->load_cmd,
-		"kopenbsd -h com0 -r sd0a (hd0,%s)/" OPENBSD_UPGRADE_KERNEL
-		"\nboot\n",
-		ins->grub_run_partition)) > 0)
+		"kopenbsd%s -r sd0a (hd0,%s)/" OPENBSD_UPGRADE_KERNEL
+		"\nboot\n", com, ins->grub_run_partition)) >= 0)
 		goto ret;
 	free(path);
 
@@ -483,37 +489,37 @@ inspect_openbsd_disk(struct inspection *ins)
 	if (asprintf(&path, "%s/" OPENBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	if (is_file(path) &&
-	    (asprintf(&ins->load_cmd,
-		"kopenbsd %s -h com0 -r sd0a (hd0,%s)/" OPENBSD_KERNEL
-		"\nboot\n",
-		ins->single_user ? "-s" : "", ins->grub_run_partition)) > 0)
-		goto ret;
-	free(path);
-err:
-	return -1;
+	if (!is_file(path) || (asprintf(&ins->load_cmd,
+		    "kopenbsd%s%s -r sd0a (hd0,%s)/" OPENBSD_KERNEL "\nboot\n",
+		    sgl, com, ins->grub_run_partition)) < 0)
+		goto err2;
+
 ret:
 	free(path);
 	return 0;
+err2:
+	free(path);
+err:
+	return -1;
 }
 
 static int
 inspect_netbsd_disk(struct inspection *ins)
 {
 	char *path;
-	const char *cmd;
+	const char *com = get_comport(ins->conf) ? " -h com0" : "";
+	const char *sgl = ins->single_user ? " -s" : "";
 
 	if (asprintf(&path, "%s/" NETBSD_KERNEL, ins->mount_point) < 0)
 		goto err;
 
-	cmd = ins->single_user ?
-	    "knetbsd -s -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n" :
-	    "knetbsd -h com0 -r dk0a /" NETBSD_KERNEL "\nboot\n";
-	if (is_file(path) && (ins->load_cmd = strdup(cmd)) != NULL) {
-		free(path);
-		return 0;
-	}
+	if (!is_file(path) || asprintf(&ins->load_cmd,
+		"knetbsd%s%s -r dk0a /" NETBSD_KERNEL "\nboot\n", sgl, com) < 0)
+		goto err2;
 
+	free(path);
+	return 0;
+err2:
 	free(path);
 err:
 	return -1;
