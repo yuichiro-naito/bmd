@@ -1741,8 +1741,6 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 			goto force_kill;
 		if (rc <= 0)
 			return rc;
-		if (wait_for_vm_output(vm_ent) < 0)
-			return -1;
 		/* FALLTHROUGH */
 	}
 
