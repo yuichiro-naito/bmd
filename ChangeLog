@@ -1,4 +1,6 @@
 * 3.3
+	- Fix 'boot=ONESHOT' doesn't work.
+	  (5821ca6cf281ceaee72024d5a0bd33c6cbb47c08)
 	- Introduce 'noexist' option to the 'disk' configuration.
 	  (8171aa3bb5bc6b17a8e92e145ad709d9c206fdab)
 	- Add support of High Definition Audio Controller.
