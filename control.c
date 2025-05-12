@@ -491,6 +491,7 @@ do_boot_console(const char *name, unsigned int boot_style, bool console,
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command", command[boot_style]);
 	nvlist_add_string(cmd, "name", name);
+	nvlist_add_string(cmd, "port", "com1");
 
 	if ((res = send_recv(cmd)) == NULL) {
 		ret = 1;
