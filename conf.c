@@ -312,6 +312,7 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->tpm_dev);
 	free(vc->tpm_type);
 	free(vc->tpm_version);
+	clear_hda_conf(vc);
 	free(vc);
 }
 
