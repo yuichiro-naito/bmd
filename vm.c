@@ -958,7 +958,7 @@ write_err_log(int fd, struct vm *vm)
 	} else if (size > 0 && vm->logfd != -1) {
 		n = 0;
 		while (n < size) {
-			if ((rc = write(vm->logfd, buf + n, size - n)) < 0)
+			while ((rc = write(vm->logfd, buf + n, size - n)) < 0)
 				if (errno != EINTR && errno != EAGAIN)
 					break;
 			if (rc < 0)
