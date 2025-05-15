@@ -1,8 +1,8 @@
 CFLAGS+=	-g -Wall -DLOCALBASE=\"$(LOCALBASE)\"
-LIB=		-lnv
+LIB=		-lnv -lutil
 OBJS= bmd.o ../console.o ../inspect_grub.o ../vm.o ../conf.o ../control.o \
 ../parser.o ../conflex.o ../global.o ../server.o ../confparse.o ../inspect.o \
-../tap.o ../wolmon.o
+../tap.o ../wolmon.o ../grub_loader.o
 
 TESTS= conf_test parser_test
 
