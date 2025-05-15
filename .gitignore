@@ -10,3 +10,4 @@ y.tab.c
 y.tab.h
 .depend*
 *.o
+*.pieo
