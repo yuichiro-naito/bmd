@@ -4,6 +4,9 @@ bmd.full
 bmd.8.gz
 bmdctl.8.gz
 bmd.conf.5.gz
+bmdtest
+bmdtest.debug
+bmdtest.full
 conflex.c
 confparse.c
 y.tab.c

@@ -1,24 +1,16 @@
-CFLAGS+=	-g -Wall -DLOCALBASE=\"$(LOCALBASE)\"
-LIB=		-lnv -lutil
-OBJS= bmd.o ../console.o ../inspect_grub.o ../vm.o ../conf.o ../control.o \
-../parser.o ../conflex.o ../global.o ../server.o ../confparse.o ../inspect.o \
-../tap.o ../wolmon.o ../grub_loader.o
+PROG=bmdtest
+CFLAGS+=-g -Wall -DLOCALBASE=\"$(LOCALBASE)\"
+LDADD=-lnv -lutil
+SRCS= ../console.c ../inspect_grub.c ../vm.c ../conf.c ../control.c \
+../parser.c ../conflex.c ../global.c ../server.c ../confparse.c ../inspect.c \
+../tap.c ../wolmon.c ../grub_loader.c conf_test.c parser_test.c main.c
+OBJS=bmd-test.pieo
+MAN=
 
-TESTS= conf_test parser_test
+test: $(PROG)
+	./$(PROG)
 
-test: $(TESTS)
-.for t in $(TESTS)
-	./$t
-.endfor
+bmd-test.pieo: ../bmd.c
+	$(CC) -c -o $@ $(CFLAGS) -DTEST ../bmd.c
 
-bmd.o: ../bmd.o
-	objcopy -N main ../bmd.o bmd.o
-
-conf_test: conf_test.c $(OBJS)
-	$(CC) $(CFLAGS) -o conf_test conf_test.c $(OBJS) $(LIB)
-
-parser_test:  parser_test.c $(OBJS)
-	$(CC) $(CFLAGS) -o parser_test parser_test.c $(OBJS) $(LIB)
-
-clean:
-	rm -f $(TESTS) bmd.o *.core
+.include <bsd.prog.mk>

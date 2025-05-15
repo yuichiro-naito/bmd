@@ -176,7 +176,7 @@ test1()
 }
 
 int
-main(int argc, char *argv[])
+parser_test(void)
 {
 	test0();
 	test1();

@@ -825,7 +825,7 @@ nvarr8(nvlist_t *a, nvlist_t *b)
 
 typedef void (*test_func)(nvlist_t *, nvlist_t *);
 int
-main(int argc, char *argv[])
+conf_test(void)
 {
 	int i;
 	nvlist_t *a, *b;

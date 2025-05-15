@@ -2127,7 +2127,11 @@ strendswith(const char *t, const char *s)
 }
 
 int
+#ifdef TEST
+bmd_main(int argc, char *argv[])
+#else
 main(int argc, char *argv[])
+#endif
 {
 	FILE *fp;
 	sigset_t nmask, omask;
