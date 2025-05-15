@@ -33,13 +33,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <termios.h>
 #include <unistd.h>
 
 #include "server.h"
 
 static int stop = 0;
-static struct termios defterm, term;
 
 static void
 sighandler_stop(int sig __unused)
@@ -74,15 +72,15 @@ put_char(int fd, char c)
 }
 
 static void
-suspend(int local_only)
+suspend(int local_only, struct termios *defterm, struct termios *term)
 {
-	tcsetattr(0, TCSADRAIN, &defterm);
+	tcsetattr(0, TCSADRAIN, defterm);
 	kill(local_only ? getpid() : 0, SIGTSTP);
-	tcsetattr(0, TCSADRAIN, &term);
+	tcsetattr(0, TCSADRAIN, term);
 }
 
 static int
-console_in(int fd)
+console_in(int fd, struct termios *defterm, struct termios *term)
 {
 	int c;
 
@@ -95,10 +93,10 @@ console_in(int fd)
 			case 4: /* ^D */
 				return 0;
 			case 0x19: /* ^Y */
-				suspend(1);
+				suspend(1, defterm, term);
 				continue;
 			case 0x1a: /* ^Z */
-				suspend(0);
+				suspend(0, defterm, term);
 				continue;
 			case '~':
 				break;
@@ -148,7 +146,7 @@ console_out(int fd)
 /*
  * Set up the "remote" tty's state
  */
-static int
+int
 ttysetup(int fd, int speed)
 {
 	struct termios cntrl;
@@ -168,25 +166,36 @@ ttysetup(int fd, int speed)
 }
 
 int
+localttysetup(struct termios *defterm, struct termios *term)
+{
+	tcgetattr(0, defterm);
+	*term = *defterm;
+	term->c_lflag &= ~(ICANON | IEXTEN | ECHO);
+	term->c_iflag &= ~(INPCK | ICRNL);
+	term->c_oflag &= ~OPOST;
+	term->c_cc[VMIN] = 1;
+	term->c_cc[VTIME] = 0;
+	term->c_cc[VINTR] = term->c_cc[VQUIT] = term->c_cc[VSUSP] =
+	    term->c_cc[VDSUSP] = term->c_cc[VDISCARD] = term->c_cc[VLNEXT] =
+		_POSIX_VDISABLE;
+	return tcsetattr(0, TCSADRAIN, term);
+}
+
+int
+rollbackttysetup(struct termios *defterm)
+{
+	return tcsetattr(0, TCSADRAIN, defterm);
+}
+
+int
 attach_console(int fd)
 {
 	int status;
 	pid_t out_pid;
+	struct termios defterm, term;
 
-	if (ttysetup(fd, 115200) < 0)
+	if (ttysetup(fd, 115200) < 0 || localttysetup(&defterm, &term))
 		return -1;
-
-	tcgetattr(0, &defterm);
-	term = defterm;
-	term.c_lflag &= ~(ICANON | IEXTEN | ECHO);
-	term.c_iflag &= ~(INPCK | ICRNL);
-	term.c_oflag &= ~OPOST;
-	term.c_cc[VMIN] = 1;
-	term.c_cc[VTIME] = 0;
-	term.c_cc[VINTR] = term.c_cc[VQUIT] = term.c_cc[VSUSP] =
-	    term.c_cc[VDSUSP] = term.c_cc[VDISCARD] = term.c_cc[VLNEXT] =
-		_POSIX_VDISABLE;
-	tcsetattr(0, TCSADRAIN, &term);
 
 	signal(SIGINT, sighandler_stop);
 	signal(SIGTERM, sighandler_stop);
@@ -198,7 +207,7 @@ attach_console(int fd)
 	signal(SIGHUP, sighandler_kill);
 
 	if (out_pid)
-		console_in(fd);
+		console_in(fd, &defterm, &term);
 	else
 		console_out(fd);
 

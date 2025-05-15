@@ -27,7 +27,6 @@
  */
 #include <sys/types.h>
 #include <sys/param.h>
-#include <sys/cpuset.h>
 #include <sys/ioctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
@@ -52,61 +51,11 @@
 #include "conf.h"
 #include "inspect.h"
 #include "log.h"
-#include "server.h"
 #include "vm.h"
 
 #define UEFI_CSM_FIRMWARE  LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
 #define UEFI_FIRMWARE	   LOCALBASE "/share/uefi-firmware/BHYVE_UEFI.fd"
 #define UEFI_FIRMWARE_VARS LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
-
-int
-write_mapfile(struct vm_conf *conf, char **mapfile)
-{
-	int fd, i;
-	char *fn;
-	FILE *fp;
-	struct disk_conf *dc;
-	struct iso_conf *ic;
-
-	if (asprintf(&fn, "/tmp/bmd.%s.%d.XXXXXX", get_name(conf), getpid()) <
-	    0)
-		return -1;
-
-	fd = mkstemp(fn);
-	if (fd < 0) {
-		ERR("%s\n", "can't create mapfile");
-		free(fn);
-		return -1;
-	}
-
-	*mapfile = fn;
-
-	if ((fp = fdopen(fd, "w+")) == NULL) {
-		ERR("can't open mapfile (%s)\n", strerror(errno));
-		goto err2;
-	}
-
-	i = 0;
-	DISK_CONF_FOREACH(dc, conf)
-		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
-			goto err;
-
-	i = 0;
-	ISO_CONF_FOREACH(ic, conf)
-		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
-			goto err;
-
-	fclose(fp);
-	return 0;
-err:
-	ERR("can't write mapfile (%s)\n", strerror(errno));
-	fclose(fp);
-err2:
-	*mapfile = NULL;
-	unlink(fn);
-	free(fn);
-	return -1;
-}
 
 #if __FreeBSD_version > 1400000
 static int
@@ -182,45 +131,6 @@ copy_uefi_vars(struct vm *vm __unused)
 }
 #endif
 
-static char *
-create_load_command(struct vm_conf *conf, size_t *length)
-{
-	const char **p, *repl[] = { "kopenbsd ", "knetbsd " };
-	size_t len = 0;
-	char *cmd = NULL;
-	char *t = (is_install(conf)) ? get_installcmd(conf) : get_loadcmd(conf);
-	if (t == NULL)
-		goto end;
-
-	if (strcasecmp(t, "auto") == 0) {
-		if ((cmd = inspect(conf)) == NULL) {
-			ERR("%s inspection failed for VM %s\n",
-			    is_install(conf) ? "installcmd" : "loadcmd",
-			    get_name(conf));
-			goto end;
-		}
-		len = strlen(cmd);
-		goto end;
-	}
-
-	if (is_single_user(conf))
-		ARRAY_FOREACH(p, repl) {
-			len = strlen(*p);
-			if (strncmp(t, *p, len) == 0) {
-				len = asprintf(&cmd, "%s-s %s\nboot\n", *p,
-				    t + len);
-				goto end;
-			}
-		}
-	len = asprintf(&cmd, "%s\nboot\n", t);
-
-end:
-	if (length)
-		*length = len;
-
-	return cmd;
-}
-
 /*
  * split_args() separates an buffer that contains '\n' as the delimiter.
  * The results will be an array of pointers to portions of the buffer,
@@ -252,209 +162,6 @@ split_args(char *buf)
 			break;
 
 	return (ap0);
-}
-
-static void
-grub_load_cleanup(struct vm *vm, nvlist_t *pl_conf __unused)
-{
-	const char *fn;
-
-	if ((fn = get_mapfile(vm)) != NULL) {
-		unlink(fn);
-		free_mapfile(vm);
-	}
-}
-
-static int
-wait_process(int ident __unused, void *data)
-{
-	int status;
-	struct vm *vm = data;
-	long pid = get_load_cmd_supplier(vm);
-	if (pid != -1) {
-		waitpid(pid, &status, 0);
-		set_load_cmd_supplier(vm, -1);
-		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
-			ERR("%s\n", "load_cmd_supplier failed!");
-	}
-	return 0;
-}
-
-static int
-kill_process(int ident __unused, void *data)
-{
-	struct vm *vm = data;
-	long pid = get_load_cmd_supplier(vm);
-	if (pid != -1)
-		kill(pid, SIGTERM);
-	return 0;
-}
-
-static int
-supply_grub_cmd(struct vm *vm, char *cmd, size_t cmdlen)
-{
-	int fd;
-	char *nmdm;
-	pid_t pid;
-	sigset_t nmask;
-
-	pid = fork();
-	if (pid < 0)
-		return -1;
-	if (pid == 0) {
-		/* child process */
-		sigemptyset(&nmask);
-		sigaddset(&nmask, SIGTERM);
-		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
-		nmdm = get_peer_comport(get_assigned_com(vm, 0));
-		if (nmdm == NULL || (fd = open(nmdm, O_RDWR)) < 0 ||
-		    write(fd, cmd, cmdlen) < 0)
-			exit(1);
-		close(fd);
-		exit(0);
-	}
-	set_load_cmd_supplier(vm, pid);
-	plugin_set_timer(10, kill_process, vm);
-	plugin_wait_for_process(pid, wait_process, vm);
-	return 0;
-}
-
-static int
-grub_load(struct vm *vm, nvlist_t *pl_conf __unused)
-{
-	int ifd[2], ofd[2], efd[2], rc;
-	pid_t pid;
-	struct vm_conf *conf = vm_get_conf(vm);
-	size_t len;
-	char *cmd, *mapfile = NULL, *com = get_assigned_com(vm, 0);
-	bool dopipe = (com == NULL) || (strcasecmp(com, "stdio") != 0);
-
-	if (dopipe) {
-		if (pipe(ofd) < 0) {
-			ERR("cannot create pipe (%s)\n", strerror(errno));
-			return -1;
-		}
-
-		if (pipe(efd) < 0) {
-			ERR("cannot create pipe (%s)\n", strerror(errno));
-			close(ofd[0]);
-			close(ofd[1]);
-			return -1;
-		}
-	}
-
-	if (write_mapfile(conf, &mapfile) < 0)
-		goto err;
-
-	if (mapfile != NULL) {
-		if (get_mapfile(vm))
-			unlink(get_mapfile(vm));
-		rc = set_mapfile(vm, mapfile);
-		free(mapfile);
-		if (rc < 0)
-			goto err;
-	}
-
-	cmd = create_load_command(conf, &len);
-	if (cmd != NULL && pipe(ifd) < 0) {
-		ERR("cannot create pipe (%s)\n", strerror(errno));
-		free(cmd);
-		goto err;
-	}
-
-	pid = fork();
-	if (pid > 0) {
-		set_pid(vm, pid);
-		set_state(vm, LOAD);
-		if (cmd != NULL) {
-			close(ifd[1]);
-			set_infd(vm, ifd[0]);
-		}
-		if (dopipe) {
-			close(ofd[1]);
-			set_outfd(vm, ofd[0]);
-			close(efd[1]);
-			set_errfd(vm, efd[0]);
-		} else {
-			set_outfd(vm, -1);
-			set_errfd(vm, -1);
-		}
-		if (cmd != NULL) {
-			if (com != NULL && strcasecmp(com, "stdio") != 0)
-				supply_grub_cmd(vm, cmd, len);
-			else
-				write(ifd[0], cmd, len);
-			free(cmd);
-		}
-	} else if (pid == 0) {
-		FILE *fp;
-		char **argv, *bp;
-
-		if (cmd != NULL) {
-			close(ifd[0]);
-			dup2(ifd[1], 0);
-		}
-		if (dopipe) {
-			close(ofd[0]);
-			close(efd[0]);
-			dup2(ofd[1], 1);
-			dup2(efd[1], 1);
-		}
-		fp = open_memstream(&bp, &len);
-		if (fp == NULL) {
-			ERR("cannot open memstream (%s)\n", strerror(errno));
-			exit(1);
-		}
-		flockfile(fp);
-
-		setenv("TERM", "vt100", 1);
-		fprintf(fp, LOCALBASE "/sbin/grub-bhyve\n");
-		if (is_wired_memory(conf))
-			fprintf(fp, "-S\n");
-		if (com != NULL && strcasecmp(com, "stdio") != 0)
-			fprintf(fp, "-c\n%s\n", com);
-		fprintf(fp, "-r\n");
-		if (is_install(conf))
-			fprintf(fp, "cd0\n");
-		else if (get_grub_run_partition(conf))
-			fprintf(fp, "hd0,%s\n", get_grub_run_partition(conf));
-		else
-			fprintf(fp, "hd0,1\n");
-		fprintf(fp, "-M\n%s\n", get_memory(conf));
-		fprintf(fp, "-m\n%s\n", get_mapfile(vm));
-		fprintf(fp, "%s\n", get_name(conf));
-		funlockfile(fp);
-		fclose(fp);
-
-		argv = split_args(bp);
-		if (argv == NULL) {
-			ERR("malloc: %s\n", strerror(errno));
-			exit(1);
-		}
-		if (dopipe) {
-			char **t;
-			for (t = argv; *t != NULL; t++)
-				printf("%s ", *t);
-			printf("\n");
-			fflush(stdout);
-		}
-		execv(argv[0], argv);
-		ERR("cannot exec %s\n", argv[0]);
-		exit(1);
-	} else {
-		ERR("cannot fork (%s)\n", strerror(errno));
-		goto err;
-	}
-
-	return 0;
-err:
-	if (dopipe) {
-		close(ofd[0]);
-		close(ofd[1]);
-		close(efd[0]);
-		close(efd[1]);
-	}
-	return -1;
 }
 
 static int
@@ -980,9 +687,6 @@ struct vm_method bhyve_method = { "bhyve", exec_bhyve, reset_bhyve,
 	poweroff_bhyve, acpi_poweroff_bhyve, cleanup_bhyve };
 
 struct loader_method bhyveload_method = { "bhyveload", bhyve_load, NULL };
-
-struct loader_method grub2load_method = { "grub", grub_load,
-	grub_load_cleanup };
 
 struct loader_method uefiload_method = { "uefi", uefi_load, NULL };
 

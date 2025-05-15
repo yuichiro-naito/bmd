@@ -28,6 +28,8 @@
 #ifndef _SERVER_H
 #define _SERVER_H
 
+#include <termios.h>
+
 /*
  * Nmdm number offset for auto assignment.
  */
@@ -46,6 +48,10 @@ int send_sock_buf(struct sock_buf *);
 typedef unsigned int com_opener_id;
 struct com_opener *lookup_com_opener(com_opener_id);
 char *get_peer_comport(const char *);
+
+int ttysetup(int, int);
+int localttysetup(struct termios *, struct termios *);
+int rollbackttysetup(struct termios *);
 
 int connect_to_server(const struct global_conf *);
 int create_command_server(const struct global_conf *);
