@@ -1,4 +1,6 @@
 * 3.3
+	- Allow to input '^S' on the bmdctl console.
+	  (6346fd0f87cf48add3fc281d90091460bca7d009)
 	- Assign a dedicated pseudo terminal for grub-bhyve.
 	  (96795d038da532952bab56e48e53a1b0783a4bc4)
 	- Fix 'boot=ONESHOT' to work.
