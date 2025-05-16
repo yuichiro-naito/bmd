@@ -159,8 +159,8 @@ localttysetup(struct termios *defterm, struct termios *term)
 	term->c_cc[VMIN] = 1;
 	term->c_cc[VTIME] = 0;
 	term->c_cc[VINTR] = term->c_cc[VQUIT] = term->c_cc[VSUSP] =
-	    term->c_cc[VDSUSP] = term->c_cc[VDISCARD] = term->c_cc[VLNEXT] =
-		_POSIX_VDISABLE;
+		term->c_cc[VDSUSP] = term->c_cc[VDISCARD] = term->c_cc[VLNEXT] =
+		term->c_cc[VSTOP] = _POSIX_VDISABLE;
 	return tcsetattr(0, TCSADRAIN, term);
 }
 
