@@ -44,6 +44,15 @@
 #define FD_KEY	    "_file_descriptor_"
 
 /*
+  Plugin module
+ */
+extern const PLUGIN_DESC __start_plugin_array;
+extern const PLUGIN_DESC __stop_plugin_array;
+
+#define PLUGIN_FOREACH(p) \
+	for ((p) = &__start_plugin_array; (p) < &__stop_plugin_array; (p)++)
+
+/*
   Command timeout in second.
  */
 #define COMMAND_TIMEOUT_SEC 30

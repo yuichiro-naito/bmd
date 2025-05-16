@@ -1110,7 +1110,7 @@ dummy2(struct vm *vm __unused, nvlist_t *pl_ent __unused)
 #define set_default(o, m, f) (o)->m = (o)->m ? (o)->m : (f)
 
 static struct plugin_entry *
-create_plugin_entry(struct plugin_desc *desc)
+create_plugin_entry(const struct plugin_desc *desc)
 {
 	char *dname, *vname, *lname;
 	struct plugin_entry *pe;
@@ -1266,27 +1266,18 @@ load_plugins(const char *plugin_dir)
 {
 	DIR *d;
 	struct dirent *ent;
-	struct plugin_desc desc;
 	struct plugin_entry *pl_ent;
 	static int loaded = 0;
+	const PLUGIN_DESC *p;
 
 	if (loaded != 0)
 		return 0;
 
-	memset(&desc, 0, sizeof(desc));
-	desc.name = "bhyve";
-	desc.method = &bhyve_method;
-	desc.loader_method = &bhyveload_method;
-
-	if ((pl_ent = create_plugin_entry(&desc)) == NULL)
-		return -1;
-
-	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
-
-	if (register_loader_method(&grub2load_method) < 0 ||
-	    register_loader_method(&uefiload_method) < 0 ||
-	    register_loader_method(&csmload_method) < 0)
-		return -1;
+	PLUGIN_FOREACH(p) {
+		if ((pl_ent = create_plugin_entry(p)) == NULL)
+			return -1;
+		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
+	}
 
 	if ((d = opendir(plugin_dir)) == NULL) {
 		ERR("cannot open %s\n", plugin_dir);

@@ -683,11 +683,12 @@ write_err_log(int fd, struct vm *vm)
 	return size;
 }
 
-struct vm_method bhyve_method = { "bhyve", exec_bhyve, reset_bhyve,
-	poweroff_bhyve, acpi_poweroff_bhyve, cleanup_bhyve };
+PLUGIN_VM_METHOD(bhyve, exec_bhyve, reset_bhyve, poweroff_bhyve,
+    acpi_poweroff_bhyve, cleanup_bhyve);
+PLUGIN_LOADER_METHOD(bhyveload, bhyve_load, NULL);
+PLUGIN_LOADER_METHOD(uefi, uefi_load, NULL);
+PLUGIN_LOADER_METHOD(csm, csm_load, NULL);
 
-struct loader_method bhyveload_method = { "bhyveload", bhyve_load, NULL };
-
-struct loader_method uefiload_method = { "uefi", uefi_load, NULL };
-
-struct loader_method csmload_method = { "csm", csm_load, NULL };
+PLUGIN_METHOD_MODULE(bhyve, &bhyve, &bhyveload);
+PLUGIN_METHOD_MODULE(uefi, NULL, &uefi);
+PLUGIN_METHOD_MODULE(csm, NULL, &csm);

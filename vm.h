@@ -28,13 +28,22 @@
 #ifndef _VM_H_
 #define _VM_H_
 
+#include "bmd_plugin.h"
+
 struct vm;
 struct vm_conf;
-extern struct vm_method bhyve_method;
-extern struct loader_method bhyveload_method;
-extern struct loader_method grub2load_method;
-extern struct loader_method uefiload_method;
-extern struct loader_method csmload_method;
+
+#define PLUGIN_MODULE_VAR(v)					\
+	static PLUGIN_DESC(v) __used __section("plugin_array")
+#define PLUGIN_METHOD_MODULE(n, v, l) PLUGIN_MODULE_VAR(pl_desc_##n) = { \
+		.version = PLUGIN_VERSION, .name = (#n), .method = (v),	\
+		.loader_method = (l) }
+#define PLUGIN_VM_METHOD(n, s, r, p, a, c) \
+	static struct vm_method(n) = { .name = (#n), .vm_start = (s), \
+		.vm_reset = (r), .vm_poweroff = (p), \
+		.vm_acpi_poweroff = (a), .vm_cleanup = (c) }
+#define PLUGIN_LOADER_METHOD(n, l, c) static struct loader_method(n) = { \
+		.name = (#n), .ld_load = (l), .ld_cleanup = (c) }
 
 /* Implemented in vm.c */
 int remove_taps(struct vm *);

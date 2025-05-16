@@ -494,5 +494,5 @@ err:
 	return -1;
 }
 
-struct loader_method grub2load_method = { "grub", grub_load,
-	grub_load_cleanup };
+PLUGIN_LOADER_METHOD(grub, grub_load, grub_load_cleanup);
+PLUGIN_METHOD_MODULE(grub, NULL, &grub);
