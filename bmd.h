@@ -107,14 +107,14 @@ struct vm_conf_entry {
 
 enum EVENT_TYPE { EVENT, PLUGIN };
 
-#define VM_START(v)    (v)->vm_method->vm_start(&(v)->vm, (v)->pl_conf)
-#define VM_RESET(v)    (v)->vm_method->vm_reset(&(v)->vm, (v)->pl_conf)
-#define VM_POWEROFF(v) (v)->vm_method->vm_poweroff(&(v)->vm, (v)->pl_conf)
+#define VM_START(v)    (v)->vm_method->vm_start(&(v)->vm, (v)->pl_vm_conf)
+#define VM_RESET(v)    (v)->vm_method->vm_reset(&(v)->vm, (v)->pl_vm_conf)
+#define VM_POWEROFF(v) (v)->vm_method->vm_poweroff(&(v)->vm, (v)->pl_vm_conf)
 #define VM_ACPI_POWEROFF(v) \
-	(v)->vm_method->vm_acpi_poweroff(&(v)->vm, (v)->pl_conf)
-#define VM_CLEANUP(v)	  (v)->vm_method->vm_cleanup(&(v)->vm, (v)->pl_conf)
-#define VM_LD_LOAD(v)	  (v)->loader_method->ld_load(&(v)->vm, (v)->pl_conf)
-#define VM_LD_CLEANUP(v)  (v)->loader_method->ld_cleanup(&(v)->vm, (v)->pl_conf)
+	(v)->vm_method->vm_acpi_poweroff(&(v)->vm, (v)->pl_vm_conf)
+#define VM_CLEANUP(v)	  (v)->vm_method->vm_cleanup(&(v)->vm, (v)->pl_vm_conf)
+#define VM_LD_LOAD(v)	  (v)->loader_method->ld_load(&(v)->vm, (v)->pl_ld_conf)
+#define VM_LD_CLEANUP(v)  (v)->loader_method->ld_cleanup(&(v)->vm, (v)->pl_ld_conf)
 #define VM_PTR(v)	  (&(v)->vm)
 #define VM_CONF(v)	  ((v)->vm.conf)
 #define VM_CONF_ENT(v)	  ((struct vm_conf_entry *)((v)->vm.conf))
@@ -122,7 +122,8 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_TMPCONF(v)	  ((v)->tmp_conf_ent)
 #define VM_METHOD(v)	  ((v)->vm_method)
 #define VM_LD_METHOD(v)	  ((v)->loader_method)
-#define VM_PLCONF(v)	  ((v)->pl_conf)
+#define VM_PL_VMCONF(v)	  ((v)->pl_vm_conf)
+#define VM_PL_LDCONF(v)	  ((v)->pl_ld_conf)
 #define VM_TYPE(v)	  ((v)->type)
 #define VM_PLUGIN_DATA(v) (VM_CONF_ENT(v)->pl_data)
 #define VM_SIGTARGETS(v)  (&(v)->signal_targets)
@@ -159,7 +160,8 @@ struct vm_entry {
 	SLIST_ENTRY(vm_entry) next;
 	struct vm_method *vm_method;
 	struct loader_method *loader_method;
-	nvlist_t *pl_conf;
+	nvlist_t *pl_vm_conf;
+	nvlist_t *pl_ld_conf;
 	struct signal_targets signal_targets;
 	bool restart;
 };

@@ -1444,7 +1444,7 @@ set_vm_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 		if ((m = pd->ent->desc.method) != NULL &&
 		    strcmp(m->name, backend) == 0) {
 			VM_METHOD(vm_ent) = m;
-			VM_PLCONF(vm_ent) = pd->pl_conf;
+			VM_PL_VMCONF(vm_ent) = pd->pl_conf;
 			return 0;
 		}
 
@@ -1467,7 +1467,7 @@ set_loader_method(struct vm_entry *vm_ent, struct vm_conf_entry *conf_ent)
 		if ((m = pd->ent->desc.loader_method) != NULL &&
 		    strcmp(m->name, loader) == 0) {
 			VM_LD_METHOD(vm_ent) = m;
-			VM_PLCONF(vm_ent) = pd->pl_conf;
+			VM_PL_LDCONF(vm_ent) = pd->pl_conf;
 			return 0;
 		}
 
