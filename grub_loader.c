@@ -157,24 +157,6 @@ end:
 	return cmd;
 }
 
-static ssize_t
-writen(int fd, char *buf, size_t size)
-{
-	size_t n;
-	ssize_t rc;
-
-	n = 0;
-	while (n < size) {
-		while ((rc = write(fd, buf + n, size - n)) < 0)
-			if (errno != EINTR && errno != EAGAIN)
-				break;
-		if (rc <= 0)
-			return rc;
-		n += rc;
-	}
-	return n;
-}
-
 static int
 on_read_master(int id, void *data)
 {

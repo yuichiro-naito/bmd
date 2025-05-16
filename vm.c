@@ -645,10 +645,28 @@ cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	}
 }
 
+ssize_t
+writen(int fd, const void *buf, size_t size)
+{
+	intptr_t b = (intptr_t)buf;
+	size_t n = 0;
+	ssize_t rc;
+
+	while (n < size) {
+		while ((rc = write(fd, (void *)(b + n), size - n)) < 0)
+			if (errno != EINTR && errno != EAGAIN)
+				break;
+		if (rc <= 0)
+			return rc;
+		n += rc;
+	}
+	return n;
+}
+
 int
 write_err_log(int fd, struct vm *vm)
 {
-	int n, rc;
+	int rc;
 	ssize_t size;
 	char buf[4 * 1024];
 
@@ -663,20 +681,13 @@ write_err_log(int fd, struct vm *vm)
 			vm->errfd = -1;
 		return 0;
 	} else if (size > 0 && vm->logfd != -1) {
-		n = 0;
-		while (n < size) {
-			while ((rc = write(vm->logfd, buf + n, size - n)) < 0)
-				if (errno != EINTR && errno != EAGAIN)
-					break;
-			if (rc < 0)
-				ERR("%s: failed to write err_logfile (%s)\n",
-				    vm->conf->name, strerror(errno));
-			if (rc <= 0) {
-				close(vm->logfd);
-				vm->logfd = -1;
-				break;
-			}
-			n += rc;
+		rc = writen(vm->logfd, buf, size);
+		if (rc < 0)
+			ERR("%s: failed to write err_logfile (%s)\n",
+			    vm->conf->name, strerror(errno));
+		if (rc <= 0) {
+			close(vm->logfd);
+			vm->logfd = -1;
 		}
 	}
 

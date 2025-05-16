@@ -36,6 +36,7 @@
 #include <unistd.h>
 
 #include "server.h"
+#include "vm.h"
 
 static int stop = 0;
 
@@ -59,16 +60,6 @@ static void
 sighandler_exit(int sig __unused)
 {
 	exit(0);
-}
-
-static ssize_t
-put_char(int fd, char c)
-{
-	ssize_t n;
-	while ((n = write(fd, &c, 1)) < 0)
-		if (stop || errno != EINTR)
-			break;
-	return n;
 }
 
 static void
@@ -101,11 +92,11 @@ console_in(int fd, struct termios *defterm, struct termios *term)
 			case '~':
 				break;
 			default:
-				if (put_char(fd, '~') <= 0)
+				if (writen(fd, &(char[]){'~'}[0], 1) <= 0)
 					return 0;
 			}
 		}
-		if (put_char(fd, c) <= 0)
+		if (writen(fd, &(char[]){c}[0], 1) <= 0)
 			break;
 	}
 
@@ -115,7 +106,7 @@ console_in(int fd, struct termios *defterm, struct termios *term)
 static int
 console_out(int fd)
 {
-	ssize_t sz, n, written;
+	ssize_t sz;
 	char buf[1024];
 
 	signal(SIGINT, sighandler_exit);
@@ -128,16 +119,8 @@ console_out(int fd)
 		if (sz <= 0)
 			break;
 
-		written = 0;
-	retry:
-		while ((n = write(1, buf + written, sz - written)) < 0)
-			if (errno != EINTR)
-				break;
-		if (n <= 0)
+		if (writen(1, buf, sz) <= 0)
 			break;
-		written += n;
-		if (written < sz)
-			goto retry;
 	}
 
 	exit(0);
