@@ -1,5 +1,7 @@
 * 3.3
-	- Fix 'boot=ONESHOT' doesn't work.
+	- Assign a dedicated pseudo terminal for grub-bhyve.
+	  (96795d038da532952bab56e48e53a1b0783a4bc4)
+	- Fix 'boot=ONESHOT' to work.
 	  (5821ca6cf281ceaee72024d5a0bd33c6cbb47c08)
 	- Introduce 'noexist' option to the 'disk' configuration.
 	  (8171aa3bb5bc6b17a8e92e145ad709d9c206fdab)
