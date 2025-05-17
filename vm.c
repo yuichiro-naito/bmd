@@ -648,7 +648,7 @@ cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 ssize_t
 writen(int fd, const void *buf, size_t size)
 {
-	intptr_t b = (intptr_t)buf;
+	uintptr_t b = (uintptr_t)buf;
 	size_t n = 0;
 	ssize_t rc;
 
