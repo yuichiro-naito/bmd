@@ -143,7 +143,7 @@ create_watch_target(struct vm_entry *v, struct net_conf *n)
 {
 	struct watch_target *t;
 
-	if ((t = malloc(sizeof(*t))) ==NULL)
+	if ((t = malloc(sizeof(*t))) == NULL)
 		return NULL;
 	if (ether_aton_r(n->mac, &t->mac) == NULL) {
 		free(t);
