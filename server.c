@@ -570,7 +570,10 @@ open_comport(const char *comport)
 	int fd;
 
 	/*
-	 * Note that O_NONBLOCK is not supported by nmdm(4).
+	 * Note that O_NONBLOCK doesn't work at this point.
+	 * The peer process (bhyveload, bhyve, or grub-bhyve)
+	 * always opens with O_NONBLOCK. Opening with O_NONBLOCK
+	 * on both sides often fails.
 	 */
 	if ((fd = open(comport, O_RDWR)) < 0)
 		goto err;
