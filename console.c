@@ -62,6 +62,16 @@ sighandler_exit(int sig __unused)
 	exit(0);
 }
 
+static ssize_t
+put_char(int fd, char c)
+{
+	ssize_t n;
+	while ((n = write(fd, &c, 1)) < 0)
+		if (stop || errno != EINTR)
+			break;
+	return n;
+}
+
 static void
 suspend(int local_only, struct termios *defterm, struct termios *term)
 {
@@ -92,11 +102,11 @@ console_in(int fd, struct termios *defterm, struct termios *term)
 			case '~':
 				break;
 			default:
-				if (writen(fd, &(char[]){'~'}[0], 1) <= 0)
+				if (put_char(fd, '~') <= 0)
 					return 0;
 			}
 		}
-		if (writen(fd, &(char[]){c}[0], 1) <= 0)
+		if (put_char(fd, c) <= 0)
 			break;
 	}
 
