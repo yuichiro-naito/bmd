@@ -62,6 +62,14 @@ sighandler_exit(int sig __unused)
 	exit(0);
 }
 
+static void
+suspend(int local_only, struct termios *defterm, struct termios *term)
+{
+	tcsetattr(0, TCSADRAIN, defterm);
+	kill(local_only ? getpid() : 0, SIGTSTP);
+	tcsetattr(0, TCSADRAIN, term);
+}
+
 static ssize_t
 put_char(int fd, char c)
 {
@@ -70,14 +78,6 @@ put_char(int fd, char c)
 		if (stop || errno != EINTR)
 			break;
 	return n;
-}
-
-static void
-suspend(int local_only, struct termios *defterm, struct termios *term)
-{
-	tcsetattr(0, TCSADRAIN, defterm);
-	kill(local_only ? getpid() : 0, SIGTSTP);
-	tcsetattr(0, TCSADRAIN, term);
 }
 
 static int
