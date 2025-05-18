@@ -1402,7 +1402,7 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 		}
 		parser = bsearch(key, parser_list, nitems(parser_list),
 		    sizeof(parser_list[0]), compare_parser_entry);
-		if (parser && parser->clear != NULL && pr->operator== 0)
+		if (parser && parser->clear != NULL && pr->operator == 0)
 			(*parser->clear)(conf);
 		STAILQ_FOREACH(vl, &pr->vals, next)
 			vm_conf_call_parser(conf, sc, pr, parser, key, vl);
