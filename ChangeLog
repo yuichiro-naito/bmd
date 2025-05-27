@@ -1,3 +1,8 @@
+* 3.4
+	- Introduce the 'noexist' option to the iso conifiguration.
+	  (659a3af3544c428341383f8890880c3c3af45bbc)
+	- Check if an iso file or device exists.
+	  (659a3af3544c428341383f8890880c3c3af45bbc)
 * 3.3
 	- Allow to input '^S' on the bmdctl console.
 	  (6346fd0f87cf48add3fc281d90091460bca7d009)
