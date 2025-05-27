@@ -36,7 +36,7 @@
 #include "bmd_plugin.h"
 #include "conf.h"
 
-#define BMD_VERSION "3.3"
+#define BMD_VERSION "3.4"
 
 #define UID_NOBODY  65534
 #define GID_NOBODY  65534
