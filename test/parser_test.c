@@ -1,4 +1,5 @@
 #include <sys/fcntl.h>
+#include <sys/queue.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +7,16 @@
 #include <assert.h>
 
 #include "../bmd.h"
+
+#define assert_str(a, b)  assert(strcmp((a), (b)) == 0)
+
+void
+free_vm_conf_list(struct vm_conf_list *l)
+{
+	struct vm_conf_entry *c = NULL, *n;
+	LIST_FOREACH_FROM_SAFE(c, l, next, n)
+		free_vm_conf_entry(c);
+}
 
 void
 test0()
@@ -16,27 +27,28 @@ test0()
 	gl_conf->config_file = strdup("./test0.conf");
 	assert(load_config_file(&list, true) == 0);
 	printf("parser %s: ok\n", __func__);
+	free_vm_conf_list(&list);
 }
 
 void
 check_test(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "/var/log/test.log") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "/var/log/test.log");;
 }
 
 void
 check_test0(struct vm_conf *c)
 {
-	assert(strcmp(c->err_logfile, "aaa") == 0);
+	assert_str(c->err_logfile, "aaa");;
 	assert(c->ncpu == 4);
 }
 
 void
 check_test1_0(struct vm_conf *c)
 {
-	assert(strcmp(c->err_logfile, "/var/log/test1_0.log") == 0);
+	assert_str(c->err_logfile, "/var/log/test1_0.log");;
 	assert(c->ncpu == 1);
 	assert(c->ncpu_sockets == 1);
 	assert(c->ncpu_cores == 1);
@@ -46,7 +58,7 @@ check_test1_0(struct vm_conf *c)
 void
 check_test1_1(struct vm_conf *c)
 {
-	assert(strcmp(c->err_logfile, "") == 0);
+	assert_str(c->err_logfile, "");;
 	assert(c->ncpu == 8);
 	assert(c->ncpu_sockets == 2);
 	assert(c->ncpu_cores == 2);
@@ -56,7 +68,7 @@ check_test1_1(struct vm_conf *c)
 void
 check_test2_0(struct vm_conf *c)
 {
-	assert(strcmp(c->err_logfile, "/var/log/test2_0.log") == 0);
+	assert_str(c->err_logfile, "/var/log/test2_0.log");;
 	assert(c->ncpu == 4);
 	assert(c->ncpu_sockets == 1);
 	assert(c->ncpu_cores == 2);
@@ -66,7 +78,7 @@ check_test2_0(struct vm_conf *c)
 void
 check_test2_1(struct vm_conf *c)
 {
-	assert(strcmp(c->err_logfile, "/var/log/test2_1.log") == 0);
+	assert_str(c->err_logfile, "/var/log/test2_1.log");;
 	assert(c->ncpu == 4);
 	assert(c->ncpu_sockets == 2);
 	assert(c->ncpu_cores == 1);
@@ -77,8 +89,8 @@ void
 check_test3_0(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "zzz") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "zzz");;
 	assert(c->loadcmd == NULL);
 }
 
@@ -86,8 +98,8 @@ void
 check_test3_1(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "/var/log/test3_1.log") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "/var/log/test3_1.log");;
 	assert(c->loadcmd == NULL);
 }
 
@@ -95,36 +107,36 @@ void
 check_test4_0(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "zzz") == 0);
-	assert(strcmp(c->loadcmd, "") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "zzz");;
+	assert_str(c->loadcmd, "");;
 }
 
 void
 check_test4_1(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "zzz") == 0);
-	assert(strcmp(c->loadcmd, "") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "zzz");;
+	assert_str(c->loadcmd, "");;
 }
 
 void
 check_test4_2(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "/var/log/test4_2.log") == 0);
-	assert(strcmp(c->loadcmd, "") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "/var/log/test4_2.log");;
+	assert_str(c->loadcmd, "");;
 }
 
 void
 check_test4_3(struct vm_conf *c)
 {
 	assert(c->ncpu == 4);
-	assert(strcmp(c->memory, "2G") == 0);
-	assert(strcmp(c->err_logfile, "/var/log/test4_3.log") == 0);
-	assert(strcmp(c->loadcmd, "load") == 0);
+	assert_str(c->memory, "2G");;
+	assert_str(c->err_logfile, "/var/log/test4_3.log");;
+	assert_str(c->loadcmd, "load");;
 }
 
 #define TENTRY(num)  {"test"#num, check_test##num}
@@ -173,6 +185,65 @@ test1()
 		printf("vm %s: ok\n", f->vm_name);
 	}
 	printf("parser %s: ok\n", __func__);
+	free_vm_conf_list(&list);
+}
+
+void
+test2()
+{
+	struct vm_conf *conf;
+	struct vm_conf_list list = LIST_HEAD_INITIALIZER();
+	struct fbuf *f;
+	struct disk_conf *dc;
+	struct iso_conf *ic;
+	struct sharefs_conf *sc;
+	init_gl_conf();
+	free(gl_conf->config_file);
+	gl_conf->config_file = strdup("./test2.conf");
+	assert(load_config_file(&list, true) == 0);
+	conf = &LIST_FIRST(&list)->conf;
+	assert(conf != NULL);
+	assert(conf->boot == YES);
+	assert(conf->boot_delay == 10);
+	assert_str(conf->com[0], "auto");
+	assert_str(conf->com[1], "/dev/nmdm1A");
+	assert_str(conf->com[2], "/dev/nmdm2A");
+	assert_str(conf->com[3], "/dev/nmdm3A");
+	assert_str(conf->debug_port, "9876");
+	assert(conf->ncpu == 2);
+	assert_str(conf->memory, "4G");
+	assert_str(conf->loader, "bhyveload");
+	dc = STAILQ_FIRST(&conf->disks);
+	assert_str(dc->type, "nvme");
+	assert(dc->noexist);
+	assert(!dc->direct);
+	assert(!dc->nocache);
+	assert(!dc->readonly);
+	assert_str(dc->path, "/dev/null");
+	ic = STAILQ_FIRST(&conf->isoes);
+	assert_str(ic->path, "/dev/zero");
+	sc = STAILQ_FIRST(&conf->sharefss);
+	assert_str(sc->name, "myhome");
+	assert_str(sc->path, "/users/home");
+	f = conf->fbuf;
+	assert(f->enable);
+	assert_str(f->vgaconf, "on");
+	assert(f->height == 768);
+	assert(f->width == 1024);
+	assert_str(f->ipaddr, "127.0.0.1");
+	assert(f->port == 5902);
+	assert(f->wait);
+	assert_str(f->vgaconf, "on");
+	assert_str(f->password, "foo_bar");
+	assert(conf->install);
+	assert_str(conf->installcmd, "auto");
+	assert_str(conf->loadcmd, "kopenbsd");
+	assert(conf->loader_timeout == 70);
+	assert_str(conf->keymap, "ja");
+	assert(conf->owner == getuid());
+	assert(conf->virt_random);
+	printf("parser %s: ok\n", __func__);
+	free_vm_conf_list(&list);
 }
 
 int
@@ -180,5 +251,6 @@ parser_test(void)
 {
 	test0();
 	test1();
+	test2();
 	return 0;
 }
