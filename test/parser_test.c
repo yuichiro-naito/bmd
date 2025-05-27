@@ -216,12 +216,13 @@ test2()
 	dc = STAILQ_FIRST(&conf->disks);
 	assert_str(dc->type, "nvme");
 	assert(dc->noexist);
-	assert(!dc->direct);
-	assert(!dc->nocache);
-	assert(!dc->readonly);
-	assert_str(dc->path, "/dev/null");
+	assert(dc->direct);
+	assert(dc->nocache);
+	assert(dc->readonly);
+	assert_str(dc->path, "/dev/zvol/images/test2");
 	ic = STAILQ_FIRST(&conf->isoes);
-	assert_str(ic->path, "/dev/zero");
+	assert_str(ic->path, "/dev/cd0");
+	assert(ic->noexist);
 	sc = STAILQ_FIRST(&conf->sharefss);
 	assert_str(sc->name, "myhome");
 	assert_str(sc->path, "/users/home");
