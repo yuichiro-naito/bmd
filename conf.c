@@ -415,7 +415,8 @@ generate_member_getter(char *, hda_conf, play_dev);
 generate_member_getter(char *, hda_conf, rec_dev);
 
 int
-add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
+add_iso_conf(struct vm_conf *conf, const char *type, const char *path,
+    bool noexist)
 {
 	struct iso_conf *t;
 	char *y, *p;
@@ -429,6 +430,7 @@ add_iso_conf(struct vm_conf *conf, const char *type, const char *path)
 		goto err;
 	t->type = y;
 	t->path = p;
+	t->noexist = noexist;
 
 	STAILQ_INSERT_TAIL(&conf->isoes, t, next);
 	conf->nisoes++;
@@ -443,6 +445,7 @@ err:
 generate_list_getter(iso_conf, isoes);
 generate_member_getter(char *, iso_conf, type);
 generate_member_getter(char *, iso_conf, path);
+generate_member_bool(iso_conf, noexist);
 
 int
 add_net_conf(struct vm_conf *conf, const char *type, const char *eaddr,
@@ -1193,6 +1196,8 @@ vm_conf_export_env(struct vm_conf *conf)
 	STAILQ_FOREACH(ic, &conf->isoes, next) {
 		vputenv(ENV_PREFIX "ISO%d_TYPE=%s", i, ic->type);
 		vputenv(ENV_PREFIX "ISO%d_PATH=%s", i++, ic->path);
+		vputenv(ENV_PREFIX "ISO%d_NOEXIST=%s", i++,
+		    bool_str[ic->noexist]);
 	}
 	vputenv(ENV_PREFIX "NNETWORKS=%d", conf->nnets);
 	i = 1;
@@ -1259,7 +1264,6 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	const static char *hdr = "%18s = ";
 	const static char *fmt = "%18s = %s\n";
 	const static char *dfmt = "%18s = %d\n";
-	const static char *lfmt = "%18s = %s,%s\n";
 	const static char *nfmt = "%18s = %s%s%s%s,%s\n";
 	char *p, **com, buf[32];
 
@@ -1350,7 +1354,10 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	i = 0;
 	STAILQ_FOREACH(ic, &conf->isoes, next) {
 		snprintf(buf, sizeof(buf), "iso%d", i++);
-		fprintf(fp, lfmt, buf, ic->type, ic->path);
+		fprintf(fp, "%18s = %s", buf, ic->type);
+		if (ic->noexist)
+			fprintf(fp, ":noexist");
+		fprintf(fp, ":%s\n", ic->path);
 	}
 	i = 0;
 	STAILQ_FOREACH(nc, &conf->nets, next) {
@@ -1464,6 +1471,7 @@ compare_iso_conf(const struct iso_conf *a, const struct iso_conf *b)
 
 	CMP_STR(type);
 	CMP_STR(path);
+	CMP_NUM(noexist);
 
 	return 0;
 }

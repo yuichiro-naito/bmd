@@ -323,46 +323,77 @@ parse_passthru(struct vm_conf *conf, char *val)
 	return add_passthru_conf(conf, val);
 }
 
-static int
-parse_disk(struct vm_conf *conf, char *val)
-{
-	unsigned int i, t = 2;
-	size_t n;
-	char *q, *s, *op = val;
-	static const char *const types[] = { "ahci", "ahci-hd", "virtio-blk",
-		"nvme" };
-	static const char *const flags[] = { "nocache", "direct", "readonly",
-	     "nodelete", "noexist" };
-	bool f[nitems(flags)];
+struct type_flag {
+	char *val;		  /* [i] value string */
+	unsigned int ntypes;	  /* [i] number of types */
+	unsigned int nflags;	  /* [i] number of flags */
+	const char *const *types; /* [i] type defs */
+	const char *const *flags; /* [i] flag defs */
+	int type;		  /* [o] selected type */
+	bool *flag;		  /* [o] set true if selected */
+	char *option;		  /* [o] option string */
+};
 
-	if ((s = strchr(val, '/')) == NULL)
+static int
+parse_type_flag(struct type_flag *t)
+{
+	unsigned int i;
+	size_t n;
+	char *q, *s, *op = t->val;
+
+	if ((s = strchr(t->val, '/')) == NULL)
 		return -1;
 
-	for (i = 0; i < nitems(types); i++) {
-		if ((q = strstr(val, types[i])) == NULL || q > s)
+	for (i = 0; i < t->ntypes; i++) {
+		if ((q = strstr(t->val, t->types[i])) == NULL || q > s)
 			continue;
-		n = strlen(types[i]);
+		n = strlen(t->types[i]);
 		if (q[n] != ':')
 			continue;
 		if (q + n + 1 > op) {
-			t = i;
+			t->type = i;
 			op = q + n + 1;
 		}
 	}
 
-	memset(f, 0, sizeof(f));
-	for (i = 0; i < nitems(flags); i++) {
-		if ((q = strstr(val, flags[i])) == NULL || q > s)
+	memset(t->flag, 0, sizeof(bool) * t->nflags);
+	for (i = 0; i < t->nflags; i++) {
+		if ((q = strstr(t->val, t->flags[i])) == NULL || q > s)
 			continue;
-		n = strlen(flags[i]);
+		n = strlen(t->flags[i]);
 		if (q[n] != ':')
 			continue;
-		f[i] = true;
+		t->flag[i] = true;
 		if (q + n + 1 > op)
 			op = q + n + 1;
 	}
 
-	return add_disk_conf(conf, types[t], op, f[0], f[1], f[2], f[3], f[4]);
+	t->option = op;
+	return 0;
+}
+
+static int
+parse_disk(struct vm_conf *conf, char *val)
+{
+	static const char *const types[] = { "ahci", "ahci-hd", "virtio-blk",
+		"nvme" };
+	static const char *const flags[] = { "nocache", "direct", "readonly",
+		"nodelete", "noexist" };
+	bool f[nitems(flags)];
+	struct type_flag t = {
+		.val = val,
+		.ntypes = nitems(types),
+		.nflags = nitems(flags),
+		.types = types,
+		.flags = flags,
+		.type = 2,
+		.flag = f,
+	};
+	if (parse_type_flag(&t) < 0)
+		return -1;
+
+	return add_disk_conf(conf, types[t.type], t.option, f[0], f[1], f[2],
+	    f[3], f[4]);
 }
 
 static int
@@ -389,17 +420,22 @@ err:
 static int
 parse_iso(struct vm_conf *conf, char *val)
 {
-	size_t n;
-	const char *const *p;
 	static const char *const types[] = { "ahci-cd" };
+	static const char *const flags[] = { "noexist" };
+	bool f[nitems(flags)];
+	struct type_flag t = {
+		.val = val,
+		.ntypes = nitems(types),
+		.nflags = nitems(flags),
+		.types = types,
+		.flags = flags,
+		.type = 0,
+		.flag = f,
+	};
+	if (parse_type_flag(&t) < 0)
+		return -1;
 
-	ARRAY_FOREACH(p, types) {
-		n = strlen(*p);
-		if (strncmp(val, *p, n) == 0 && val[n] == ':')
-			return add_iso_conf(conf, *p, &val[n + 1]);
-	}
-
-	return add_iso_conf(conf, "ahci-cd", val);
+	return add_iso_conf(conf, types[t.type], t.option, f[0]);
 }
 
 static int
@@ -993,27 +1029,35 @@ compare_parser_entry(const void *a, const void *b)
 }
 
 static int
-check_disks(struct vm_conf *conf)
+check_image(const char *name, const char *path)
 {
-	char *name = conf->name;
-	struct disk_conf *dc;
 	struct stat st;
 
-	STAILQ_FOREACH(dc, &conf->disks, next) {
-		if (dc->noexist)
-			continue;
-		if (stat(dc->path, &st) < 0) {
-			ERR("%s: %s is not found\n", name, dc->path);
-			return -1;
-		}
-		if (!S_ISREG(st.st_mode) && !S_ISCHR(st.st_mode)) {
-			ERR("%s: %s is not a file nor block device\n", name,
-			    dc->path);
-			return -1;
-		}
+	if (stat(path, &st) < 0) {
+		ERR("%s: %s is not found\n", name, path);
+		return -1;
+	}
+	if (!S_ISREG(st.st_mode) && !S_ISCHR(st.st_mode)) {
+		ERR("%s: %s is not a file nor block device\n", name, path);
+		return -1;
 	}
 	return 0;
 }
+
+#define CHECK_DISK_IMAGE(type, types)					\
+	static int check_##types(struct vm_conf *conf)			\
+	{								\
+		struct type##_conf *c;					\
+		STAILQ_FOREACH(c, &conf->types, next)			\
+			if (!c->noexist &&				\
+			    check_image(conf->name, c->path) < 0)	\
+				return -1;				\
+		return 0;						\
+	}
+
+CHECK_DISK_IMAGE(disk, disks);
+CHECK_DISK_IMAGE(iso, isoes);
+#undef CHECK_DISK_IMAGE
 
 static int
 check_hda_dev(const char *name, const char *path)
@@ -1052,7 +1096,7 @@ check_conf(struct vm_conf *conf)
 		return -1;
 	}
 
-	if (check_disks(conf) < 0)
+	if (check_disks(conf) < 0 || check_isoes(conf) < 0)
 		return -1;
 
 	/*

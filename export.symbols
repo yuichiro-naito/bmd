@@ -44,6 +44,7 @@ get_iso_conf;
 next_iso_conf;
 get_iso_conf_type;
 get_iso_conf_path;
+is_iso_conf_noexist;
 get_taps;
 get_net_conf;
 next_net_conf;

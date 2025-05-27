@@ -128,6 +128,7 @@ struct iso_conf *get_iso_conf(struct vm_conf *);
 struct iso_conf *next_iso_conf(struct iso_conf *);
 char *get_iso_conf_type(struct iso_conf *);
 char *get_iso_conf_path(struct iso_conf *);
+bool is_iso_conf_noexist(struct iso_conf *);
 struct net_conf *get_taps(struct vm *);
 struct net_conf *get_net_conf(struct vm_conf *);
 struct net_conf *next_net_conf(struct net_conf *);

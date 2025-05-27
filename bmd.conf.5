@@ -215,8 +215,15 @@ e.g.
 .Qo
 kopenbsd -h com0 (cd0)/6.9/amd64/bsd.rd
 .Qs
-.It Cm iso = (+=) Ar image_filepath;
+.It Cm iso = (+=) Oo Ar noexist : Oc Ar image_filepath;
 ISO image filename.
+.Bl -tag -width 10n
+.It Cm noexist
+Disable disk image check while loading the configuration. The bmd will continue
+to load the configuration and boot normally even if the disk image isn't
+present. The disk image must be supplied before VM boot.
+.El
+
 .It Cm keymap = Ar keymap;
 Keymap for vnc.
 .It Cm loadcmd = Ar load_cmd;
