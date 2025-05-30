@@ -87,6 +87,9 @@ extern int lineno;
 %type <as> args
 %type <ad> argdef
 %type <ds> argdefs
+
+%left '+' '-'
+%left '*' '/' '%'
 %%
 
 
