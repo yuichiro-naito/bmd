@@ -157,15 +157,14 @@ mddetach(long unit)
 static int
 mount_iso(struct inspection *ins)
 {
-	size_t i;
 	int rc;
-	struct iovec iov[] = { IOV_ENTRY_DECONST("fstype"),
+	struct iovec *p, iov[] = { IOV_ENTRY_DECONST("fstype"),
 		IOV_ENTRY_DECONST("cd9660"), IOV_ENTRY_DECONST("fspath"),
 		IOV_ENTRY_DECONST(ins->mount_point), IOV_ENTRY_DECONST("from"),
 		IOV_ENTRY_DECONST("/dev/mdNNNNNNNNNN") };
 
-	for (i = 0; i < nitems(iov); i++)
-		if (iov[i].iov_base == NULL) {
+	ARRAY_FOREACH(p, iov)
+		if (p->iov_base == NULL) {
 			rc = -1;
 			goto ret;
 		}
@@ -179,8 +178,8 @@ mount_iso(struct inspection *ins)
 
 	rc = nmount(iov, nitems(iov), MNT_RDONLY);
 ret:
-	for (i = 0; i < nitems(iov); i++)
-		free(iov[i].iov_base);
+	ARRAY_FOREACH(p, iov)
+		free(p->iov_base);
 
 	return rc;
 }
@@ -188,23 +187,22 @@ ret:
 static int
 mount_ufs(struct inspection *ins, char *path)
 {
-	size_t i;
 	int rc;
-	struct iovec iov[] = { IOV_ENTRY_DECONST("fstype"),
+	struct iovec *p, iov[] = { IOV_ENTRY_DECONST("fstype"),
 		IOV_ENTRY_DECONST("ufs"), IOV_ENTRY_DECONST("fspath"),
 		IOV_ENTRY_DECONST(ins->mount_point), IOV_ENTRY_DECONST("from"),
 		IOV_ENTRY_DECONST(path) };
 
-	for (i = 0; i < nitems(iov); i++)
-		if (iov[i].iov_base == NULL) {
+	ARRAY_FOREACH(p, iov)
+		if (p->iov_base == NULL) {
 			rc = -1;
 			goto ret;
 		}
 
 	rc = nmount(iov, nitems(iov), MNT_RDONLY);
 ret:
-	for (i = 0; i < nitems(iov); i++)
-		free(iov[i].iov_base);
+	ARRAY_FOREACH(p, iov)
+		free(p->iov_base);
 
 	return rc;
 }
