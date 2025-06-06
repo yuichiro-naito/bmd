@@ -346,8 +346,7 @@ inspect_iso_image(struct inspection *ins)
 {
 	struct iso_conf *ic;
 
-	ic = get_iso_conf(ins->conf);
-	if (ic == NULL)
+	if ((ic = get_iso_conf(ins->conf)) == NULL)
 		return -1;
 
 	ins->iso_path = ic->path;
@@ -399,8 +398,7 @@ mount_blockdev(struct inspection *ins)
 	size_t len;
 	char *dirname, *diskname, *p;
 
-	dirname = strdup(ins->block_dev);
-	if (dirname == NULL)
+	if ((dirname = strdup(ins->block_dev)) == NULL)
 		return -1;
 	len = strlen(dirname);
 
@@ -528,8 +526,7 @@ inspect_disk_image(struct inspection *ins)
 {
 	struct disk_conf *dc;
 
-	dc = get_disk_conf(ins->conf);
-	if (dc == NULL)
+	if ((dc = get_disk_conf(ins->conf)) == NULL)
 		return -1;
 	ins->disk_path = dc->path;
 
@@ -564,26 +561,26 @@ err:
 char *
 inspect(struct vm_conf *conf)
 {
-	char *rc = NULL;
+	char *cmd;
 	struct inspection *ins;
 
-	ins = create_inspection(conf);
-	if (ins == NULL)
-		return rc;
+	if ((ins = create_inspection(conf)) == NULL)
+		return NULL;
 
 	if (is_install(conf)) {
-		if (inspect_iso_image(ins) == 0) {
-			rc = ins->install_cmd;
-			ins->install_cmd = NULL;
-		}
+		if (inspect_iso_image(ins) < 0)
+			goto err;
+		cmd = ins->install_cmd;
+		ins->install_cmd = NULL;
 	} else {
-		if (inspect_disk_image(ins) == 0 ||
-		    inspect_with_grub(ins) == 0) {
-			rc = ins->load_cmd;
-			ins->load_cmd = NULL;
-		}
+		if (inspect_disk_image(ins) < 0 && inspect_with_grub(ins) < 0)
+			goto err;
+		cmd = ins->load_cmd;
+		ins->load_cmd = NULL;
 	}
-
 	free_inspection(ins);
-	return rc;
+	return cmd;
+err:
+	free_inspection(ins);
+	return NULL;
 }
