@@ -49,6 +49,8 @@
 #include "log.h"
 #include "vm.h"
 
+#define PIPE_BUFFER_SIZE (4 * 1024)
+
 extern char **split_args(char *);
 
 struct proc_pipe {
@@ -76,11 +78,7 @@ SLIST_HEAD(disk_info_head, disk_info);
 #define NEWLINE "\r"
 #define PROMPT	"grub> "
 
-static struct disk_info *
-create_disk_info(void)
-{
-	return calloc(1, sizeof(struct disk_info));
-}
+#define create_disk_info() calloc(1, sizeof(struct disk_info))
 
 static void
 free_disk_info(struct disk_info *di)
@@ -261,16 +259,21 @@ retry:
 static struct proc_pipe *
 pp_create(void)
 {
-	struct proc_pipe *ret;
+	char *bf;
+	struct proc_pipe *pp;
 
-	if ((ret = calloc(1, sizeof(struct proc_pipe))) == NULL)
-		return NULL;
-	ret->size = 4 * 1024;
-	if ((ret->buf = calloc(1, ret->size)) == NULL) {
-		free(ret);
-		return NULL;
-	}
-	return ret;
+	pp = calloc(1, sizeof(struct proc_pipe));
+	bf = calloc(1, PIPE_BUFFER_SIZE);
+	if (pp == NULL || bf == NULL)
+		goto err;
+
+	pp->buf = bf;
+	pp->size = PIPE_BUFFER_SIZE;
+	return pp;
+err:
+	free(pp);
+	free(bf);
+	return NULL;
 }
 
 static void
