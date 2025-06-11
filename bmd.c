@@ -1680,7 +1680,8 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *name = conf->name;
 
-	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
+	if (set_vm_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0 ||
+	    set_loader_method(vm_ent, VM_CONF_ENT(vm_ent)) < 0) {
 		ERR("no backend for vm %s\n", name);
 		return -1;
 	}
