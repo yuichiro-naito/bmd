@@ -456,12 +456,13 @@ do_console(const char *name, const char *port)
 	if (nvlist_exists_number(res, FD_KEY)) {
 		fd = nvlist_take_number(res, FD_KEY);
 		if (attach_console(fd) < 0) {
-			fprintf(stderr, "failed to setup console\n");
+			fprintf(stderr, "failed to setup %s\n",
+			    port ? port : "console");
 			ret = 1;
 		}
 		close(fd);
 	} else {
-		fprintf(stderr, "failed to open console\n");
+		fprintf(stderr, "failed to open %s\n", port ? port : "console");
 		ret = 1;
 	}
 
