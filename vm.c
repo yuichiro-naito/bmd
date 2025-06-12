@@ -202,18 +202,18 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 	}
 
-	pid = fork();
-	if (pid > 0) {
+	if ((pid = fork()) < 0)  {
+		ERR("cannot fork (%s)\n", strerror(errno));
 		if (dopipe) {
+			close(outfd[0]);
 			close(outfd[1]);
+			close(errfd[0]);
 			close(errfd[1]);
-			vm->outfd = outfd[0];
-			vm->errfd = errfd[0];
 		}
-		vm->pid = pid;
-		vm->state = LOAD;
-		return 0;
-	} else if (pid == 0) {
+		return (-1);
+	}
+
+	if (pid == 0) {
 		char **argv;
 		FILE *fp;
 		char *bp;
@@ -265,16 +265,17 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		execv(argv[0], argv);
 		ERR("cannot exec %s\n", argv[0]);
 		exit(1);
-	} else {
-		ERR("cannot fork (%s)\n", strerror(errno));
-		if (dopipe) {
-			close(outfd[0]);
-			close(outfd[1]);
-			close(errfd[0]);
-			close(errfd[1]);
-		}
-		return (-1);
 	}
+
+	if (dopipe) {
+		close(outfd[1]);
+		close(errfd[1]);
+		vm->outfd = outfd[0];
+		vm->errfd = errfd[0];
+	}
+	vm->pid = pid;
+	vm->state = LOAD;
+	return 0;
 }
 
 int
@@ -396,18 +397,12 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 	}
 
-	pid = fork();
-	if (pid > 0) {
-		/* parent process */
-		if (dopipe) {
-			close(outfd[1]);
-			close(errfd[1]);
-			vm->outfd = outfd[0];
-			vm->errfd = errfd[0];
-		}
-		vm->pid = pid;
-		vm->state = RUN;
-	} else if (pid == 0) {
+	if ((pid = fork()) < 0) {
+		ERR("cannot fork (%s)\n", strerror(errno));
+		return -1;
+	}
+
+	if (pid == 0) {
 		char **args, **com, *buf;
 		size_t buf_size;
 		FILE *fp;
@@ -559,11 +554,17 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		execv(args[0], args);
 		ERR("cannot exec %s\n", args[0]);
 		exit(1);
-	} else {
-		ERR("cannot fork (%s)\n", strerror(errno));
-		exit(1);
 	}
 
+	/* parent process */
+	if (dopipe) {
+		close(outfd[1]);
+		close(errfd[1]);
+		vm->outfd = outfd[0];
+		vm->errfd = errfd[0];
+	}
+	vm->pid = pid;
+	vm->state = RUN;
 	return 0;
 }
 

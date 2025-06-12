@@ -367,18 +367,12 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 
 	if (pipe(ofd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
-		close(ifd[0]);
-		close(ifd[1]);
-		return -1;
+		goto err1;
 	}
 
 	if (pipe(efd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
-		close(ifd[0]);
-		close(ifd[1]);
-		close(ofd[0]);
-		close(ofd[1]);
-		return -1;
+		goto err2;
 	}
 
 	if (write_mapfile(conf, &mapfile) < 0)
@@ -402,17 +396,11 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		nvlist_free_number(pl_conf, PTYKEY);
 	nvlist_add_number(pl_conf, PTYKEY, (intptr_t)p);
 
-	pid = fork();
-	if (pid > 0) {
-		set_pid(vm, pid);
-		set_state(vm, LOAD);
-		close(ifd[0]);
-		set_infd(vm, ifd[1]);
-		close(ofd[1]);
-		set_outfd(vm, ofd[0]);
-		close(efd[1]);
-		set_errfd(vm, efd[0]);
-	} else if (pid == 0) {
+	if ((pid = fork()) < 0) {
+		ERR("cannot fork (%s)\n", strerror(errno));
+		goto err;
+	}
+	if (pid == 0) {
 		FILE *fp;
 		char **argv, *bp, **t;
 
@@ -459,20 +447,26 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		execv(argv[0], argv);
 		ERR("cannot exec %s\n", argv[0]);
 		exit(1);
-	} else {
-		ERR("cannot fork (%s)\n", strerror(errno));
-		goto err;
 	}
 
+	set_pid(vm, pid);
+	set_state(vm, LOAD);
+	close(ifd[0]);
+	set_infd(vm, ifd[1]);
+	close(ofd[1]);
+	set_outfd(vm, ofd[0]);
+	close(efd[1]);
+	set_errfd(vm, efd[0]);
 	return 0;
 err:
-
-	close(ifd[0]);
-	close(ifd[1]);
-	close(ofd[0]);
-	close(ofd[1]);
 	close(efd[0]);
 	close(efd[1]);
+err2:
+	close(ofd[0]);
+	close(ofd[1]);
+err1:
+	close(ifd[0]);
+	close(ifd[1]);
 	return -1;
 }
 
