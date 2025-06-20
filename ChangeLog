@@ -1,4 +1,6 @@
 * 3.4
+	- Fix to follow VM owner changes while the VM is terminated.
+	  (0919cae346f48f1a8620ca44551e939ce09c3574)
 	- Introduce the 'noexist' option to the iso conifiguration.
 	  (659a3af3544c428341383f8890880c3c3af45bbc)
 	- Check if an iso file or device exists.
