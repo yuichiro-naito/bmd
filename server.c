@@ -739,24 +739,37 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 	return 0;
 }
 
-static int
-check_owner(struct vm_entry *vm_ent, struct xucred *ucred)
+static struct vm_conf *
+get_latest_conf(struct vm_entry *vm_ent)
 {
-	int64_t owner = VM_CONF(vm_ent)->owner;
-	int64_t group = VM_CONF(vm_ent)->group;
+	return (VM_STATE(vm_ent) == TERMINATE && VM_NEWCONF(vm_ent) != NULL) ?
+		&VM_NEWCONF(vm_ent)->conf : VM_CONF(vm_ent);
+}
+
+static int
+check_owner(struct vm_entry *vm_ent, struct xucred *ucred,
+    struct vm_conf **latest_conf)
+{
+	struct vm_conf *conf = get_latest_conf(vm_ent);
+	int64_t owner = conf->owner;
+	int64_t group = conf->group;
 	int i;
 
 	if (ucred->cr_uid == 0 || ucred->cr_uid == (uid_t)owner)
-		return 0;
+		goto ret;
 
 	if (group == -1)
 		return -1;
 
 	for (i = 0; i < ucred->cr_ngroups; i++)
 		if (ucred->cr_groups[i] == (gid_t)group)
-			return 0;
+			goto ret;
 
 	return -1;
+ret:
+	if (latest_conf != NULL)
+		*latest_conf = conf;
+	return 0;
 }
 
 /*
@@ -780,7 +793,7 @@ boot0_command(struct sock_buf *s __unused, const nvlist_t *nv, int style,
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (check_owner(vm_ent, ucred) != 0)) {
+	    (check_owner(vm_ent, ucred, NULL) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -850,7 +863,7 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (check_owner(vm_ent, ucred) != 0)) {
+	    (check_owner(vm_ent, ucred, NULL) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -907,7 +920,7 @@ showvgaport_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (check_owner(vm_ent, ucred) != 0)) {
+	    (check_owner(vm_ent, ucred, NULL) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
@@ -936,6 +949,7 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 	nvlist_t *res, *p;
 	nvlist_t **list = NULL;
 	struct vm_entry *vm_ent;
+	struct vm_conf *conf;
 	bool error = false;
 	struct passwd *pwd;
 	const static char *state_string[] = { "STOP", "LOAD", "RUN",
@@ -945,7 +959,7 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 	res = nvlist_create(0);
 
 	SLIST_FOREACH(vm_ent, &vm_list, next) {
-		if (check_owner(vm_ent, ucred) != 0)
+		if (check_owner(vm_ent, ucred, NULL) != 0)
 			continue;
 		count++;
 	}
@@ -961,18 +975,17 @@ list_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 
 	i = 0;
 	SLIST_FOREACH(vm_ent, &vm_list, next) {
-		if (check_owner(vm_ent, ucred) != 0)
+		if (check_owner(vm_ent, ucred, &conf) != 0)
 			continue;
 		p = nvlist_create(0);
-		nvlist_add_stringf(p, "id", "%u", VM_CONF(vm_ent)->id);
-		nvlist_add_string(p, "name", VM_CONF(vm_ent)->name);
-		nvlist_add_stringf(p, "ncpu", "%d", VM_CONF(vm_ent)->ncpu);
-		nvlist_add_string(p, "memory", VM_CONF(vm_ent)->memory);
+		nvlist_add_stringf(p, "id", "%u", conf->id);
+		nvlist_add_string(p, "name", conf->name);
+		nvlist_add_stringf(p, "ncpu", "%d", conf->ncpu);
+		nvlist_add_string(p, "memory", conf->memory);
 		nvlist_add_string(p, "loader",
-		    VM_CONF(vm_ent)->loader ? VM_CONF(vm_ent)->loader :
-					      VM_CONF(vm_ent)->backend);
+		    conf->loader ? conf->loader : conf->backend);
 		nvlist_add_string(p, "state", state_string[VM_STATE(vm_ent)]);
-		if ((pwd = getpwuid(VM_CONF(vm_ent)->owner)) == NULL)
+		if ((pwd = getpwuid(conf->owner)) == NULL)
 			nvlist_add_string(p, "owner", "nobody");
 		else
 			nvlist_add_string(p, "owner", pwd->pw_name);
@@ -999,7 +1012,7 @@ vm_down_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
-	    (check_owner(vm_ent, ucred) != 0)) {
+	    (check_owner(vm_ent, ucred, NULL) != 0)) {
 		error = true;
 		reason = "VM not found";
 		goto ret;
