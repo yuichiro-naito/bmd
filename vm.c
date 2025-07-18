@@ -239,8 +239,7 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			dup2(outfd[1], 1);
 			dup2(errfd[1], 2);
 		}
-		fp = open_memstream(&bp, &len);
-		if (fp == NULL) {
+		if ((fp = open_memstream(&bp, &len)) == NULL) {
 			ERR("cannot open memstream (%s)\n", strerror(errno));
 			exit(1);
 		}
@@ -392,7 +391,6 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	struct cpu_pin *cp;
 	struct hda_conf *hc;
 	pid_t pid;
-	int pcid = 0;
 	int outfd[2], errfd[2];
 	char *com0 = vm->assigned_com[0];
 	bool dopipe = (com0 == NULL || strcasecmp(com0, "stdio") != 0);
@@ -419,6 +417,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	if (pid == 0) {
 		char **args, **com, *buf;
 		size_t buf_size;
+		unsigned int pcid = 0;
 		FILE *fp;
 
 		/* child process */
@@ -433,8 +432,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			if (putenv(be->env) < 0)
 				ERR("invalid environment: %s", be->env);
 
-		fp = open_memstream(&buf, &buf_size);
-		if (fp == NULL) {
+		if ((fp = open_memstream(&buf, &buf_size)) == NULL) {
 			ERR("cannot open memstream (%s)\n", strerror(errno));
 			exit(1);
 		}
@@ -553,8 +551,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 
 		funlockfile(fp);
 		fclose(fp);
-		args = split_args(buf);
-		if (args == NULL) {
+		if ((args = split_args(buf)) == NULL) {
 			ERR("malloc %s\n", strerror(errno));
 			exit(1);
 		}
