@@ -1,4 +1,6 @@
 * 3.4
+	- Expand the number of PCI devices up to 8192.
+	  (36a181a1dbcba092ce06bbe9c2bd86d2c969aab9)
 	- Fix to follow VM owner changes while the VM is terminated.
 	  (0919cae346f48f1a8620ca44551e939ce09c3574)
 	- Introduce the 'noexist' option to the iso conifiguration.
