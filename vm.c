@@ -53,6 +53,18 @@
 #include "log.h"
 #include "vm.h"
 
+#define MAX_PCI_DEVICES (256 * 32)
+
+#define PCISLOT(fp, fmt, s, ...)                                      \
+	{                                                             \
+		fprintf(fp, "-s\n%d:%d:0," fmt, (s) >> 5, (s) & 0x1f, \
+		    __VA_ARGS__);                                     \
+		if (++s > MAX_PCI_DEVICES) {                          \
+			ERR("too many PCI devices\n", NULL);          \
+			exit(1);                                      \
+		}                                                     \
+	}
+
 #define UEFI_CSM_FIRMWARE  LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_CSM.fd"
 #define UEFI_FIRMWARE	   LOCALBASE "/share/uefi-firmware/BHYVE_UEFI.fd"
 #define UEFI_FIRMWARE_VARS LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
@@ -202,7 +214,7 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 	}
 
-	if ((pid = fork()) < 0)  {
+	if ((pid = fork()) < 0) {
 		ERR("cannot fork (%s)\n", strerror(errno));
 		if (dopipe) {
 			close(outfd[0]);
@@ -378,7 +390,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	struct cpu_pin *cp;
 	struct hda_conf *hc;
 	pid_t pid;
-	int pcid;
+	int pcid = 0;
 	int outfd[2], errfd[2];
 	char *com0 = vm->assigned_com[0];
 	bool dopipe = (com0 == NULL || strcasecmp(com0, "stdio") != 0);
@@ -475,19 +487,18 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		case NONE:
 			break;
 		case INTEL:
-			fprintf(fp, "-s\n0,hostbridge\n");
+			PCISLOT(fp, "hostbridge\n", pcid, NULL);
 			break;
 		case AMD:
-			fprintf(fp, "-s\n0,amd_hostbridge\n");
+			PCISLOT(fp, "amd_hostbridge\n", pcid, NULL);
 			break;
 		}
-		fprintf(fp, "-s\n1,lpc\n");
+		PCISLOT(fp, "lpc\n", pcid, NULL);
 
-		pcid = 2;
 		if (conf->virt_random)
-			fprintf(fp, "-s\n%d,virtio-rnd\n", pcid++);
+			PCISLOT(fp, "virtio-rnd\n", pcid, NULL);
 		STAILQ_FOREACH(dc, &conf->disks, next) {
-			fprintf(fp, "-s\n%d,%s,%s", pcid++, dc->type, dc->path);
+			PCISLOT(fp, "%s,%s", pcid, dc->type, dc->path);
 			if (dc->nocache)
 				fprintf(fp, ",nocache");
 			if (dc->direct)
@@ -499,13 +510,12 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "\n");
 		}
 		STAILQ_FOREACH(ic, &conf->isoes, next)
-			fprintf(fp, "-s\n%d,%s,%s\n", pcid++, ic->type,
-			    ic->path);
+			PCISLOT(fp, "%s,%s\n", pcid, ic->type, ic->path);
 		STAILQ_FOREACH(sc, &conf->sharefss, next)
-			fprintf(fp, "-s\n%d,virtio-9p,%s=%s%s\n", pcid++,
-			    sc->name, sc->path, (sc->readonly) ? ",ro" : "");
+			PCISLOT(fp, "virtio-9p,%s=%s%s\n", pcid, sc->name,
+			    sc->path, (sc->readonly) ? ",ro" : "");
 		STAILQ_FOREACH(nc, &vm->taps, next) {
-			fprintf(fp, "-s\n%d,%s", pcid++, nc->type);
+			PCISLOT(fp, "%s", pcid, nc->type);
 			if (nc->tap)
 				fprintf(fp, ",%s", nc->tap);
 			else if (nc->vale)
@@ -515,9 +525,9 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			fprintf(fp, "\n");
 		}
 		STAILQ_FOREACH(pc, &conf->passthrues, next)
-			fprintf(fp, "-s\n%d,passthru,%s\n", pcid++, pc->devid);
+			PCISLOT(fp, "passthru,%s\n", pcid, pc->devid);
 		STAILQ_FOREACH(hc, &conf->hdas, next) {
-			fprintf(fp, "-s\n%d,hda", pcid++);
+			PCISLOT(fp, "hda", pcid, NULL);
 			if (*hc->play_dev != '\0')
 				fprintf(fp, ",play=%s", hc->play_dev);
 			if (*hc->rec_dev != '\0')
@@ -526,15 +536,17 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 		if (conf->fbuf->enable) {
 			struct fbuf *fb = conf->fbuf;
-			fprintf(fp, "-s\n%d,fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
-			    pcid++, fb->ipaddr, fb->port, fb->width, fb->height,
+			PCISLOT(fp, "fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s", pcid,
+			    fb->ipaddr, fb->port, fb->width, fb->height,
 			    fb->vgaconf, fb->wait ? ",wait" : "");
 			if (fb->password)
 				fprintf(fp, ",password=%s", fb->password);
 			fprintf(fp, "\n");
 		}
 		if (conf->mouse)
-			fprintf(fp, "-s\n%d,xhci,tablet\n", pcid++);
+			PCISLOT(fp, "xhci,tablet\n", pcid, NULL);
+		if (pcid > 32)
+			fprintf(fp, "-Y\n");
 		fprintf(fp, "%s\n", conf->name);
 
 		funlockfile(fp);
