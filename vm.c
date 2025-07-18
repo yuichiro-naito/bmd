@@ -53,7 +53,9 @@
 #include "log.h"
 #include "vm.h"
 
-#define MAX_PCI_DEVICES (256 * 32)
+#define MAX_PCI_BUS 256
+#define MAX_PCI_SLOT 32
+#define MAX_PCI_DEVICES (MAX_PCI_BUS * MAX_PCI_SLOT)
 
 #define PCISLOT(fp, fmt, s, ...)                                      \
 	{                                                             \
@@ -545,7 +547,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 		if (conf->mouse)
 			PCISLOT(fp, "xhci,tablet\n", pcid, NULL);
-		if (pcid > 32)
+		if (pcid > MAX_PCI_SLOT)
 			fprintf(fp, "-Y\n");
 		fprintf(fp, "%s\n", conf->name);
 
