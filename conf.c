@@ -1180,6 +1180,7 @@ vm_conf_export_env(struct vm_conf *conf)
 		    bool_str[dc->nodelete]);
 		vputenv(ENV_PREFIX "DISK%d_NOEXIST=%s", i,
 		    bool_str[dc->noexist]);
+		i++;
 	}
 	VPUTINT(nsharefs);
 	i = 1;
@@ -1188,14 +1189,16 @@ vm_conf_export_env(struct vm_conf *conf)
 		vputenv(ENV_PREFIX "SHAREFS%d_PATH=%s", i, sc->path);
 		vputenv(ENV_PREFIX "DISK%d_READONLY=%s", i,
 		    bool_str[sc->readonly]);
+		i++;
 	}
 	VPUTINT(nisoes);
 	i = 1;
 	STAILQ_FOREACH(ic, &conf->isoes, next) {
 		vputenv(ENV_PREFIX "ISO%d_TYPE=%s", i, ic->type);
-		vputenv(ENV_PREFIX "ISO%d_PATH=%s", i++, ic->path);
-		vputenv(ENV_PREFIX "ISO%d_NOEXIST=%s", i++,
+		vputenv(ENV_PREFIX "ISO%d_PATH=%s", i, ic->path);
+		vputenv(ENV_PREFIX "ISO%d_NOEXIST=%s", i,
 		    bool_str[ic->noexist]);
+		i++;
 	}
 	vputenv(ENV_PREFIX "NNETWORKS=%d", conf->nnets);
 	i = 1;
@@ -1223,8 +1226,9 @@ vm_conf_export_env(struct vm_conf *conf)
 			vputenv(ENV_PREFIX "HDA%d_PLAY_DEV=%s", i,
 			    hc->play_dev);
 		if (*hc->rec_dev != '\0')
-			vputenv(ENV_PREFIX "HDA%d_REC_DEV=%s", i++,
+			vputenv(ENV_PREFIX "HDA%d_REC_DEV=%s", i,
 			    hc->rec_dev);
+		i++;
 	}
 	fb = conf->fbuf;
 	vputenv(ENV_PREFIX "GRAPHICS=%s", bool_str[fb->enable]);
