@@ -1,4 +1,6 @@
 * 3.4
+	- Bugfix: Count up indexes properly while exporting VM configurations.
+	  (d9b75ac03d0e605839618d3691ee0795f9c9b613)
         - Bugfix: Fix the hookcmd plugin fails if graphics=yes.
           (cbcca759e583b057e55bb2d50771330d7c586815)
 	- Expand the number of PCI devices up to 8192.
