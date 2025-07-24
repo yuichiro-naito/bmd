@@ -1234,7 +1234,7 @@ vm_conf_export_env(struct vm_conf *conf)
 		vputenv(ENV_PREFIX "GRAPHICS_RES=%dx%d", fb->width, fb->height);
 		vputenv(ENV_PREFIX "GRAPHICS_VGA=%s", fb->vgaconf);
 		vputenv(ENV_PREFIX "GRAPHICS_WAIT=%s", bool_str[fb->wait]);
-		vputenv(ENV_PREFIX "XHCI_MOUSE=%s", conf->mouse);
+		vputenv(ENV_PREFIX "XHCI_MOUSE=%s", bool_str[conf->mouse]);
 		VPUTSTR(keymap);
 	}
 
