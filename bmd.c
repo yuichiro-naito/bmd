@@ -1987,11 +1987,24 @@ reload_virtual_machines(void)
 }
 
 static int
+call_event_cb(int ident, struct event *ev)
+{
+	int do_remove, rc;
+
+	do_remove = (ev->kev.flags & EV_ONESHOT) ? 1 : 0;
+	rc = (ev->cb) ? (*ev->cb)(ident, ev->data) : 0;
+	if (do_remove) {
+		LIST_REMOVE(ev, next);
+		free(ev);
+	}
+	return rc;
+}
+
+static int
 event_loop(void)
 {
 	struct kevent ev;
-	struct event *event;
-	int n, do_remove;
+	int n;
 	struct timespec *to, timeout;
 
 	while (sigterm == 0) {
@@ -2008,14 +2021,8 @@ event_loop(void)
 			ERR("recieved unexpcted event! (%d)", ev.filter);
 			continue;
 		}
-		event = ev.udata;
-		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
-		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
-			ERR("%s\n", "callback failed");
-		if (do_remove) {
-			LIST_REMOVE(event, next);
-			free(event);
-		}
+		if (call_event_cb(ev.ident, ev.udata) < 0)
+			ERR("%s\n", "event callback failed");
 	}
 
 	return 0;
@@ -2027,7 +2034,7 @@ stop_virtual_machines(void)
 	struct kevent ev;
 	struct event *event;
 	struct vm_entry *vm_ent;
-	int do_remove, count = 0;
+	int count = 0;
 
 	SLIST_FOREACH(vm_ent, &vm_list, next) {
 		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
@@ -2045,13 +2052,8 @@ stop_virtual_machines(void)
 		event = ev.udata;
 		if (event->type == EVENT && event->kev.filter == EVFILT_PROC)
 			count--;
-		do_remove = (event->kev.flags & EV_ONESHOT) ? 1 : 0;
-		if (event->cb && (*event->cb)(ev.ident, event->data) < 0)
-			ERR("%s\n", "callback failed");
-		if (do_remove) {
-			LIST_REMOVE(event, next);
-			free(event);
-		}
+		if (call_event_cb(ev.ident, ev.udata) < 0)
+			ERR("%s\n", "event callback failed");
 	}
 #if __FreeBSD_version < 1400059
 	// waiting for vm memory is actually freed in the kernel.
