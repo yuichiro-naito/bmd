@@ -36,6 +36,9 @@
 
 #include <machine/vmm.h>
 #include <machine/vmm_dev.h>
+#if __FreeBSD_version > 1500026
+#include <dev/vmm/vmm_dev.h>
+#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -583,7 +586,24 @@ static int
 destroy_bhyve(struct vm *vm)
 {
 	char *name = vm->conf->name;
+#if __FreeBSD_version > 1500026
+	int rc, fd;
+	struct vmmctl_vm_destroy vmd;
+
+	while ((fd = open("/dev/vmmctl", O_RDWR)) < 0)
+		if (errno != EINTR)
+			break;
+	if (fd < 0)
+		return -1;
+
+	memset(&vmd, 0, sizeof(vmd));
+	(void)strlcpy(vmd.name, name, sizeof(vmd.name));
+	rc = ioctl(fd, VMMCTL_VM_DESTROY, &vmd);
+	close(fd);
+	return rc;
+#else
 	return sysctlbyname("hw.vmm.destroy", NULL, 0, name, strlen(name));
+#endif
 }
 
 static int
