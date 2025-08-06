@@ -499,6 +499,7 @@ generate_member_getter(char *, net_conf, tap);
 generate_member_getter(char *, net_conf, vale);
 generate_member_getter(char *, net_conf, vale_port);
 generate_member_getter(bool, net_conf, wol);
+generate_member_bool(net_conf, wol);
 
 int
 add_sharefs_conf(struct vm_conf *conf, const char *name, const char *path,
@@ -797,7 +798,7 @@ get_fbuf_vgaconf(struct vm_conf *conf)
 }
 
 int
-set_fbuf_wait(struct fbuf *fb, int wait)
+set_fbuf_wait(struct fbuf *fb, bool wait)
 {
 	fb->wait = wait;
 	return 0;
@@ -805,6 +806,12 @@ set_fbuf_wait(struct fbuf *fb, int wait)
 
 int
 get_fbuf_wait(struct vm_conf *conf)
+{
+	return conf->fbuf->wait;
+}
+
+bool
+is_fbuf_wait(struct vm_conf *conf)
 {
 	return conf->fbuf->wait;
 }

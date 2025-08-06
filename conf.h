@@ -285,7 +285,7 @@ int set_fbuf_ipaddr(struct fbuf *, const char *);
 int set_fbuf_port(struct fbuf *, int);
 int set_fbuf_res(struct fbuf *, int, int);
 int set_fbuf_vgaconf(struct fbuf *, const char *);
-int set_fbuf_wait(struct fbuf *, int);
+int set_fbuf_wait(struct fbuf *, bool);
 int set_fbuf_password(struct fbuf *, const char *);
 int set_mouse(struct vm_conf *, bool);
 int set_wired_memory(struct vm_conf *, bool);

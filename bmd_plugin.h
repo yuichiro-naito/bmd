@@ -84,12 +84,24 @@ enum STATE {
 	for ((sc) = get_sharefs_conf((conf)); (sc) != NULL; \
 	     (sc) = next_sharefs_conf((sc)))
 
+#define CPU_PINS_FOREACH(sc, conf)                      \
+	for ((sc) = get_cpu_pin((conf)); (sc) != NULL; \
+	     (sc) = next_cpu_pin((sc)))
+
 #define HDA_CONF_FOREACH(hc, conf)                      \
 	for ((hc) = get_hda_conf((conf)); (hc) != NULL; \
 	     (hc) = next_hda_conf((hc)))
 
 #define TAPS_FOREACH(nc, vm) \
 	for ((nc) = get_taps((vm)); (nc) != NULL; (nc) = next_net_conf((nc)))
+
+#define BHYVELOAD_ENV_FOREACH(be, conf)                      \
+	for ((be) = get_bhyveload_env((conf)); (be) != NULL; \
+	     (be) = next_bhyveload_env((be)))
+
+#define BHYVE_ENV_FOREACH(be, conf)                      \
+	for ((be) = get_bhyve_env((conf)); (be) != NULL; \
+	     (be) = next_bhyve_env((be)))
 
 int get_infd(struct vm *);
 int get_outfd(struct vm *);
@@ -138,7 +150,8 @@ char *get_net_conf_mac(struct net_conf *);
 char *get_net_conf_tap(struct net_conf *);
 char *get_net_conf_vale(struct net_conf *);
 char *get_net_conf_vale_port(struct net_conf *);
-bool get_net_conf_wol(struct net_conf *);
+bool get_net_conf_wol(struct net_conf *); /* deprecated, violates naming rule. */
+bool is_net_conf_wol(struct net_conf *);
 struct sharefs_conf *get_sharefs_conf(struct vm_conf *);
 struct sharefs_conf *next_sharefs_conf(struct sharefs_conf *);
 char *get_sharefs_conf_name(struct sharefs_conf *);
@@ -190,7 +203,8 @@ char *get_fbuf_ipaddr(struct vm_conf *);
 int get_fbuf_port(struct vm_conf *);
 void get_fbuf_res(struct vm_conf *, int *, int *);
 char *get_fbuf_vgaconf(struct vm_conf *);
-int get_fbuf_wait(struct vm_conf *);
+int get_fbuf_wait(struct vm_conf *); /* deprecated, violates naming rule. */
+bool is_fbuf_wait(struct vm_conf *);
 char *get_fbuf_password(struct vm_conf *);
 bool is_mouse(struct vm_conf *);
 bool is_wired_memory(struct vm_conf *);
