@@ -502,6 +502,10 @@ do_boot_console(const char *name, unsigned int boot_style, bool console,
 	if (nvlist_get_bool(res, "error")) {
 		ret = 1;
 		printf("%s\n", nvlist_get_string(res, "reason"));
+		if (nvlist_exists_string(res, "errmes")) {
+			printf("%s", nvlist_get_string(res, "errmes"));
+			fflush(stdout);
+		}
 		goto end;
 	}
 

@@ -1761,10 +1761,10 @@ compare_fstat(int fd, struct stat *old)
 	} while (0)
 
 static int
-wait_for_child_and_signal(pid_t cid)
+wait_for_child_and_signal(pid_t cid, int fd)
 {
 	int rc;
-	struct kevent *ev, e[3], r;
+	struct kevent *ev, e[4], r;
 	int evlen;
 	struct timespec *timeo, tv = { 0, 100000000 };
 #if __FreeBSD_version >= 1400088 || \
@@ -1780,12 +1780,21 @@ wait_for_child_and_signal(pid_t cid)
 	EV_SET(&e[0], cid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
 	EV_SET(&e[1], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&e[2], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&e[3], fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
 	ev = e;
-	evlen = nitems(e);
+	evlen = (fd == -1) ? nitems(e) - 1 : nitems(e);
 retry:
 	while ((rc = kevent(q, ev, evlen, &r, 1, timeo)) < 0)
 		if (errno != EINTR)
 			break;
+
+	if (rc > 0 && r.filter == EVFILT_READ) {
+		if (on_read_log_fd(r.ident, NULL) <= 0)
+			close(fd);
+		ev = NULL;
+		evlen = 0;
+		goto retry;
+	}
 
 	if (timeo == NULL && rc > 0 && r.filter == EVFILT_SIGNAL) {
 		kill(cid, SIGTERM);
@@ -1804,9 +1813,14 @@ parse(struct cffile *file)
 {
 	FILE *fp;
 	struct stat st, lst;
-	int rc, status;
+	int rc, status, log[2];
 	pid_t pid;
 	sigset_t nmask;
+
+	if (pipe2(log, O_CLOEXEC) < 0) {
+		log[0] = -1;
+		log[1] = -1;
+	}
 
 retry:
 	mpool_snapshot();
@@ -1815,6 +1829,9 @@ retry:
 	if ((pid = fork()) < 0)
 		return -1;
 	if (pid == 0) {
+		if (log[0] != -1)
+			close(log[0]);
+		set_log_fd(log[1]);
 		setproctitle("parser");
 		sigemptyset(&nmask);
 		sigaddset(&nmask, SIGTERM);
@@ -1847,10 +1864,15 @@ retry:
 		rc = (yyparse() || yynerrs) ? 1 : 0;
 		fclose(fp);
 		yylex_destroy();
+		clear_log_fd();
+		if (log[1] != -1)
+			close(log[1]);
 		exit(rc);
 	}
 
-	if (wait_for_child_and_signal(pid) < 0 ||
+	if (log[1] != -1)
+		close(log[1]);
+	if (wait_for_child_and_signal(pid, log[0]) < 0 ||
 	    waitpid(pid, &status, 0) < 0 || (!WIFEXITED(status)))
 		return -1;
 	if (WEXITSTATUS(status) != 0) {

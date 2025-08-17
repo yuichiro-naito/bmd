@@ -27,16 +27,24 @@
  */
 #ifndef _LOG_H_
 #define _LOG_H_
+#include <sys/types.h>
 #include <syslog.h>
 
 #define LOG_OPEN()	      openlog("bmd", LOG_PID, LOG_DAEMON)
 #define LOG_OPEN_PERROR()     openlog("bmd", LOG_PID | LOG_PERROR, LOG_DAEMON)
 #define LOG_CLOSE()	      closelog()
 
-#define LOGGER(pri, msg, ...) syslog(pri, msg, __VA_ARGS__)
-#define ERR(msg, ...)	      syslog(LOG_ERR, msg, __VA_ARGS__)
-#define WARN(msg, ...)	      syslog(LOG_WARNING, msg, __VA_ARGS__)
-#define INFO(msg, ...)	      syslog(LOG_INFO, msg, __VA_ARGS__)
-#define DEBUG(msg, ...)	      syslog(LOG_DEBUG, msg, __VA_ARGS__)
+#define LOGGER(pri, msg, ...) logger(pri, msg, __VA_ARGS__)
+#define ERR(msg, ...)	      logger(LOG_ERR, msg, __VA_ARGS__)
+#define WARN(msg, ...)	      logger(LOG_WARNING, msg, __VA_ARGS__)
+#define INFO(msg, ...)	      logger(LOG_INFO, msg, __VA_ARGS__)
+#define DEBUG(msg, ...)	      logger(LOG_DEBUG, msg, __VA_ARGS__)
+
+int start_log_collector(void);
+int end_log_collector(char **, size_t *);
+int set_log_fd(int fd);
+int clear_log_fd(void);
+int logger(int pri, const char *msg, ...);
+int on_read_log_fd(int, void *);
 
 #endif

@@ -785,11 +785,15 @@ boot0_command(struct sock_buf *s __unused, const nvlist_t *nv, int style,
 	struct vm_entry *vm_ent = NULL;
 	nvlist_t *res;
 	bool error = false;
+	char *buf;
+	size_t len;
 
 	if (style < 0) {
 		error = true;
 		reason = "internal error";
 	}
+
+	start_log_collector();
 
 	if ((name = nvlist_get_string(nv, "name")) == NULL ||
 	    (vm_ent = lookup_vm_by_name(name)) == NULL ||
@@ -829,8 +833,12 @@ boot0_command(struct sock_buf *s __unused, const nvlist_t *nv, int style,
 	}
 
 ret:
+	end_log_collector(&buf, &len);
 	res = nvlist_create(0);
 	nvlist_add_bool(res, "error", error);
+	if (len > 0)
+		nvlist_add_string(res, "errmes", buf);
+	free(buf);
 	if (error)
 		nvlist_add_string(res, "reason", reason);
 	return res;
