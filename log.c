@@ -61,10 +61,13 @@ end_log_collector(char **bufp, size_t *sizep)
 	fputc('\0', collector);
 	fclose(collector);
 	collector = NULL;
-	if (bufp && sizep) {
+	if (bufp != NULL)
 		*bufp = collector_buf;
+	else
+		free(collector_buf);
+	if (sizep != NULL)
 		*sizep = collector_size;
-	}
+
 	return 0;
 }
 
