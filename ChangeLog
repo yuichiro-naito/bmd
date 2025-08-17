@@ -1,3 +1,6 @@
+* 3.5
+	- Report a configuration file error to the 'bmdctl start'.
+	  (f85a8c51a01491b57b3fca9b9a7654e8b1d7ab91)
 * 3.4
 	- Bugfix: Count up indexes properly while exporting VM configurations.
 	  (d9b75ac03d0e605839618d3691ee0795f9c9b613)
