@@ -1701,7 +1701,7 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 		return 0;
 	}
 
-	for (i = 0; i < nitems(VM_ASCOM(vm_ent)); i++)
+	for (i = 0; i < NCOM; i++)
 		if (assign_com(vm_ent, i) < 0) {
 			ERR("failed to assign comport for vm %s\n", name);
 			return -1;
@@ -1856,6 +1856,23 @@ copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 			    db->pl_conf);
 }
 
+void
+clear_assigned_com(char *old[NCOM], char *new[NCOM], char *assigned[NCOM])
+{
+	int i;
+	for (i = 0; i < NCOM; i++) {
+		/* No change no clear. */
+		if ((old[i] == NULL && new[i] == NULL) ||
+		    (old[i] && new[i] && strcmp(old[i], new[i]) == 0))
+			continue;
+		/* Clear assigned com port if the com device changed. */
+		if (assigned[i] != NULL) {
+			free(assigned[i]);
+			assigned[i] = NULL;
+		}
+	}
+}
+
 static int
 reload_virtual_machines(void)
 {
@@ -1894,6 +1911,8 @@ reload_virtual_machines(void)
 			VM_CLOSE(vm_ent, LOGFD);
 			VM_LOGFD(vm_ent) = open_err_logfile(conf);
 		}
+		clear_assigned_com(VM_CONF(vm_ent)->com,
+		    conf->com, VM_ASCOM(vm_ent));
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
 		VM_TMPCONF(vm_ent) = conf_ent;
 		if (conf->boot != NO && conf->reboot_on_change &&

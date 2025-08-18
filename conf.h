@@ -41,6 +41,8 @@
    17 bytes long. */
 #define ETHER_FORMAT_LEN (3 * 5 + 2)
 
+#define NCOM 4
+
 struct global_conf {
 	char *config_file;
 	char *plugin_dir;
@@ -158,7 +160,7 @@ struct vm_conf {
 	int ncpu;
 	char *memory;
 	char *name;
-	char *com[4];
+	char *com[NCOM];
 	char *loader;
 	char *loadcmd;
 	char *installcmd;
@@ -211,7 +213,7 @@ struct vm {
 	char *mapfile;
 	char *bootrom;
 	char *varsfile;
-	char *assigned_com[4];
+	char *assigned_com[NCOM];
 	int infd;
 	int outfd;
 	int errfd;
