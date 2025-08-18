@@ -1529,7 +1529,7 @@ get_nmdm_number(const char *p)
 {
 	int v = 0;
 
-	if (p == NULL)
+	if (p == NULL || strstr(p, "nmdm") == NULL)
 		return -1;
 
 	for (; *p != '\0'; p++)
