@@ -95,9 +95,12 @@ static unsigned int wolmonid = 0;
 
 #define GET_BRIDGE_NAME(n) ((n)->bridge) ? ((n)->bridge) : ((n)->vale)
 
+#define GET_VM_CONF(v) \
+	(VM_NEWCONF(v) != NULL) ? (&VM_NEWCONF(v)->conf): (VM_CONF(v))
+
 #define WOL_FOREACH(v, n)                               \
 	SLIST_FOREACH((v), &vm_list, next)              \
-		NET_CONF_FOREACH((n), get_vm_conf((v))) \
+		NET_CONF_FOREACH((n), (GET_VM_CONF(v)))	\
 			if (is_wol_enable((n)))
 
 /*
@@ -701,12 +704,6 @@ err2:
 err:
 	free(mon);
 	return NULL;
-}
-
-static inline struct vm_conf *
-get_vm_conf(struct vm_entry *v)
-{
-	return VM_NEWCONF(v) != NULL ? &VM_NEWCONF(v)->conf : VM_CONF(v);
 }
 
 static inline bool
