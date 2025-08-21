@@ -235,7 +235,6 @@ void free_plugin_data(struct plugin_data_list *);
 void free_vm_conf_entry(struct vm_conf_entry *);
 struct vm_entry *lookup_vm_by_name(const char *);
 int set_timer(struct vm_entry *, int);
-void clear_assigned_com(char *[NCOM], char *[NCOM], char *[NCOM]);
 int start_virtual_machine(struct vm_entry *);
 
 int direct_run(const char *, bool, bool);

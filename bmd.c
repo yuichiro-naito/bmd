@@ -1654,6 +1654,23 @@ load_virtual_machine(struct vm_entry *vm_ent)
 	return rc;
 }
 
+static void
+clear_assigned_com(char *old[NCOM], char *new[NCOM], char *assigned[NCOM])
+{
+	int i;
+	for (i = 0; i < NCOM; i++) {
+		/* No change no clear. */
+		if ((old[i] == NULL && new[i] == NULL) ||
+		    (old[i] && new[i] && strcmp(old[i], new[i]) == 0))
+			continue;
+		/* Clear assigned com port if the com device changed. */
+		if (assigned[i] != NULL) {
+			free(assigned[i]);
+			assigned[i] = NULL;
+		}
+	}
+}
+
 /*
   Start the virtual machine with new VM configuration.
  */
@@ -1856,23 +1873,6 @@ copy_plugin_data(struct vm_conf_entry *dst, struct vm_conf_entry *src)
 		if (da->ent->desc.on_reload_config)
 			da->ent->desc.on_reload_config(da->pl_conf,
 			    db->pl_conf);
-}
-
-void
-clear_assigned_com(char *old[NCOM], char *new[NCOM], char *assigned[NCOM])
-{
-	int i;
-	for (i = 0; i < NCOM; i++) {
-		/* No change no clear. */
-		if ((old[i] == NULL && new[i] == NULL) ||
-		    (old[i] && new[i] && strcmp(old[i], new[i]) == 0))
-			continue;
-		/* Clear assigned com port if the com device changed. */
-		if (assigned[i] != NULL) {
-			free(assigned[i]);
-			assigned[i] = NULL;
-		}
-	}
 }
 
 static int
