@@ -500,13 +500,10 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 	}
 
 	if (compare_vm_conf_entry(ret, VM_CONF_ENT(vm_ent)) != 0) {
-		clear_assigned_com(VM_CONF(vm_ent)->com, ret->conf.com,
-		    VM_ASCOM(vm_ent));
 		copy_plugin_data(ret, VM_CONF_ENT(vm_ent));
 		LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
-		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
-		VM_CONF(vm_ent) = &ret->conf;
+		VM_NEWCONF(vm_ent) = ret;
 		start_wol_monitor();
 		INFO("changes are found. update %s configuration\n", name);
 	} else {

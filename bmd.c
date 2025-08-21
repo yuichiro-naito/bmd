@@ -1661,6 +1661,8 @@ int
 start_virtual_machine(struct vm_entry *vm_ent)
 {
 	if (VM_NEWCONF(vm_ent) != NULL) {
+		clear_assigned_com(VM_CONF(vm_ent)->com,
+		    VM_NEWCONF(vm_ent)->conf.com, VM_ASCOM(vm_ent));
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 		VM_CONF(vm_ent) = &VM_NEWCONF(vm_ent)->conf;
 		VM_NEWCONF(vm_ent) = NULL;
@@ -1911,8 +1913,6 @@ reload_virtual_machines(void)
 			VM_CLOSE(vm_ent, LOGFD);
 			VM_LOGFD(vm_ent) = open_err_logfile(conf);
 		}
-		clear_assigned_com(VM_CONF(vm_ent)->com,
-		    conf->com, VM_ASCOM(vm_ent));
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
 		VM_TMPCONF(vm_ent) = conf_ent;
 		if (conf->boot != NO && conf->reboot_on_change &&
