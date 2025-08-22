@@ -1,4 +1,6 @@
 * 3.5
+	- Add support of tcp backend comport.
+	  (67c4ed5112952e0ee7aed1da03ad5f79aec00f66)
 	- Bugfix: Follow the com device change.
 	  (04f15e9c1808810231d5004ea5b250686fc2b31b)
 	- Report a configuration file error to the 'bmdctl start'.
