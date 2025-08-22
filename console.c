@@ -188,7 +188,12 @@ attach_console(int fd)
 	pid_t out_pid;
 	struct termios defterm, term;
 
-	if (ttysetup(fd, 115200) < 0 || localttysetup(&defterm, &term))
+	/*
+	  Ignore an error of remote tty setup. If the 'fd' is a socket,
+	  ttysetup() will always fail.
+	*/
+	ttysetup(fd, 115200);
+	if (localttysetup(&defterm, &term))
 		return -1;
 
 	signal(SIGINT, sighandler_stop);

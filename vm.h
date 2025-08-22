@@ -33,6 +33,8 @@
 struct vm;
 struct vm_conf;
 
+#define IS_NMDM(c) (strstr((c), "nmdm") != NULL)
+
 #define PLUGIN_MODULE_VAR(v)					\
 	static PLUGIN_DESC(v) __used __section("plugin_array")
 #define PLUGIN_METHOD_MODULE(n, v, l) PLUGIN_MODULE_VAR(pl_desc_##n) = { \

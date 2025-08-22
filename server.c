@@ -522,8 +522,14 @@ get_peer_comport(const char *comport)
 	int i;
 	char *peer;
 
+	if (comport == NULL)
+		return NULL;
+
+	if (!IS_NMDM(comport))
+		return strdup(comport);
+
 	/* A null modem device has at least 11 characters. */
-	if (comport == NULL || (i = strlen(comport) - 1) < 10)
+	if ((i = strlen(comport) - 1) < 10)
 		return NULL;
 
 	if ((peer = strdup(comport)) == NULL)
@@ -549,6 +555,9 @@ chown_comport(const char *comport, struct xucred *ucred)
 	int i, rc;
 	struct stat st;
 
+	if (comport == NULL || !IS_NMDM(comport))
+		return 0;
+
 	for (i = 0; i < 5; i++) {
 		if (stat(comport, &st) < 0 ||
 		    chown(comport, ucred->cr_uid, st.st_gid) < 0) {
@@ -564,7 +573,7 @@ chown_comport(const char *comport, struct xucred *ucred)
 }
 
 static int
-open_comport(const char *comport)
+open_comport_fd(const char *comport)
 {
 	int fd;
 
@@ -588,6 +597,82 @@ err2:
 	close(fd);
 err:
 	return -1;
+}
+
+static int
+connect_to_comport(const char *comport)
+{
+	const char *hs, *he, *ps;
+	char *host, *port;
+	int s;
+	struct addrinfo hints, *r;
+	const static char *(*p)[2], *replace_host[][2] = {
+		{"0.0.0.0", "127.0.0.1"},
+		{"::", "::1"},
+	};
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_socktype = SOCK_STREAM;
+
+	if (comport[0] == '[') {
+		hints.ai_family = AF_INET6;
+		hs = &comport[1];
+		if ((he = strchr(hs, ']')) == NULL || he[1] != ':')
+			return -1;
+		ps = &he[2];
+	} else {
+		hints.ai_family = AF_INET;
+		hs = comport;
+		if ((he = strchr(hs, ':')) == NULL)
+			return -1;
+		ps = &he[1];
+	}
+	host = strndup(hs, he - hs);
+	port = strdup(ps);
+	if (host == NULL || port == NULL)
+		goto err;
+
+	ARRAY_FOREACH(p, replace_host)
+		if (strcmp(host, (*p)[0]) == 0) {
+			free(host);
+			if ((host = strdup((*p)[1])) == NULL)
+				goto err;
+			break;
+		}
+
+	if (getaddrinfo(host, port, &hints, &r))
+		goto err;
+
+	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err2;
+
+	while (connect(s, r->ai_addr, r->ai_addrlen) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			goto err2;
+
+	freeaddrinfo(r);
+	free(port);
+	free(host);
+	return s;
+
+err2:
+	ERR("failed to connect %s %s (%s)\n", host, port, strerror(errno));
+	freeaddrinfo(r);
+	if (s != -1)
+		close(s);
+err:
+	free(port);
+	free(host);
+	return -1;
+}
+
+static int
+open_comport(const char *c)
+{
+	if (c == NULL)
+		return -1;
+	return (IS_NMDM(c)) ? open_comport_fd(c) : connect_to_comport(&c[4]);
 }
 
 struct com_opener *
