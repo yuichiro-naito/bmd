@@ -503,6 +503,7 @@ search_and_replace_vm_conf(struct vm_entry *vm_ent)
 		copy_plugin_data(ret, VM_CONF_ENT(vm_ent));
 		LIST_REMOVE(VM_CONF_ENT(vm_ent), next);
 		LIST_INSERT_HEAD(&vm_conf_list, ret, next);
+		free_vm_conf_entry(VM_NEWCONF(vm_ent));
 		VM_NEWCONF(vm_ent) = ret;
 		start_wol_monitor();
 		INFO("changes are found. update %s configuration\n", name);
@@ -903,7 +904,10 @@ boot0_command(struct sock_buf *s __unused, const nvlist_t *nv, int style,
 	case 0:
 		break;
 	case 1:
-		VM_CONF(vm_ent)->install = true;
+		if (VM_NEWCONF(vm_ent) != NULL)
+			VM_NEWCONF(vm_ent)->conf.install = true;
+		else
+			VM_CONF(vm_ent)->install = true;
 		break;
 	default:
 		error = true;
