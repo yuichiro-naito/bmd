@@ -3,7 +3,7 @@
 	  (67c4ed5112952e0ee7aed1da03ad5f79aec00f66)
 	- Bugfix: Follow the com device change.
 	  (04f15e9c1808810231d5004ea5b250686fc2b31b)
-	- Report a configuration file error to the 'bmdctl start'.
+	- Report a configuration file error to the 'bmdctl start/install'.
 	  (f85a8c51a01491b57b3fca9b9a7654e8b1d7ab91)
 * 3.4
 	- Bugfix: Count up indexes properly while exporting VM configurations.
