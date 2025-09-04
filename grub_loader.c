@@ -457,6 +457,8 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 	set_outfd(vm, ofd[0]);
 	close(efd[1]);
 	set_errfd(vm, efd[0]);
+	/* The target kernel is loaded, Boot ROM isn't necessary. */
+	clear_bootrom(vm);
 	return 0;
 err:
 	close(efd[0]);

@@ -898,6 +898,15 @@ set_bootrom(struct vm *vm, const char *rom)
 	return set_string(&vm->bootrom, rom);
 }
 
+void
+clear_bootrom(struct vm *vm)
+{
+	free(vm->bootrom);
+	vm->bootrom = NULL;
+	free(vm->varsfile);
+	vm->varsfile = NULL;
+}
+
 const char *
 get_mapfile(struct vm *vm)
 {

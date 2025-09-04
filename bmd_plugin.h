@@ -117,6 +117,7 @@ enum STATE get_state(struct vm *);
 void set_state(struct vm *, enum STATE);
 void set_pid(struct vm *, pid_t);
 int set_bootrom(struct vm *, const char *);
+void clear_bootrom(struct vm *);
 const char *get_mapfile(struct vm *);
 int set_mapfile(struct vm *, const char *);
 const char *get_varsdir(void);

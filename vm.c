@@ -291,6 +291,8 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	}
 	vm->pid = pid;
 	vm->state = LOAD;
+	/* The target kernel is loaded, Boot ROM isn't necessary. */
+	clear_bootrom(vm);
 	return 0;
 }
 
