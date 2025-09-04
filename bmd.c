@@ -1852,6 +1852,7 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 		break;
 	case RESTART:
 		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
+		/* FALLTHROUGH */
 	default:
 		VM_SAVED_STATE(vm_ent) = 0;
 		break;
