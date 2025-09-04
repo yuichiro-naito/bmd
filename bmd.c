@@ -415,11 +415,11 @@ get_plugin_state(struct vm_entry *vm_ent, unsigned int i)
 
 	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->results[i].called) {
-			if (pd->prestart_result.state == 0)
+			if (pd->results[i].state == 0)
 				continue;
-			if (pd->prestart_result.state > 0)
+			if (pd->results[i].state > 0)
 				return 1;
-			if (pd->prestart_result.state < 0)
+			if (pd->results[i].state < 0)
 				rc = -1;
 		}
 	return rc;
@@ -822,6 +822,7 @@ call_poststop_plugins(struct vm_entry *vm_ent)
 	bool called = false;
 	struct plugin_data *pd;
 
+	VM_SAVE_STATE(vm_ent);
 	VM_STATE(vm_ent) = POSTSTOP;
 
 	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
@@ -863,7 +864,6 @@ on_vm_exit(int ident __unused, void *data)
 		}
 		break;
 	case RESTART:
-		VM_SET_RESTART(vm_ent);
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
 		stop_virtual_machine(vm_ent);
@@ -1845,9 +1845,16 @@ stop_virtual_machine(struct vm_entry *vm_ent)
 	if (direct_run_mode)
 		sigterm++;
 	VM_PID(vm_ent) = -1;
-	if (VM_ISSET_RESTART(vm_ent)) {
+	switch (VM_SAVED_STATE(vm_ent)) {
+	case REMOVE:
+		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
+		free_vm_entry(vm_ent);
+		break;
+	case RESTART:
 		set_timer(vm_ent, MAX(VM_CONF(vm_ent)->boot_delay, 3));
-		VM_CLEAR_RESTART(vm_ent);
+	default:
+		VM_SAVED_STATE(vm_ent) = 0;
+		break;
 	}
 }
 

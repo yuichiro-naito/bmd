@@ -139,6 +139,8 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_PID(v)	  ((v)->vm.pid)
 #define VM_TAPS(v)	  (&(v)->vm.taps)
 #define VM_STATE(v)	  ((v)->vm.state)
+#define VM_SAVE_STATE(v)  ((v)->saved_state = VM_STATE(v))
+#define VM_SAVED_STATE(v) ((v)->saved_state)
 #define VM_MAPFILE(v)	  ((v)->vm.mapfile)
 #define VM_BOOTROM(v)	  ((v)->vm.bootrom)
 #define VM_VARSFILE(v)	  ((v)->vm.varsfile)
@@ -154,9 +156,6 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 			VM_##fd(v) = -1;   \
 		}                          \
 	} while (0)
-#define VM_SET_RESTART(v)   ((v)->restart) = true
-#define VM_CLEAR_RESTART(v) ((v)->restart) = false
-#define VM_ISSET_RESTART(v) ((v)->restart)
 
 /*
   Entry of vm list.
@@ -172,7 +171,7 @@ struct vm_entry {
 	nvlist_t *pl_vm_conf;
 	nvlist_t *pl_ld_conf;
 	struct signal_targets signal_targets;
-	bool restart;
+	enum STATE saved_state;
 };
 
 /*
