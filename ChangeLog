@@ -1,4 +1,10 @@
 * 3.5
+	- Bugifx: If a VM configuration is removed and the 'poststop' plugin
+	  for the VM is called, the VM won't be removed completely.
+	  (3141e7c400ef89552884610de590287865d732ba)
+	- Bugfix: To follow the loader changes,
+	  clear the boot ROM when the loader is not UEFI.
+	  (ae2cc596ca77ffc51bd706e1efaf7c212920929b)
 	- Add support of tcp backend comport.
 	  (67c4ed5112952e0ee7aed1da03ad5f79aec00f66)
 	- Bugfix: Follow the com device change.
