@@ -549,6 +549,19 @@ make_capture_interfaces(struct watch_targets *wl, struct capture_interfaces *cl)
 }
 
 static int
+on_read_sock(int fd)
+{
+	ssize_t rc;
+	char buf[8];
+
+	while ((rc = read(fd, buf, sizeof(buf))) < 0)
+		if (errno != EAGAIN && errno != EINTR)
+			break;
+
+	return rc;
+}
+
+static int
 wolmon_main(int sock, struct watch_targets *wl)
 {
 	int kq, i;
@@ -578,7 +591,7 @@ wolmon_main(int sock, struct watch_targets *wl)
 		i++;
 	}
 
-	evs = malloc(sizeof(struct kevent) * (i + 3));
+	evs = malloc(sizeof(struct kevent) * (i + 4));
 	if (evs == NULL) {
 		ERR("wolmon: %s\n", "failed to allocate memory\n");
 		goto err;
@@ -590,6 +603,7 @@ wolmon_main(int sock, struct watch_targets *wl)
 	EV_SET(&evs[i++], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&evs[i++], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&evs[i++], SIGPIPE, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&evs[i++], sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
 
 	if (kevent(kq, evs, i, NULL, 0, NULL) < 0) {
 		free(evs);
@@ -603,6 +617,11 @@ wolmon_main(int sock, struct watch_targets *wl)
 		case EVFILT_SIGNAL:
 			goto end;
 		case EVFILT_READ:
+			if ((int)ev.ident == sock) {
+				if (on_read_sock(sock) <= 0)
+					goto end;
+				break;
+			}
 			ci = ev.udata;
 			if ((ci->callback)(sock, wl, ci) < 0)
 				ERR("wolmon: failed to read (%s)\n",

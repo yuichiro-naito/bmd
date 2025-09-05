@@ -429,8 +429,8 @@ create_command_server(const struct global_conf *gc)
 		return -1;
 	}
 
-	while ((s = socket(r->ai_family, r->ai_socktype | SOCK_CLOEXEC,
-		    r->ai_protocol)) < 0)
+	r->ai_socktype |= SOCK_CLOEXEC | SOCK_CLOFORK;
+	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;
 
