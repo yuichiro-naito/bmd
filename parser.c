@@ -1091,9 +1091,19 @@ check_conf(struct vm_conf *conf)
 		return -1;
 	}
 
-	if (strcmp(conf->backend, "bhyve") == 0 && conf->loader == NULL) {
-		ERR("%s: loader is required\n", name);
-		return -1;
+	if (strcmp(conf->backend, "bhyve") == 0) {
+		if (conf->loader == NULL) {
+			ERR("%s: loader is required\n", name);
+			return -1;
+		}
+		if ((strcmp(conf->loader, "bhyveload") == 0 ||
+			strcmp(conf->loader, "grub") == 0) &&
+		    conf->com[0] != NULL &&
+		    strncmp(conf->com[0], "tcp=", 4) == 0) {
+			ERR("%s: The loader '%s' doesn't support TCP backend com1\n",
+			    name, conf->loader);
+			return -1;
+		}
 	}
 
 	if (check_disks(conf) < 0 || check_isoes(conf) < 0)

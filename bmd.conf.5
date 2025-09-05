@@ -110,6 +110,12 @@ Specify com1 port device (e.g. /dev/nmdm0B).
 .Qq auto
 assigns a nmdm device
 automatically.
+Specifying
+.Dq tcp=ip:port
+uses a TCP backend com port. A TCP backend com port supports com2, com3, and com4.
+If the loader is
+.Sq uefi ,
+the com1 is supported for a TCP backend com port.
 .It Cm com2 = Ar com_device;
 Specify com2 port device as same as com1.
 .It Cm com3 = Ar com_device;
