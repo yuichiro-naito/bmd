@@ -707,6 +707,9 @@ exec_wol_monitor(struct watch_targets *wl)
 
 	if (pid == 0) {
 		close(sk[0]);
+#if __FreeBSD_version <= 1500051
+		close_command_server();
+#endif
 		exit(wolmon_main(sk[1], wl));
 	}
 	close(sk[1]);

@@ -429,7 +429,11 @@ create_command_server(const struct global_conf *gc)
 		return -1;
 	}
 
+#if __FreeBSD_version > 1500051
 	r->ai_socktype |= SOCK_CLOEXEC | SOCK_CLOFORK;
+#else
+	r->ai_socktype |= SOCK_CLOEXEC;
+#endif
 	while ((s = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) < 0)
 		if (errno != EAGAIN && errno != EINTR)
 			goto err;

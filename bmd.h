@@ -250,6 +250,9 @@ int register_events(struct kevent *, event_call_back *, void **, int);
 int set_sock_buf_wait_flags(struct sock_buf *, short, short);
 
 int register_signal_target(struct vm_entry *, pid_t, int);
+#if __FreeBSD_version <= 1500051
+void close_command_server(void);
+#endif
 
 /* implemented in control.c */
 int control(int, char *[]);

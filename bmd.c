@@ -2375,3 +2375,11 @@ register_signal_target(struct vm_entry *vm_ent, pid_t tpid, int signum)
 
 	return 0;
 }
+
+#if __FreeBSD_version <= 1500051
+void
+close_command_server(void)
+{
+	close(cmd_sock);
+}
+#endif
