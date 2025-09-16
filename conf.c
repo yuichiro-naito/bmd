@@ -84,6 +84,7 @@ struct vartree *global_vars = NULL;
 		STAILQ_FOREACH_SAFE(p, &vc->member, next, pn) \
 			free_##type(p);                       \
 		STAILQ_INIT(&vc->member);                     \
+		vc->n##member = 0;			      \
 	}
 
 #define generate_getter(rtype, member)        \
@@ -517,7 +518,7 @@ add_sharefs_conf(struct vm_conf *conf, const char *name, const char *path,
 	t->path = p;
 	t->readonly = ro;
 	STAILQ_INSERT_TAIL(&conf->sharefss, t, next);
-	conf->nsharefs++;
+	conf->nsharefss++;
 	return 0;
 err:
 	free(t);
@@ -1198,7 +1199,7 @@ vm_conf_export_env(struct vm_conf *conf)
 		    bool_str[dc->noexist]);
 		i++;
 	}
-	VPUTINT(nsharefs);
+	VPUTINT(nsharefss);
 	i = 1;
 	STAILQ_FOREACH(sc, &conf->sharefss, next) {
 		vputenv(ENV_PREFIX "SHAREFS%d_NAME=%s", i, sc->name);

@@ -198,7 +198,7 @@ struct vm_conf {
 	char *tpm_type;
 	char *tpm_version;
 	STAILQ_HEAD(, sharefs_conf) sharefss;
-	int nsharefs;
+	int nsharefss;
 	bool virt_random;
 	bool x2apic;
 	int nhdas;
