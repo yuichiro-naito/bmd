@@ -1,5 +1,9 @@
 * 3.5
-	- Bugifx: If a VM configuration is removed and the 'poststop' plugin
+	- Bugfix: Clear number of list elements by the '=' operator.
+                  (ndisks, nisoes, nnets, npassthrues, nbhyve_envs,
+	           nbhyveload_envs, ncpu_pins, nsharefss, nhdas)
+	  (fb4893b25e8dffd8e4d2eeeb6d55831944e83217)
+	- Bugfix: If a VM configuration is removed and the 'poststop' plugin
 	  for the VM is called, the VM won't be removed completely.
 	  (3141e7c400ef89552884610de590287865d732ba)
 	- Bugfix: To follow the loader changes,
