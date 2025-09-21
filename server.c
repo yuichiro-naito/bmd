@@ -611,7 +611,10 @@ connect_to_comport(const char *comport)
 	char *host, *port;
 	int s;
 	struct addrinfo hints, *r;
-	const static char *(*p)[2], *replace_host[][2] = {
+	const static struct mapping {
+		const char *from;
+		const char *to;
+	} *p, replace_host[] = {
 		{"0.0.0.0", "127.0.0.1"},
 		{"::", "::1"},
 	};
@@ -638,9 +641,9 @@ connect_to_comport(const char *comport)
 		goto err;
 
 	ARRAY_FOREACH(p, replace_host)
-		if (strcmp(host, (*p)[0]) == 0) {
+		if (strcmp(host, p->from) == 0) {
 			free(host);
-			if ((host = strdup((*p)[1])) == NULL)
+			if ((host = strdup(p->to)) == NULL)
 				goto err;
 			break;
 		}
