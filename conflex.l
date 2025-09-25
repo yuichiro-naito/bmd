@@ -174,19 +174,19 @@ int lineno = 1;
 
 			/* Partially formed bits worth complaining about */
 <_>\/\*([^*]|(\*+([^*\/])))*\** {
-				ERR("%s line %d: unterminated comment",
+				ERR("%s line %d: unterminated comment\n",
 				      peek_filename(), lineno);
 				yynerrs++;
 			}
 <_>'([^\n'\\]|\\.)*	|
 <_>\"([^\n\"\\]|\\.)*	{
-				ERR("%s line %d: unterminated string",
+				ERR("%s line %d: unterminated string\n",
 				      peek_filename(), lineno);
 				yynerrs++;
 			}
 <_>$\{([^\n{}]|\\.)*	|
 <DQ>$\{([^\n\"{}]|\\.)*	{
-				ERR("%s line %d: unterminated variable",
+				ERR("%s line %d: unterminated variable\n",
 				      peek_filename(), lineno);
 				yynerrs++;
 			}
@@ -208,9 +208,9 @@ yyerror(const char *s)
 	if (!yytext)
 		ERR("%s line %d: %s\n", fn, lineno, s);
 	else if (!yytext[0])
-		ERR("%s: unexpected EOF", fn);
+		ERR("%s: unexpected EOF\n", fn);
 	else
-		ERR("%s line %d: '%s': %s", fn, lineno, yytext, s);
+		ERR("%s line %d: '%s': %s\n", fn, lineno, yytext, s);
 }
 
 /*

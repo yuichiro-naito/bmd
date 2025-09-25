@@ -403,7 +403,7 @@ print_prestart_error(struct vm_entry *vm_ent)
 
 	SLIST_FOREACH(pd, &VM_PLUGIN_DATA(vm_ent), next)
 		if (pd->results[0].called && pd->prestart_result.state < 0)
-			ERR("%s: plugin '%s' prevents from starting VM",
+			ERR("%s: plugin '%s' prevents from starting VM\n",
 			    VM_CONF(vm_ent)->name, pd->ent->desc_name);
 }
 
@@ -2045,7 +2045,7 @@ event_loop(void)
 			continue;
 		}
 		if (ev.udata == NULL) {
-			ERR("recieved unexpcted event! (%d)", ev.filter);
+			ERR("recieved unexpcted event! (%d)\n", ev.filter);
 			continue;
 		}
 		if (call_event_cb(ev.ident, ev.udata) < 0)

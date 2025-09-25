@@ -435,7 +435,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 
 		STAILQ_FOREACH(be, &conf->bhyve_envs, next)
 			if (putenv(be->env) < 0)
-				ERR("invalid environment: %s", be->env);
+				ERR("invalid environment: %s\n", be->env);
 
 		if ((fp = open_memstream(&buf, &buf_size)) == NULL) {
 			ERR("cannot open memstream (%s)\n", strerror(errno));

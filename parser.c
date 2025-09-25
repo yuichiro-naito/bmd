@@ -1258,7 +1258,7 @@ token_to_string(struct variables *vars, struct cftokens *tokens)
 			if (vars == NULL)
 				continue;
 			if ((val = get_var(vars, tk->s)) == NULL) {
-				ERR("%s line %d: ${%s} is undefined",
+				ERR("%s line %d: ${%s} is undefined\n",
 				    tk->filename, tk->lineno, tk->s);
 				goto err;
 			}
@@ -1849,12 +1849,12 @@ retry:
 
 		if (stat(file->original_name, &st) < 0 ||
 		    (!S_ISREG(st.st_mode))) {
-			ERR("%s is not a file\n", file->original_name);
+			ERR("%s is not a file.\n", file->original_name);
 			exit(0);
 		}
 		if (lstat(file->original_name, &lst) < 0 ||
 		    st.st_uid != lst.st_uid || st.st_gid != lst.st_gid) {
-			ERR("access denied %s \n", file->original_name);
+			ERR("access denied %s.\n", file->original_name);
 			exit(0);
 		}
 		/*
@@ -1866,7 +1866,7 @@ retry:
 		setuid(st.st_uid);
 		if ((fp = fopen(file->original_name, "r")) == NULL ||
 		    !compare_fstat(fileno(fp), &st)) {
-			ERR("failed to open %s\n", file->original_name);
+			ERR("failed to open %s.\n", file->original_name);
 			exit(0);
 		}
 		yyin = fp;

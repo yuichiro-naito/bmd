@@ -528,7 +528,7 @@ add_section(enum SECTION sec, char *name)
 	if (name != NULL && sec != SECTION_GLOBAL)
 		STAILQ_FOREACH (v, section, next)
 			if (strcmp(v->name, name) == 0) {
-				ERR("%s: %s '%s' already exists.",
+				ERR("%s: %s '%s' already exists.\n",
 				    peek_filename(), sec_names[sec], name);
 				v->duplicate++;
 				break;
