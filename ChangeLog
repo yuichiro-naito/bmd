@@ -1,3 +1,6 @@
+* 3.6
+	- Add error check for a single value parameter.
+	  (5a06f747e723f07a31f649e0bdb0a5ef94136b99)
 * 3.5
 	- Bugfix: Clear number of list elements by the '=' operator.
                   (ndisks, nisoes, nnets, npassthrues, nbhyve_envs,
