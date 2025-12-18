@@ -1430,6 +1430,7 @@ vm_conf_call_parser(struct vm_conf *conf, struct cfsection *sc,
 static int
 vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 {
+	struct cftoken *tk;
 	struct cfparam *pr;
 	struct cfvalue *vl;
 	struct cftarget *gt;
@@ -1458,6 +1459,15 @@ vm_conf_set_params(struct vm_conf *conf, struct cfsection *sc)
 		    sizeof(parser_list[0]), compare_parser_entry);
 		if (parser && parser->clear != NULL && pr->operator == 0)
 			(*parser->clear)(conf);
+		vl = STAILQ_FIRST(&pr->vals);
+		if (parser && parser->clear == NULL && vl &&
+		    (pr->operator == 1 || STAILQ_NEXT(vl, next))) {
+			tk = STAILQ_FIRST(&vl->tokens);
+			ERR("%s line %d: %s: The \"%s\" key doesn't"
+			    " take multiple values\n",
+			    tk->filename, tk->lineno, sc->name, key);
+			continue;
+		}
 		STAILQ_FOREACH(vl, &pr->vals, next)
 			vm_conf_call_parser(conf, sc, pr, parser, key, vl);
 	}
