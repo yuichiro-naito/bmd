@@ -1046,7 +1046,7 @@ err:
 	free(local);
 	free(ret);
 	free(backend);
-	free(fbuf);
+	free_fbuf(fbuf);
 	free(name);
 	return NULL;
 }
