@@ -1,4 +1,6 @@
 * 3.6
+	- Add support of 'graphics_path'.
+	  (d8327e64113b57455ea156560796e9ed750c8bab)
 	- Add error check for a single value parameter.
 	  (5a06f747e723f07a31f649e0bdb0a5ef94136b99)
 * 3.5
