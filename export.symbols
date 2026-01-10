@@ -101,6 +101,7 @@ get_fbuf_vgaconf;
 get_fbuf_wait;
 is_fbuf_wait;
 get_fbuf_password;
+get_fbuf_unixpath;
 is_mouse;
 is_wired_memory;
 is_utctime;

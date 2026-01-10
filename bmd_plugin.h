@@ -207,6 +207,7 @@ char *get_fbuf_vgaconf(struct vm_conf *);
 int get_fbuf_wait(struct vm_conf *); /* deprecated, violates naming rule. */
 bool is_fbuf_wait(struct vm_conf *);
 char *get_fbuf_password(struct vm_conf *);
+char *get_fbuf_unixpath(struct vm_conf *);
 bool is_mouse(struct vm_conf *);
 bool is_wired_memory(struct vm_conf *);
 bool is_utctime(struct vm_conf *);

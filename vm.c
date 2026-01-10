@@ -541,9 +541,16 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 		if (conf->fbuf->enable) {
 			struct fbuf *fb = conf->fbuf;
-			PCISLOT(fp, "fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s", pcid,
-			    fb->ipaddr, fb->port, fb->width, fb->height,
-			    fb->vgaconf, fb->wait ? ",wait" : "");
+			if (fb->unixpath) {
+				PCISLOT(fp, "fbuf,rfb=unix:%s,w=%d,h=%d,vga=%s%s",
+				    pcid, fb->unixpath, fb->width, fb->height,
+				    fb->vgaconf, fb->wait ? ",wait" : "");
+			} else {
+				PCISLOT(fp, "fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
+				    pcid, fb->ipaddr, fb->port, fb->width,
+				    fb->height, fb->vgaconf,
+				    fb->wait ? ",wait" : "");
+			}
 			if (fb->password)
 				fprintf(fp, ",password=%s", fb->password);
 			fprintf(fp, "\n");
@@ -677,6 +684,8 @@ cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		free(vm->mapfile);
 		vm->mapfile = NULL;
 	}
+	if (vm->conf->fbuf->unixpath)
+		unlink(vm->conf->fbuf->unixpath);
 }
 
 ssize_t

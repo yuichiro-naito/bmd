@@ -184,6 +184,12 @@ Set
 .Qq yes
 to use frame a buffer device. The default is
 .Qq no .
+.It Cm graphics_path = Ar path;
+Set the vnc UNIX domain socket path. Default to unset. The
+.Ar path
+must not exist on the filesystem before booting the VM.
+This parameter takes precedence over
+.Sq graphics_listen .
 .It Cm graphics_listen = Ar address;
 Set the vnc listen address. The default value is
 .Qq 0.0.0.0 .

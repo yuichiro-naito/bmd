@@ -231,6 +231,7 @@ free_fbuf(struct fbuf *f)
 	free(f->ipaddr);
 	free(f->vgaconf);
 	free(f->password);
+	free(f->unixpath);
 	free(f);
 }
 
@@ -718,6 +719,25 @@ bool
 is_fbuf_enable(struct vm_conf *conf)
 {
 	return conf->fbuf->enable;
+}
+
+int
+set_fbuf_unixpath(struct fbuf *fb, const char *path)
+{
+	int ret;
+	if (fb == NULL)
+		return 0;
+
+	ret = set_string(&fb->unixpath, path);
+	if (ret == 0 && fb->enable < 0)
+		fb->enable = true;
+	return ret;
+}
+
+char *
+get_fbuf_unixpath(struct vm_conf *conf)
+{
+	return conf->fbuf->unixpath;
 }
 
 int
@@ -1399,9 +1419,15 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	}
 	fb = conf->fbuf;
 	if (fb->enable) {
-		fprintf(fp, "%18s = %s:%d, %dx%d, %s, %s\n", "graphics",
-		    fb->ipaddr, fb->port, fb->width, fb->height, fb->vgaconf,
-		    fb->wait ? "wait" : "nowait");
+		if (fb->unixpath) {
+			fprintf(fp, "%18s = %s, %dx%d, %s, %s\n", "graphics",
+			    fb->unixpath, fb->width, fb->height, fb->vgaconf,
+			    fb->wait ? "wait" : "nowait");
+		} else {
+			fprintf(fp, "%18s = %s:%d, %dx%d, %s, %s\n", "graphics",
+			    fb->ipaddr, fb->port, fb->width, fb->height,
+			    fb->vgaconf, fb->wait ? "wait" : "nowait");
+		}
 		fprintf(fp, fmt, "xhci_mouse", bool_str[conf->mouse]);
 		fprintf(fp, fmt, "keymap", conf->keymap);
 	}
@@ -1440,6 +1466,7 @@ compare_fbuf(const struct fbuf *a, const struct fbuf *b)
 	CMP_STR(vgaconf);
 	CMP_NUM(wait);
 	CMP_STR(password);
+	CMP_STR(unixpath);
 
 	return 0;
 }

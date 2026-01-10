@@ -908,6 +908,12 @@ parse_graphics_listen(struct vm_conf *conf, char *val)
 }
 
 static int
+parse_graphics_path(struct vm_conf *conf, char *val)
+{
+	return set_fbuf_unixpath(conf->fbuf, val);
+}
+
+static int
 parse_graphics_res(struct vm_conf *conf, char *val)
 {
 	char *p;
@@ -989,6 +995,7 @@ static struct parser_entry parser_list[] = {
 	{ "graphics", &parse_graphics, NULL },
 	{ "graphics_listen", &parse_graphics_listen, NULL },
 	{ "graphics_password", &parse_graphics_password, NULL },
+	{ "graphics_path", &parse_graphics_path, NULL },
 	{ "graphics_port", &parse_graphics_port, NULL },
 	{ "graphics_res", &parse_graphics_res, NULL },
 	{ "graphics_vga", &parse_graphics_vga, NULL },
@@ -1079,6 +1086,8 @@ check_conf(struct vm_conf *conf)
 	char *name = conf->name;
 	struct cpu_pin *cp;
 	struct hda_conf *hc;
+	struct fbuf *fb;
+	struct stat st;
 	int hw_ncpu, vmm_maxcpu;
 
 	if (name == NULL) {
@@ -1149,6 +1158,15 @@ check_conf(struct vm_conf *conf)
 		if (check_hda_dev(name, hc->play_dev) < 0 ||
 		    check_hda_dev(name, hc->rec_dev) < 0)
 			return -1;
+
+	fb = conf->fbuf;
+	if (fb->enable) {
+		if (fb->unixpath && stat(fb->unixpath, &st) == 0) {
+			ERR("%s: graphics: %s already exists\n", name,
+			    fb->unixpath);
+			return -1;
+		}
+	}
 
 	return 0;
 }

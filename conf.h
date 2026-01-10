@@ -110,6 +110,7 @@ struct fbuf {
 	int width;
 	int height;
 	int wait;
+	char *unixpath;
 };
 
 struct bhyveload_env {
@@ -289,6 +290,7 @@ int set_fbuf_res(struct fbuf *, int, int);
 int set_fbuf_vgaconf(struct fbuf *, const char *);
 int set_fbuf_wait(struct fbuf *, bool);
 int set_fbuf_password(struct fbuf *, const char *);
+int set_fbuf_unixpath(struct fbuf *, const char *);
 int set_mouse(struct vm_conf *, bool);
 int set_wired_memory(struct vm_conf *, bool);
 int set_utctime(struct vm_conf *, bool);
