@@ -384,6 +384,21 @@ err:
 }
 
 static int
+check_parameters(struct vm *vm)
+{
+	struct vm_conf *conf = vm->conf;
+	struct fbuf *fb = conf->fbuf;
+	struct stat st;
+
+	if (fb->enable && fb->unixpath && stat(fb->unixpath, &st) == 0) {
+		ERR("%s: graphics: %s already exists\n", conf->name,
+		    fb->unixpath);
+		return -1;
+	}
+	return 0;
+}
+
+static int
 exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	struct vm_conf *conf = vm->conf;
@@ -399,6 +414,9 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	int outfd[2], errfd[2];
 	char *com0 = vm->assigned_com[0];
 	bool dopipe = (com0 == NULL || strcasecmp(com0, "stdio") != 0);
+
+	if (check_parameters(vm) < 0)
+		return -1;
 
 	if (dopipe) {
 		if (pipe(outfd) < 0) {
