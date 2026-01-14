@@ -1089,6 +1089,7 @@ check_conf(struct vm_conf *conf)
 	struct fbuf *fb;
 	struct stat st;
 	int hw_ncpu, vmm_maxcpu;
+	struct vm_entry *vm_ent;
 
 	if (name == NULL) {
 		ERR("%s\n", "vm name is required");
@@ -1161,7 +1162,9 @@ check_conf(struct vm_conf *conf)
 
 	fb = conf->fbuf;
 	if (fb->enable) {
-		if (fb->unixpath && stat(fb->unixpath, &st) == 0) {
+		if (fb->unixpath && stat(fb->unixpath, &st) == 0 &&
+		    ((vm_ent = lookup_vm_by_name(name)) == NULL ||
+			!VM_IS_RUNNING(vm_ent))) {
 			ERR("%s: graphics: %s already exists\n", name,
 			    fb->unixpath);
 			return -1;

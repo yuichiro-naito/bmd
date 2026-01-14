@@ -139,6 +139,7 @@ enum EVENT_TYPE { EVENT, PLUGIN };
 #define VM_PID(v)	  ((v)->vm.pid)
 #define VM_TAPS(v)	  (&(v)->vm.taps)
 #define VM_STATE(v)	  ((v)->vm.state)
+#define VM_IS_RUNNING(v)  ((v)->vm.state > TERMINATE && (v)->vm.state < PRESTART)
 #define VM_SAVE_STATE(v)  ((v)->saved_state = VM_STATE(v))
 #define VM_SAVED_STATE(v) ((v)->saved_state)
 #define VM_MAPFILE(v)	  ((v)->vm.mapfile)
