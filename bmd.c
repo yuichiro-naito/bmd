@@ -601,60 +601,37 @@ static int
 open_err_logfile(struct vm_conf *conf)
 {
 	int fd;
-	pid_t pid;
-	int socks[2];
+	uid_t ouid;
+	gid_t ogid;
 	struct stat st;
 	int64_t group;
 	struct passwd *pwd;
 
-	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0)
-		return -1;
+	if (conf->owner > 0) {
+		if ((group = conf->group) == -1)
+			group = (pwd = getpwuid((uid_t)conf->owner)) ?
+				pwd->pw_gid :
+				GID_NOBODY;
 
-	if ((pid = fork()) < 0) {
-		close(socks[0]);
-		close(socks[1]);
-		return -1;
+		ogid=getgid();
+		ouid=getuid();
+		setegid((gid_t)group);
+		seteuid((uid_t)conf->owner);
 	}
 
-	if (pid == 0) {
-		setproctitle("err_logfile opener");
-		close(socks[0]);
-		if (conf->owner > 0) {
-			if ((group = conf->group) == -1)
-				group = (pwd = getpwuid((uid_t)conf->owner)) ?
-				    pwd->pw_gid :
-				    GID_NOBODY;
-
-			setgid((gid_t)group);
-			setuid((uid_t)conf->owner);
-		}
-
-		while (
-		    (fd = open(conf->err_logfile,
-			 O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644)) < 0)
-			if (errno != EINTR)
-				break;
-
-		if (fd >= 0 && (fstat(fd, &st) < 0 || (!S_ISREG(st.st_mode)))) {
-			close(fd);
-			fd = -1;
-		}
-
-		send_fd(socks[1], fd);
-		recv_ack(socks[1]);
-		close(socks[1]);
-		exit(0);
-	}
-
-	close(socks[1]);
-
-	fd = recv_fd(socks[0]);
-	send_ack(socks[0]);
-	while (waitpid(pid, NULL, 0) < 0)
+	while ((fd = open(conf->err_logfile,
+		    O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644)) < 0)
 		if (errno != EINTR)
 			break;
 
-	close(socks[0]);
+	if (fd >= 0 && (fstat(fd, &st) < 0 || (!S_ISREG(st.st_mode)))) {
+		close(fd);
+		fd = -1;
+	}
+	if (conf->owner > 0) {
+		seteuid(ouid);
+		setegid(ogid);
+	}
 	if (fd < 0)
 		ERR("%s: failed to open %s\n", conf->name, conf->err_logfile);
 	return fd;
