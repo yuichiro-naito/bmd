@@ -1,4 +1,8 @@
 * 3.6
+	- Introduce `bmdctl show` subcommand.
+	- Obsoleted `showconsole showvgaport showconfig` subcommand.
+	- Add support of virtio-console.
+	  (80b42221374031676ed4fe8c79a9c39a999e1a73)
 	- Add support of 'graphics_path'.
 	  (d8327e64113b57455ea156560796e9ed750c8bab)
 	- Add error check for a single value parameter.
