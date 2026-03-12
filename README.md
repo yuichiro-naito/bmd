@@ -430,9 +430,12 @@ Following subcommands are available.
 | com[1-4] | VM name | open the com[1-4] device and emulate `cu -l` |
 | vconsole[N] | VM name | open the Nth virtio-console device and emulate `cu -l` |
 | vconsole[N].[M] | VM name | open the Mth port of Nth virtio-console controller and emulate `cu -l` |
-| showconsole | VM name | show current console device to connect in |
-| showvgaport | VM name | show current vnc listen address and port number |
-| showconfig | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
+| show com[1-4] | VM name | show current com[1-4] device to connect in |
+| show console | VM name | show current console device to connect in |
+| show vgaport | VM name | show current vnc listen address and port number |
+| show vconsole[N] | VM name | show current Nth virt_console port to connect in |
+| show vconsole[N].[M] | VM name | show current Mth port of Nth controller to connect in |
+| show config | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
 | inspect | VM name | run auto inspection manually |
 | run | [-i] [-s] VM name | boot directly with serial console that is redirect to stdio.<br>VM booted from this subcommand is independent from bmd.<br>-i: install mode<br>-s: single user mode|
 | list  | [-r] [-s colname] | list VMs sorted by 'colname' |
