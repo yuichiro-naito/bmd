@@ -43,15 +43,35 @@ name
 name
 .Nm
 .Op Fl f config_file
-.Cm showconsole
+.Cm vconsole[N]
 name
 .Nm
 .Op Fl f config_file
-.Cm showvgaport
+.Cm vconsole[N].[M]
 name
 .Nm
 .Op Fl f config_file
-.Cm showconfig
+.Cm show com[1-4]
+name
+.Nm
+.Op Fl f config_file
+.Cm show console
+name
+.Nm
+.Op Fl f config_file
+.Cm show vgaport
+name
+.Nm
+.Op Fl f config_file
+.Cm show vconsole[N]
+name
+.Nm
+.Op Fl f config_file
+.Cm show vconsole[N].[M]
+name
+.Nm
+.Op Fl f config_file
+.Cm show config
 .Op name
 .Nm
 .Op Fl f config_file
@@ -121,11 +141,26 @@ Connect to the console (com1) of the virtual machine. See ESCAPE SEQUENCES
 below.
 .It Cm com[1-4] Ar name
 Connect to the com[1-4] of the virtual machine. See ESCAPE SEQUENCES below.
-.It Cm showconsole Ar name
+.It Cm vconsole[N] Ar name
+Connect to the Nth virt_console of the virtual machine, where N starts with 0.
+The maximum of N is the total number of virt_console ports among all controllers
+minus 1.
+See ESCAPE SEQUENCES below.
+.It Cm vconsole[N].[M] Ar name
+Connect to the Mth port of the Nth virt_console controller of the virtual machine,
+where N and M are between 0 and 15.
+See ESCAPE SEQUENCES below.
+.It Cm show com[1-4] Ar name
+Print the com[1-4] device file. (nmdm)
+.It Cm show console Ar name
 Print the console device file. (nmdm)
-.It Cm showvgaport Ar name
+.It Cm show vgaport Ar name
 Print the vnc listen address and port number that are separated by space.
-.It Cm showconfig Op Ar name
+.It Cm show vconsole[N] Ar name
+Print the Nth virt_console Unix Domain Socket path.
+.It Cm show vconsole[N].[M] Ar name
+Print the Mth port of Nth virt_console controller's Unix Domain Socket path.
+.It Cm show config Op Ar name
 Parse the configuration file and show virtual machine configurations. This is
 for debugging the configuration parser.
 .It Cm inspect Ar name

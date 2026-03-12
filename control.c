@@ -41,6 +41,7 @@
 #include <unistd.h>
 
 #include "bmd.h"
+#include "conf.h"
 #include "inspect.h"
 #include "log.h"
 #include "server.h"
@@ -51,17 +52,22 @@ usage(int argc __unused, char *argv[])
 {
 	printf(
 	    "usage: %s [-f config_file] <subcommand>\n"
-	    "  boot [-c] <name>         : boot VM\n"
-	    "  install [-c] <name>      : install VM from ISO image\n"
-	    "  shutdown <name>          : ACPI shutdown VM\n"
-	    "  poweroff <name>          : poweroff VM\n"
-	    "  reset <name>             : reset VM\n"
-	    "  console <name>           : connect to com1 port\n"
-	    "  com[1-4] <name>          : connect to com[1-4] port\n"
-	    "  showconsole <name>       : show console\n"
-	    "  showvgaport <name>       : show vgaport\n"
-	    "  showconfig [<name>]      : show VM config\n"
-	    "  inspect <name>           : inspect and print installcmd & loadcmd\n"
+	    "  boot [-c] <name>            : boot VM\n"
+	    "  install [-c] <name>         : install VM from ISO image\n"
+	    "  shutdown <name>             : ACPI shutdown VM\n"
+	    "  poweroff <name>             : poweroff VM\n"
+	    "  reset <name>                : reset VM\n"
+	    "  console <name>              : connect to com1 port\n"
+	    "  com[1-4] <name>             : connect to com[1-4] port\n"
+	    "  vconsole<N>.<0-15>          : connect to virt_consoleN's port \n"
+	    "  vconsole<N>                 : connect to Nth virt_console port\n"
+	    "  show console <name>         : show console\n"
+	    "  show com[1-4] <name>        : show comN\n"
+	    "  show vconsole<N> <name>     : show vconsoleN\n"
+	    "  show vconsole<N>.<M> <name> : show vconsoleN.M\n"
+	    "  show vgaport <name>         : show vgaport\n"
+	    "  show config [<name>]        : show VM config\n"
+	    "  inspect <name>              : inspect and print installcmd & loadcmd\n"
 	    "  run [-i] [-s] <name>     : directly run with serial console\n"
 	    "  list [-r] [-s <colname>] : list VM name & status\n",
 	    argv[0]);
@@ -478,8 +484,8 @@ end:
  * boot_style= 0: showconsole, 1: boot, 2: install
  */
 static int
-do_boot_console(const char *name, unsigned int boot_style, bool console,
-    bool show)
+do_boot_console(const char *name, const char *port, unsigned int boot_style,
+    bool console, bool show)
 {
 	int ret;
 	nvlist_t *cmd, *res = NULL;
@@ -492,7 +498,7 @@ do_boot_console(const char *name, unsigned int boot_style, bool console,
 	cmd = nvlist_create(0);
 	nvlist_add_string(cmd, "command", command[boot_style]);
 	nvlist_add_string(cmd, "name", name);
-	nvlist_add_string(cmd, "port", "com1");
+	nvlist_add_string(cmd, "port", port ? port : "com1");
 
 	if ((res = send_recv(cmd)) == NULL) {
 		ret = 1;
@@ -620,7 +626,7 @@ sub_boot_install(int argc, char *argv[])
 
 	if ((name = argv[optind]) == NULL)
 		return 2;
-	return do_boot_console(name, boot_style, console, false);
+	return do_boot_console(name, NULL, boot_style, console, false);
 }
 
 static int
@@ -675,7 +681,7 @@ sub_showconsole(int argc, char *argv[])
 {
 	if (argc < 2)
 		return 2;
-	return do_boot_console(argv[1], 0, false, true);
+	return do_boot_console(argv[1], NULL, 0, false, true);
 }
 
 static int
@@ -690,6 +696,31 @@ static int
 sub_showconfig(int argc, char *argv[])
 {
 	return do_showconfig(argc > 1 ? argv[1] : NULL);
+}
+
+static int
+sub_show(int argc, char *argv[])
+{
+	if (strcmp(argv[1], "config") == 0)
+		return do_showconfig(argc > 2 ? argv[2] : NULL);
+
+	if (argc < 3)
+		return 3;
+
+	if (strcmp(argv[1], "vgaport") == 0)
+		return do_show_vgaport(argv[1]);
+
+	if (strncmp(argv[1], "com", 3) == 0 && argv[1][3] > '0' &&
+	    argv[1][3] < '5' )
+		return do_boot_console(argv[2], argv[1], 0, false, true);
+
+	if (strcmp(argv[1], "console") == 0)
+		return do_boot_console(argv[2], "com1", 0, false, true);
+
+	if (strncmp(argv[1], "vconsole", 8) == 0)
+		return do_boot_console(argv[2], argv[1], 0, false, true);
+	printf("invalid command 'show %s'.\n", argv[1]);
+	return -1;
 }
 
 static int
@@ -770,6 +801,7 @@ static struct subcommand {
 	{ "poweroff", sub_send_recv },
 	{ "reset", sub_send_recv },
 	{ "run", sub_run },
+	{ "show", sub_show },
 	{ "showconfig", sub_showconfig },
 	{ "showconsole", sub_showconsole },
 	{ "showvgaport", sub_showvgaport },
@@ -815,9 +847,11 @@ control(int argc, char *argv[])
 
 	sbc = bsearch(argv[0], subcommand_table, nitems(subcommand_table),
 	    sizeof(subcommand_table[0]), compare_subcommand);
-	if (sbc == NULL)
+	if (sbc == NULL) {
+		if (strncmp(argv[0], "vconsole", 8) == 0 && argc > 1)
+			return do_console(argv[1], argv[0]);
 		return usage(oargc, oargv);
-
+	}
 	rc = sbc->func(argc, argv);
 	if (rc == 2)
 		return usage(oargc, oargv);

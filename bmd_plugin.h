@@ -103,6 +103,10 @@ enum STATE {
 	for ((be) = get_bhyve_env((conf)); (be) != NULL; \
 	     (be) = next_bhyve_env((be)))
 
+#define VIRT_CONSOLE_FOREACH(c, p, conf) \
+	for ((c) = 0; (c) < get_virt_console_ncontrollers(conf); (c)++)	\
+		for ((p) = 0; (p) < get_virt_console_nports(conf); (p)++)
+
 int get_infd(struct vm *);
 int get_outfd(struct vm *);
 int get_errfd(struct vm *);
@@ -184,6 +188,11 @@ struct cpu_pin *get_cpu_pin(struct vm_conf *);
 struct cpu_pin *next_cpu_pin(struct cpu_pin *);
 int get_cpu_pin_vcpu(struct cpu_pin *);
 int get_cpu_pin_hostcpu(struct cpu_pin *);
+int get_virt_console_ncontrollers(struct vm_conf *);
+int get_virt_console_nports(struct vm_conf *);
+char *get_virt_console_default_template(struct vm_conf *);
+char *get_virt_console_template(struct vm_conf *);
+char *get_virt_console_port(struct vm *, int, int);
 int get_loader_timeout(struct vm_conf *);
 int get_stop_timeout(struct vm_conf *);
 char *get_grub_run_partition(struct vm_conf *);

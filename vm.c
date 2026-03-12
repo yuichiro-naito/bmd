@@ -411,7 +411,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	struct cpu_pin *cp;
 	struct hda_conf *hc;
 	pid_t pid;
-	int outfd[2], errfd[2];
+	int i, j, k, outfd[2], errfd[2];
 	char *com0 = vm->assigned_com[0];
 	bool dopipe = (com0 == NULL || strcasecmp(com0, "stdio") != 0);
 
@@ -557,6 +557,12 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 				fprintf(fp, ",rec=%s", hc->rec_dev);
 			fprintf(fp, "\n");
 		}
+		for (i = 0, k = 0; i < conf->virt_console_ncontrollers; i++) {
+			PCISLOT(fp, "virtio-console", pcid, NULL);
+			for (j = 0; j < conf->virt_console_nports; j++, k++)
+				fprintf(fp, ",%s", vm->virt_console_paths[k]);
+			fprintf(fp, "\n");
+                }
 		if (conf->fbuf->enable) {
 			struct fbuf *fb = conf->fbuf;
 			if (fb->unixpath) {
@@ -683,27 +689,7 @@ acpi_poweroff_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 static void
 cleanup_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
-#define VM_CLOSE_FD(fd)                \
-	do {                           \
-		if (vm->fd != -1) {    \
-			close(vm->fd); \
-			vm->fd = -1;   \
-		}                      \
-	} while (0)
-
-	VM_CLOSE_FD(infd);
-	VM_CLOSE_FD(outfd);
-	VM_CLOSE_FD(errfd);
-	VM_CLOSE_FD(logfd);
-#undef VM_CLOSE_FD
 	destroy_bhyve(vm);
-	if (vm->mapfile) {
-		unlink(vm->mapfile);
-		free(vm->mapfile);
-		vm->mapfile = NULL;
-	}
-	if (vm->conf->fbuf->unixpath)
-		unlink(vm->conf->fbuf->unixpath);
 }
 
 ssize_t

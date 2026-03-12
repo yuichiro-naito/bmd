@@ -27,6 +27,7 @@
  */
 #include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,6 +35,11 @@
 #include "bmd_plugin.h"
 #include "conf.h"
 #include "log.h"
+
+#define VIRT_CONSOLE_DEFAULT_PORTNAME "virt_console%%n"
+#define VIRT_CONSOLE_DEFAULT_PATHNAME "/var/run/vc-%s%%n.sock"
+#define VIRT_CONSOLE_DEFAULT_TEMPLATE \
+	VIRT_CONSOLE_DEFAULT_PORTNAME "=" VIRT_CONSOLE_DEFAULT_PATHNAME
 
 #define CMP(a, b) ((a) < (b) ? -1 : ((a) == (b) ? 0 : 1))
 #define CMP_RETURN(a, b) \
@@ -313,6 +319,8 @@ free_vm_conf(struct vm_conf *vc)
 	free(vc->tpm_type);
 	free(vc->tpm_version);
 	clear_hda_conf(vc);
+	free(vc->virt_console_default_template);
+	free(vc->virt_console_template);
 	free(vc);
 }
 
@@ -650,7 +658,31 @@ set_string(char **var, const char *value)
 }
 
 generate_getter(unsigned int, id);
-generate_string_accessor(name);
+generate_getter(char *, name);
+
+int
+set_name(struct vm_conf *c, const char *v)
+{
+	char *t, *n;
+
+	if (c == NULL)
+		return -1;
+
+	asprintf(&t, VIRT_CONSOLE_DEFAULT_TEMPLATE, v);
+	n = strdup(v);
+	if (t == NULL || n == NULL)
+		goto err;
+	free(c->virt_console_default_template);
+	c->virt_console_default_template = t;
+	free(c->name);
+	c->name = n;
+	return 0;
+err:
+	free(t);
+	free(n);
+	return -1;
+}
+
 generate_string_accessor(loadcmd);
 generate_string_accessor(installcmd);
 generate_string_accessor(err_logfile);
@@ -661,6 +693,36 @@ generate_number_accessor(int, stop_timeout);
 generate_string_accessor(grub_run_partition);
 generate_string_accessor(debug_port);
 generate_string_accessor(memory);
+generate_number_accessor(int, virt_console_ncontrollers);
+generate_number_accessor(int, virt_console_nports);
+generate_string_accessor(virt_console_default_template);
+
+char *
+get_virt_console_template(struct vm_conf *c)
+{
+	return c->virt_console_template ? c->virt_console_template :
+		c->virt_console_default_template;
+}
+
+int
+set_virt_console_template(struct vm_conf *c, const char *v)
+{
+	char *p;
+
+	if (c == NULL)
+		return -1;
+
+	if (strchr(v, '=') == NULL) {
+		if (asprintf(&p, "%s=" VIRT_CONSOLE_DEFAULT_PATHNAME,
+			v, c->name) < 0)
+			return -1;
+		free(c->virt_console_template);
+		c->virt_console_template = p;
+		return 0;
+	}
+
+	return set_string(&c->virt_console_template, v);
+}
 
 int
 set_ncpu(struct vm_conf *conf, int ncpu)
@@ -1005,7 +1067,7 @@ err:
 struct vm_conf *
 create_vm_conf(const char *vm_name)
 {
-	char *name, *backend, idnum[12];
+	char *name, *backend, idnum[12], *vct;
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
 	unsigned int id;
@@ -1016,8 +1078,9 @@ create_vm_conf(const char *vm_name)
 	name = strdup(vm_name);
 	backend = strdup("bhyve");
 	local = malloc(sizeof(*local));
+	asprintf(&vct, VIRT_CONSOLE_DEFAULT_TEMPLATE, vm_name);
 	if (ret == NULL || fbuf == NULL || name == NULL || backend == NULL ||
-	    local == NULL)
+	    local == NULL || vct == NULL)
 		goto err;
 
 	RB_INIT(local);
@@ -1050,6 +1113,7 @@ create_vm_conf(const char *vm_name)
 	ret->utctime = true;
 	ret->backend = backend;
 	ret->group = -1;
+	ret->virt_console_default_template = vct;
 
 	STAILQ_INIT(&ret->disks);
 	STAILQ_INIT(&ret->isoes);
@@ -1063,6 +1127,7 @@ create_vm_conf(const char *vm_name)
 	return ret;
 err:
 	ERR("failed to create VM config! (%s)\n", strerror(errno));
+	free(vct);
 	free(local);
 	free(ret);
 	free(backend);
@@ -1079,6 +1144,11 @@ finalize_vm_conf(struct vm_conf *conf)
 
 	if (conf->fbuf->enable < 0)
 		conf->fbuf->enable = false;
+
+	/* Assign at least one controller if virt_console port is specified */
+	if (conf->virt_console_ncontrollers == 0 &&
+	    conf->virt_console_nports > 0)
+		conf->virt_console_ncontrollers++;
 
 	return 0;
 }
@@ -1119,7 +1189,7 @@ capitalize(char *buf, size_t bufsize, const char *str)
 int
 vm_conf_export_env(struct vm_conf *conf)
 {
-	int i;
+	int i, j;
 	struct disk_conf *dc;
 	struct iso_conf *ic;
 	struct net_conf *nc;
@@ -1267,6 +1337,12 @@ vm_conf_export_env(struct vm_conf *conf)
 			    hc->rec_dev);
 		i++;
 	}
+	vputenv(ENV_PREFIX "VIRT_CONSOLE_NCONTROLLERS=%d",
+	    conf->virt_console_ncontrollers);
+	vputenv(ENV_PREFIX "VIRT_CONSOLE_NPORTS=%d", conf->virt_console_nports);
+	VIRT_CONSOLE_FOREACH(i, j, conf)
+		vputenv(ENV_PREFIX "VIRT_CONSOLE_PATH%d.%d=%s", i, j,
+			get_virt_console_sockpath(vm, i, j));
 	fb = conf->fbuf;
 	vputenv(ENV_PREFIX "GRAPHICS=%s", bool_str[fb->enable]);
 	if (fb->enable) {
@@ -1329,6 +1405,10 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 			    CONF_COM_NUM(com, conf->com));
 			fprintf(fp, fmt, buf, *com);
 		}
+	fprintf(fp, dfmt, "virt_console_ncontrollers",
+	    conf->virt_console_ncontrollers);
+	fprintf(fp, dfmt, "virt_console_nports", conf->virt_console_nports);
+	fprintf(fp, fmt, "virt_console_template", conf->virt_console_template);
 	fprintf(fp, fmt, "debug_port", conf->debug_port);
 	fprintf(fp, fmt, "boot", btype[conf->boot]);
 	fprintf(fp, dfmt, "boot_delay", conf->boot_delay);
@@ -1655,6 +1735,10 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_STR(tpm_dev);
 	CMP_STR(tpm_type);
 	CMP_STR(tpm_version);
+	CMP_STR(virt_console_default_template);
+	CMP_STR(virt_console_template);
+	CMP_NUM(virt_console_ncontrollers);
+	CMP_NUM(virt_console_nports);
 
 	return 0;
 }

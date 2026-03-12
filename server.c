@@ -47,6 +47,7 @@
 #include <unistd.h>
 
 #include "bmd.h"
+#include "conf.h"
 #include "log.h"
 #include "server.h"
 #include "vm.h"
@@ -622,22 +623,27 @@ connect_to_comport(const char *comport)
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_socktype = SOCK_STREAM;
 
-	if (comport[0] == '[') {
+	if (strncmp(comport,"tcp=[", 5) == 0) {
 		hints.ai_family = AF_INET6;
-		hs = &comport[1];
+		hs = &comport[5];
 		if ((he = strchr(hs, ']')) == NULL || he[1] != ':')
 			return -1;
 		ps = &he[2];
-	} else {
+	} else if (strncmp(comport,"tcp=", 4) == 0) {
 		hints.ai_family = AF_INET;
 		hs = comport;
 		if ((he = strchr(hs, ':')) == NULL)
 			return -1;
 		ps = &he[1];
+	} else {
+		hints.ai_family = AF_UNIX;
+		hs = comport;
+		he = strchr(comport, '\0');
+		ps = NULL;
 	}
 	host = strndup(hs, he - hs);
-	port = strdup(ps);
-	if (host == NULL || port == NULL)
+	port = ps ? strdup(ps) : NULL;
+	if (host == NULL)
 		goto err;
 
 	ARRAY_FOREACH(p, replace_host)
@@ -680,7 +686,7 @@ open_comport(const char *c)
 {
 	if (c == NULL)
 		return -1;
-	return (IS_NMDM(c)) ? open_comport_fd(c) : connect_to_comport(&c[4]);
+	return (IS_NMDM(c)) ? open_comport_fd(c) : connect_to_comport(c);
 }
 
 struct com_opener *
@@ -951,13 +957,49 @@ install_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 	return boot0_command(s, nv, 1, ucred);
 }
 
+static char *
+get_com_port(struct vm_entry *vm_ent, const char *port)
+{
+	struct vm_conf *conf = VM_CONF(vm_ent);
+	char *cons, *ep;
+	int i, v[2];
+
+	if (strncmp(port, "com", 3) == 0 && port[3] > '0' && port[3] < '5') {
+		i = port[3] - '1';
+		cons = VM_ASCOM(vm_ent)[i] ? VM_ASCOM(vm_ent)[i] :
+					conf->com[i];
+		return get_peer_comport(cons);
+	}
+
+	if (strncmp(port, "vconsole", 8) == 0) {
+		if (port[strlen("vconsole")] == '\0')
+			return NULL;
+		v[0] = strtol(&port[8], &ep, 10);
+		if (*ep == '\0') {
+			cons = get_virt_console_sockpath(VM_PTR(vm_ent),
+			    v[0] / conf->virt_console_nports,
+			    v[0] % conf->virt_console_nports);
+			return cons ? strdup(cons) : NULL;
+		} else if (*ep == '.') {
+			v[1] = strtol(ep + 1, &ep, 10);
+			if (*ep != '\0')
+				return NULL;
+			cons = get_virt_console_sockpath(VM_PTR(vm_ent),
+			    v[0], v[1]);
+			return cons ? strdup(cons) : NULL;
+		}
+	}
+
+	return NULL;
+}
+
 static nvlist_t *
 showconsole_command(struct sock_buf *s, const nvlist_t *nv,
     struct xucred *ucred)
 {
 	const char *name, *port, *reason;
 	struct vm_entry *vm_ent;
-	int pnum, rc = -1;
+	int rc = -1;
 	nvlist_t *res;
 	bool error = false;
 	char *cons = NULL;
@@ -972,17 +1014,14 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 		goto ret;
 	}
 
+
 	if ((port = nvlist_get_string(nv, "port")) == NULL ||
-	    strncmp(port, "com", 3) != 0 || port[3] < '1' || port[3] > '4') {
+	    (cons = get_com_port(vm_ent, port)) == NULL) {
 		error = true;
 		reason = "invalid port";
 		goto ret;
 	}
-	pnum = port[3] - '1';
 
-	cons = VM_ASCOM(vm_ent)[pnum] ? VM_ASCOM(vm_ent)[pnum] :
-					VM_CONF(vm_ent)->com[pnum];
-	cons = get_peer_comport(cons);
 	if (VM_STATE(vm_ent) == PRESTART || VM_STATE(vm_ent) == LOAD ||
 	    VM_STATE(vm_ent) == RUN) {
 		chown_comport(cons, ucred);

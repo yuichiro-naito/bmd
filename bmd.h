@@ -236,6 +236,7 @@ void free_vm_conf_entry(struct vm_conf_entry *);
 struct vm_entry *lookup_vm_by_name(const char *);
 int set_timer(struct vm_entry *, int);
 int start_virtual_machine(struct vm_entry *);
+char *get_virt_console_sockpath(struct vm *, int, int);
 
 int direct_run(const char *, bool, bool);
 

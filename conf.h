@@ -42,6 +42,9 @@
 #define ETHER_FORMAT_LEN (3 * 5 + 2)
 
 #define NCOM 4
+#define VIRT_CONSOLE_MAX_CONTROLLERS 16
+#define VIRT_CONSOLE_MAX_PORTS 16
+
 
 struct global_conf {
 	char *config_file;
@@ -204,6 +207,10 @@ struct vm_conf {
 	bool x2apic;
 	int nhdas;
 	STAILQ_HEAD(, hda_conf) hdas;
+	int virt_console_ncontrollers;
+	int virt_console_nports;
+	char *virt_console_default_template;
+	char *virt_console_template;
 };
 
 struct vm {
@@ -220,6 +227,9 @@ struct vm {
 	int errfd;
 	int logfd;
 	int ntaps;
+	int virt_console_npaths;
+	char *virt_console_random;
+	char **virt_console_paths;
 };
 
 #define ARRAY_FOREACH(p, a)	for (p = &a[0]; p < &a[nitems(a)]; p++)
@@ -283,6 +293,10 @@ int set_com(struct vm_conf *, unsigned int, const char *);
 int set_reboot_on_change(struct vm_conf *, bool);
 int set_single_user(struct vm_conf *, bool);
 int set_install(struct vm_conf *, bool);
+int set_virt_console_ncontrollers(struct vm_conf *, int);
+int set_virt_console_nports(struct vm_conf *, int);
+int set_virt_console_default_template(struct vm_conf *, const char *);
+int set_virt_console_template(struct vm_conf *, const char *);
 int set_fbuf_enable(struct fbuf *, bool);
 int set_fbuf_ipaddr(struct fbuf *, const char *);
 int set_fbuf_port(struct fbuf *, int);

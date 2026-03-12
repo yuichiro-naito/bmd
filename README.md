@@ -197,6 +197,9 @@ Following keys are available.
 | tpm | TPM device name | no | (none) |
 | utctime | "yes": RTC keeps UTC time<br>"no" : RTC keeps localtime | no | yes |
 | virt_random | "yes": add virtio_random device | no | no |
+| virt_console_ncontrollers | number of virtio-console controllers | no | no |
+| virt_console_nports | number of ports per controller | no | no |
+| virt_console_template | template of port name and unix domain socket<br>e.g. vcons%n=/var/run/vc-${NAME}%n.sock | no | no |
 | wired_memory | set "yes" to wire VM memory | no | no |
 | x2apic | "yes": enable x2APIC | no | no |
 | xhci_mouse | set "yes" to use xhci tablet | no | no |
@@ -425,6 +428,8 @@ Following subcommands are available.
 | reset | VM name | force to reset VM<br>***Warning: damage to disk image*** |
 | console | VM name | open the com1 device and emulate `cu -l` |
 | com[1-4] | VM name | open the com[1-4] device and emulate `cu -l` |
+| vconsole[N] | VM name | open the Nth virtio-console device and emulate `cu -l` |
+| vconsole[N].[M] | VM name | open the Mth port of Nth virtio-console controller and emulate `cu -l` |
 | showconsole | VM name | show current console device to connect in |
 | showvgaport | VM name | show current vnc listen address and port number |
 | showconfig | [VM name] | run configuration parser manually and print configurations. No effects for running bmd. |
@@ -440,7 +445,6 @@ The following devices are unsupported for now. If you desire to use these
 devices, feel free to create an issue in this GitHub repository.
 
 * virtio-scsi
-* virtio-console
 * virtio-input
 
 ## 2. WoL password is ignored.

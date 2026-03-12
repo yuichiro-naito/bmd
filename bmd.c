@@ -48,6 +48,7 @@
 
 #include "bmd.h"
 #include "bmd_plugin.h"
+#include "conf.h"
 #include "log.h"
 #include "server.h"
 #include "vm.h"
@@ -98,6 +99,9 @@ static void stop_virtual_machine(struct vm_entry *);
 static void free_vm_entry(struct vm_entry *);
 static int boot_virtual_machine(struct vm_entry *);
 static void trigger_signal(struct vm_entry *);
+static int allocate_virt_console(struct vm *);
+static void clear_virt_console(struct vm *);
+static void remove_vm_filedescs(struct vm_entry *);
 
 static int
 create_eventq(void)
@@ -852,6 +856,7 @@ on_vm_exit(int ident __unused, void *data)
 			(strcmp(VM_CONF(vm_ent)->backend, "bhyve") == 0 &&
 			    WEXITSTATUS(status) == 0))) {
 			VM_STATE(vm_ent) = PRESTART;
+			remove_vm_filedescs(vm_ent);
 			boot_virtual_machine(vm_ent);
 			break;
 		}
@@ -1334,6 +1339,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 	stop_waiting_for(vm_entry, vm_ent);
 	LIST_FOREACH_SAFE(t, VM_SIGTARGETS(vm_ent), next, nt)
 		free(t);
+	clear_virt_console(VM_PTR(vm_ent));
 	free(VM_MAPFILE(vm_ent));
 	free(VM_BOOTROM(vm_ent));
 	free(VM_VARSFILE(vm_ent));
@@ -1577,8 +1583,50 @@ assign_com(struct vm_entry *vm_ent, unsigned int cid)
 }
 
 static void
+remove_vm_filedescs(struct vm_entry *vm_ent)
+{
+	struct vm *vm = VM_PTR(vm_ent);
+	struct event *ev, *evn;
+	struct kevent *kev;
+
+#define VM_CLOSE_FD(fd)                \
+	do {                           \
+		if (vm->fd != -1) {    \
+			close(vm->fd); \
+			vm->fd = -1;   \
+		}                      \
+	} while (0)
+
+	VM_CLOSE_FD(infd);
+	VM_CLOSE_FD(outfd);
+	VM_CLOSE_FD(errfd);
+	VM_CLOSE_FD(logfd);
+	LIST_FOREACH_SAFE(ev, &event_list, next, evn) {
+		kev = &ev->kev;
+		if (ev->data != vm_ent || kev->filter != EVFILT_READ ||
+		    ((int)kev->ident != vm->infd &&
+			(int)kev->ident != vm->outfd &&
+			(int)kev->ident != vm->errfd &&
+			(int)kev->ident != vm->logfd))
+			continue;
+		/*
+		 * No need to remove fd from kqueue.
+		 * It's already closed.
+		 */
+		LIST_REMOVE(ev, next);
+		free(ev);
+	}
+#undef VM_CLOSE_FD
+
+	clear_virt_console(vm);
+	if (vm->conf->fbuf->unixpath)
+		unlink(vm->conf->fbuf->unixpath);
+}
+
+static void
 cleanup_virtual_machine(struct vm_entry *vm_ent)
 {
+	remove_vm_filedescs(vm_ent);
 	remove_taps(VM_PTR(vm_ent));
 	VM_CLEANUP(vm_ent);
 	VM_STATE(vm_ent) = TERMINATE;
@@ -1646,6 +1694,158 @@ clear_assigned_com(char *old[NCOM], char *new[NCOM], char *assigned[NCOM])
 			assigned[i] = NULL;
 		}
 	}
+}
+
+static void
+clear_virt_console(struct vm *vm)
+{
+	char **p, *sep;
+
+	free(vm->virt_console_random);
+	vm->virt_console_random = NULL;
+	if (vm->virt_console_paths != NULL) {
+		for (p = vm->virt_console_paths;
+		     p < &vm->virt_console_paths[vm->virt_console_npaths];
+		     p++) {
+			if (*p == NULL)
+				continue;
+			if ((sep = strchr(*p, '=')) != NULL)
+				unlink(sep + 1);
+			free(*p);
+		}
+		free(vm->virt_console_paths);
+		vm->virt_console_paths = NULL;
+	}
+	vm->virt_console_npaths = 0;
+}
+
+char *
+get_virt_console_sockpath(struct vm *vm, int ci, int pi)
+{
+	char *s, *port = get_virt_console_port(vm, ci, pi);
+	if (port && (s = strchr(port, '=')) != NULL)
+		return s + 1;
+	return NULL;
+}
+
+static char *
+remove_whitespace(char *s)
+{
+	char *p, *q;
+
+	for (p = q = s; *q != '\0'; q++)
+		if (!isspace(*q))
+			*p++ = *q;
+	*p = '\0';
+
+	return s;
+}
+
+char *
+get_virt_console_port(struct vm *vm, int ci, int pi)
+{
+	struct vm_conf *conf = vm->conf;
+	FILE *out;
+	const char *p, *tmpl;
+	char *ret;
+	int idx;
+	size_t sz;
+
+	if (ci < 0 || ci >= conf->virt_console_ncontrollers ||
+	    pi < 0 || pi >= conf->virt_console_nports)
+		return NULL;
+
+	/* allocate virt_console_paths while VM is terminated. */
+	if (vm->virt_console_paths == NULL && allocate_virt_console(vm) < 0)
+		return NULL;
+
+	idx = ci * conf->virt_console_nports + pi;
+	if (vm->virt_console_paths[idx] != NULL)
+		return vm->virt_console_paths[idx];
+
+	if ((out = open_memstream(&ret, &sz)) == NULL)
+		return NULL;
+	tmpl = get_virt_console_template(conf);
+	for (p = tmpl; *p != '\0'; p++) {
+		if (*p == '%') {
+			p++;
+			switch (*p) {
+			case '\0':
+				fputc('%', out);
+				goto loop_end;
+			case 'c':
+				fprintf(out, "%d", ci);
+				break;
+			case 'n':
+				fprintf(out, "%d", idx);
+				break;
+			case 'p':
+				fprintf(out, "%d", pi);
+				break;
+			case 'r':
+				fprintf(out, "%s", vm->virt_console_random);
+				break;
+			case '%':
+				fputc('%', out);
+				break;
+			default:
+				fputc('%', out);
+				fputc(*p, out);
+			}
+		} else
+			  fputc(*p, out);
+	}
+loop_end:
+
+	fclose(out);
+	ret = remove_whitespace(ret);
+	vm->virt_console_paths[idx] = ret;
+	return ret;
+}
+
+static char *
+make_virt_console_random(unsigned int size)
+{
+	static const char cs[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		"abcdefghijklmnopqrstuvwxyz";
+	char *p, *ret;
+
+	if ((ret = malloc(size + 1)) == NULL)
+		return NULL;
+	for (p = ret; p < ret + size; p++)
+		*p = cs[arc4random_uniform(sizeof(cs) - 1)];
+	*p = '\0';
+	return ret;
+}
+
+static int
+allocate_virt_console(struct vm *vm)
+{
+	struct vm_conf *conf = vm->conf;
+	int i, j, n;
+	char *r;
+	char **l;
+
+	n = conf->virt_console_ncontrollers * conf->virt_console_nports;
+	if (n == 0)
+	    return 0;
+
+	r = make_virt_console_random(8);
+	l = calloc(n, sizeof(char *));
+	if (r == NULL || l == NULL)
+		goto err;
+
+	clear_virt_console(vm);
+	vm->virt_console_random = r;
+	vm->virt_console_paths = l;
+	vm->virt_console_npaths = n;
+	VIRT_CONSOLE_FOREACH(i, j, conf)
+		get_virt_console_port(vm, i, j);
+	return 0;
+err:
+	free(r);
+	free(l);
+	return -1;
 }
 
 /*
@@ -1723,6 +1923,11 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 		}
 	}
 	if (VM_STATE(vm_ent) == TERMINATE || VM_STATE(vm_ent) == PRESTART) {
+		if (allocate_virt_console(VM_PTR(vm_ent)) < 0) {
+			ERR("failed to assign virtio-console for vm %s\n",
+			    name);
+			return -1;
+		}
 		rc = load_virtual_machine(vm_ent);
 		if (rc <= -2)
 			goto force_kill;
@@ -1737,6 +1942,7 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 	if (VM_START(vm_ent) < 0) {
 		ERR("failed to start vm %s\n", name);
 		cleanup_virtual_machine(vm_ent);
+		trigger_signal(vm_ent);
 		return -1;
 	}
 

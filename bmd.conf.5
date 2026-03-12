@@ -122,6 +122,48 @@ Specify com2 port device as same as com1.
 Specify com3 port device as same as com1.
 .It Cm com4 = Ar com_device;
 Specify com4 port device as same as com1.
+.It Cm virt_console_ncontrollers = Ar num_controllers;
+Specify the number of virtio-console controllers. The default value is 0 which
+means no controller. The maximum number of controllers is 16.
+.It Cm vconsole_nc = Ar num_controllers;
+Alias to the
+.Sq virt_console_ncontrollers
+parameter.
+.It Cm virt_console_nports = Ar num_ports;
+Specify the number of virtSpecify the number of virtio-console ports per
+controller. The default value is 0. The maximum number of ports is 16.
+If the number of controllers is omitted but the number of ports is specified,
+it implies that at least one controller is assigned.
+.It Cm vconsole_np = Ar num_ports;
+Alias to the
+.Sq virt_console_nports
+parameter.
+.It Cm virt_console_template = Ar portname | Dq Ar portname = sockpath ;
+Specify the portname and the Unix Domain Socket path template.
+The default value is
+.Dq virt_console%n = /var/run/vc-${NAME}%n.sock .
+The portname will be passed to the guest OS. See the virtio-console driver
+specification for each OS. If
+.Ar sockpath
+is omitted, the default path will be served.
+The following parameters are available. All sequence numbers start with 0.
+.Bl -tag -width 10n
+.It Cm %c
+Sequence number of the controllers.
+.It Cm %p
+Sequence number of the ports in a controller.
+.It Cm %n
+Sequence number for all ports across controllers.
+.It Cm %r
+Random 8 characters that consist of
+.Bq a-zA-Z0-9 .
+Random characters are re-created on each VM boot. The characters are shared
+among all ports.
+.El
+.It Cm vconsole_tmpl = Ar portname | Dq Ar portname = sockpath ;
+Alias to the
+.Sq virt_console_tmplate
+parameter.
 .It Cm debug_port = Ar port_number;
 Gdb debug port.
 .It Cm disk = (+=) Oo Ar type : Oc Oo Ar options : Oc Ar filename ;

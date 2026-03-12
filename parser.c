@@ -853,6 +853,34 @@ parse_com4(struct vm_conf *conf, char *val)
 	return set_com(conf, 3, val);
 }
 
+static int
+parse_virt_console_ncontrollers(struct vm_conf *conf, char *val)
+{
+	int n;
+
+	if (parse_int(&n, val) < 0 || n < 0 || n > VIRT_CONSOLE_MAX_CONTROLLERS)
+		return -1;
+
+	return set_virt_console_ncontrollers(conf, n);
+}
+
+static int
+parse_virt_console_nports(struct vm_conf *conf, char *val)
+{
+	int n;
+
+	if (parse_int(&n, val) < 0 || n < 0 || n > VIRT_CONSOLE_MAX_PORTS)
+		return -1;
+
+	return set_virt_console_nports(conf, n);
+}
+
+static int
+parse_virt_console_template(struct vm_conf *conf, char *val)
+{
+	return set_virt_console_template(conf, val);
+}
+
 static bool
 parse_boolean(const char *value)
 {
@@ -1021,6 +1049,12 @@ static struct parser_entry parser_list[] = {
 	{ "stop_timeout", &parse_stop_timeout, NULL },
 	{ "tpm", &parse_tpm, NULL },
 	{ "utctime", &parse_utctime, NULL },
+	{ "vconsole_nc", &parse_virt_console_ncontrollers, NULL },
+	{ "vconsole_np", &parse_virt_console_nports, NULL },
+	{ "vconsole_tmpl", &parse_virt_console_template, NULL },
+	{ "virt_console_ncontrollers", &parse_virt_console_ncontrollers, NULL },
+	{ "virt_console_nports", &parse_virt_console_nports, NULL },
+	{ "virt_console_template", &parse_virt_console_template, NULL },
 	{ "virt_random", &parse_virt_random, NULL },
 	{ "wired_memory", &parse_wired_memory, NULL },
 	{ "x2apic", &parse_x2apic, NULL },
