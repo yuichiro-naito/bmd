@@ -1120,10 +1120,7 @@ check_conf(struct vm_conf *conf)
 	char *name = conf->name;
 	struct cpu_pin *cp;
 	struct hda_conf *hc;
-	struct fbuf *fb;
-	struct stat st;
 	int hw_ncpu, vmm_maxcpu;
-	struct vm_entry *vm_ent;
 
 	if (name == NULL) {
 		ERR("%s\n", "vm name is required");
@@ -1193,17 +1190,6 @@ check_conf(struct vm_conf *conf)
 		if (check_hda_dev(name, hc->play_dev) < 0 ||
 		    check_hda_dev(name, hc->rec_dev) < 0)
 			return -1;
-
-	fb = conf->fbuf;
-	if (fb->enable) {
-		if (fb->unixpath && stat(fb->unixpath, &st) == 0 &&
-		    ((vm_ent = lookup_vm_by_name(name)) == NULL ||
-			!VM_IS_RUNNING(vm_ent))) {
-			ERR("%s: graphics: %s already exists\n", name,
-			    fb->unixpath);
-			return -1;
-		}
-	}
 
 	return 0;
 }
