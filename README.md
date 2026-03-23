@@ -26,9 +26,9 @@ Bmd doesn't manage disk images, neither.
 Most of administrators have their own disk management policy and tools.
 So, it is better that disk images are created to follow the policy.
 
-## Paper work
+## Papers
 
-- [Design and Implementation of Bhyve Management Daemon](Paper/AsiaBSDCon2026.pdf) - AsiaBSDCon 2026
+- [Design and Implementation of Bhyve Management Daemon](Papers/AsiaBSDCon2026.pdf)s - AsiaBSDCon 2026
 
 ## Requirements
 
