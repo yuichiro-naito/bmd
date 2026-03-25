@@ -28,7 +28,7 @@ So, it is better that disk images are created to follow the policy.
 
 ## Papers
 
-- [Design and Implementation of Bhyve Management Daemon](Papers/AsiaBSDCon2026.pdf) - [AsiaBSDCon 2026](https://2026.asiabsdcon.org)
+- Yuichiro Naito, "[Design and Implementation of Bhyve Management Daemon](Papers/AsiaBSDCon2026.pdf)", [AsiaBSDCon](https://2026.asiabsdcon.org), 2026
 
 ## Requirements
 
