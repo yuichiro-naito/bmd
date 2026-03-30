@@ -26,6 +26,10 @@ Bmd doesn't manage disk images, neither.
 Most of administrators have their own disk management policy and tools.
 So, it is better that disk images are created to follow the policy.
 
+## Papers
+
+- Yuichiro Naito, "[Design and Implementation of Bhyve Management Daemon](Papers/AsiaBSDCon2026.pdf)", [AsiaBSDCon](https://2026.asiabsdcon.org), 2026
+
 ## Requirements
 
 1. grub2-bhyve package
