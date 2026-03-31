@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <sys/ucred.h>
 #include <sys/un.h>
+#include <sys/poll.h>
 #include <sys/wait.h>
 
 #include <netinet/in.h>
@@ -51,6 +52,8 @@
 #include "log.h"
 #include "server.h"
 #include "vm.h"
+
+#define FIND_VPORT "_find_vport_"
 
 static struct sock_list sock_list = LIST_HEAD_INITIALIZER();
 
@@ -681,12 +684,55 @@ err:
 	return -1;
 }
 
+static bool
+is_connected(int s)
+{
+	int rc;
+	char buf[4];
+	struct pollfd pfd = {
+		.fd = s,
+		.events = POLLIN | POLLERR | POLLHUP
+	};
+
+	rc = poll(&pfd, 1, 100);
+	if (rc < 0)
+		return false;
+	if (rc == 0)
+		return true;
+	if (recv(s, buf, sizeof(buf), MSG_PEEK) <= 0)
+		return false;
+
+	return true;
+}
+
 static int
-open_comport(const char *c)
+search_vconsole(struct vm *vm)
+{
+	int i, s;
+	char **p, *sep;
+	for (i = 0; i < vm->virt_console_npaths; i++) {
+		p = &vm->virt_console_paths[i];
+		if (*p == NULL || (sep = strchr(*p, '=')) == NULL)
+			continue;
+		if ((s = connect_to_comport(sep + 1)) >= 0) {
+			if (is_connected(s))
+				return s;
+			close(s);
+		}
+	}
+	return -1;
+}
+
+static int
+open_comport(const char *c, struct vm *vm)
 {
 	if (c == NULL)
 		return -1;
-	return (IS_NMDM(c)) ? open_comport_fd(c) : connect_to_comport(c);
+	if (IS_NMDM(c))
+		return open_comport_fd(c);
+	if (strcmp(c, FIND_VPORT) == 0)
+		return search_vconsole(vm);
+	return connect_to_comport(c);
 }
 
 struct com_opener *
@@ -773,7 +819,8 @@ on_exit_open_comport(int ident __unused, void *data)
 }
 
 static int
-delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
+delayed_open_comport(struct sock_buf *sb, const char *comport,
+    struct vm_entry *vm_ent, nvlist_t *res)
 {
 	pid_t pid;
 	int socks[2];
@@ -805,7 +852,7 @@ delayed_open_comport(struct sock_buf *sb, const char *comport, nvlist_t *res)
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
 		close(socks[0]);
-		send_fd(socks[1], open_comport(comport));
+		send_fd(socks[1], open_comport(comport, VM_PTR(vm_ent)));
 		recv_ack(socks[1]);
 		close(socks[1]);
 		exit(0);
@@ -973,7 +1020,7 @@ get_com_port(struct vm_entry *vm_ent, const char *port)
 
 	if (strncmp(port, "vconsole", 8) == 0) {
 		if (port[strlen("vconsole")] == '\0')
-			return NULL;
+			return strdup(FIND_VPORT);
 		v[0] = strtol(&port[8], &ep, 10);
 		if (*ep == '\0') {
 			cons = get_virt_console_sockpath(VM_PTR(vm_ent),
@@ -1026,7 +1073,7 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 	    VM_STATE(vm_ent) == RUN) {
 		chown_comport(cons, ucred);
 
-		if ((rc = delayed_open_comport(s, cons, res)) < 0) {
+		if ((rc = delayed_open_comport(s, cons, vm_ent, res)) < 0) {
 			error = true;
 			reason = "failed to open comport";
 			goto ret;
