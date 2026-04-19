@@ -1,4 +1,6 @@
 * 3.6
+        - Add support of `bmdctl vconsole` subcommand.
+          (a29b9d7541b3b45bf0c3f53ce45ff0d69f4466b0)
 	- Introduce `bmdctl show` subcommand.
 	- Obsoleted `showconsole showvgaport showconfig` subcommand.
 	- Add support of virtio-console.
