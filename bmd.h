@@ -114,7 +114,7 @@ struct vm_conf_entry {
 	LIST_ENTRY(vm_conf_entry) next;
 };
 
-enum EVENT_TYPE { EVENT, PLUGIN };
+enum EVENT_TYPE { EVENT, PLUGIN, CLIENT };
 
 #define VM_START(v)    (v)->vm_method->vm_start(&(v)->vm, (v)->pl_vm_conf)
 #define VM_RESET(v)    (v)->vm_method->vm_reset(&(v)->vm, (v)->pl_vm_conf)
@@ -230,10 +230,13 @@ bool vm_method_exists(char *);
 bool loader_method_exists(char *);
 void copy_plugin_data(struct vm_conf_entry *, struct vm_conf_entry *);
 
+int wait_for_client(pid_t, event_call_back, void *);
+
 int create_plugin_data(struct plugin_data_list *);
 void free_plugin_data(struct plugin_data_list *);
 void free_vm_conf_entry(struct vm_conf_entry *);
 struct vm_entry *lookup_vm_by_name(const char *);
+struct vm_entry *lookup_vm_by_id(unsigned int);
 int set_timer(struct vm_entry *, int);
 int start_virtual_machine(struct vm_entry *);
 char *get_virt_console_sockpath(struct vm *, int, int);
@@ -244,8 +247,8 @@ int load_config_file(struct vm_conf_list *, bool);
 int compare_vm_conf_entry(struct vm_conf_entry *, struct vm_conf_entry *);
 void free_parser_objects(void);
 
-int send_fd(int, int);
-int recv_fd(int);
+int send_fd(int, int, void *, size_t);
+int recv_fd(int, void *, size_t);
 int send_ack(int);
 int recv_ack(int);
 int register_events(struct kevent *, event_call_back *, void **, int);

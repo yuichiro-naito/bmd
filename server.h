@@ -45,6 +45,9 @@ int recv_sock_buf(struct sock_buf *);
 void clear_send_sock_buf(struct sock_buf *);
 int send_sock_buf(struct sock_buf *);
 
+typedef unsigned int client_console_id;
+struct client_console *lookup_client_console(client_console_id);
+
 typedef unsigned int com_opener_id;
 struct com_opener *lookup_com_opener(com_opener_id);
 char *get_peer_comport(const char *);

@@ -1,4 +1,4 @@
-.Dd Mar 12, 2026
+.Dd Apl 18, 2026
 .Dt bmdctl 8
 .Os
 .
@@ -40,6 +40,10 @@ name
 .Nm
 .Op Fl f config_file
 .Cm com[1-4]
+name
+.Nm
+.Op Fl f config_file
+.Cm vconsole
 name
 .Nm
 .Op Fl f config_file
@@ -141,6 +145,14 @@ Connect to the console (com1) of the virtual machine. See ESCAPE SEQUENCES
 below.
 .It Cm com[1-4] Ar name
 Connect to the com[1-4] of the virtual machine. See ESCAPE SEQUENCES below.
+.It Cm vconsole Ar name
+Connect to one of the free virt_console ports. The BMD remembers the user
+ID and the tty name where
+.Nm
+is running. They are specified in the port request message. If the same user
+on the same tty requests the virt_console next, the BMD will assign the same
+virt_console port as before. If no unused port is found, the BMD may assign
+a port that was previously used by another user or tty.
 .It Cm vconsole[N] Ar name
 Connect to the Nth virt_console of the virtual machine, where N starts with 0.
 The maximum of N is the total number of virt_console ports among all controllers

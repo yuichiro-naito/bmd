@@ -59,7 +59,8 @@ usage(int argc __unused, char *argv[])
 	    "  reset <name>                : reset VM\n"
 	    "  console <name>              : connect to com1 port\n"
 	    "  com[1-4] <name>             : connect to com[1-4] port\n"
-	    "  vconsole<N>.<0-15>          : connect to virt_consoleN's port \n"
+	    "  vconsole                    : connect to a virt_console port\n"
+	    "  vconsole<N>.<0-15>          : connect to virt_consoleN's port\n"
 	    "  vconsole<N>                 : connect to Nth virt_console port\n"
 	    "  show console <name>         : show console\n"
 	    "  show com[1-4] <name>        : show comN\n"
@@ -447,6 +448,8 @@ do_console(const char *name, const char *port)
 	nvlist_add_string(cmd, "name", name);
 	nvlist_add_number(cmd, "sigtrigger_pid", getpid());
 	nvlist_add_number(cmd, "sigtrigger_num", SIGHUP);
+	if (isatty(STDIN_FILENO))
+		nvlist_add_string(cmd, "tty", ttyname(STDIN_FILENO));
 
 	if ((res = send_recv(cmd)) == NULL) {
 		ret = 1;
@@ -499,6 +502,8 @@ do_boot_console(const char *name, const char *port, unsigned int boot_style,
 	nvlist_add_string(cmd, "command", command[boot_style]);
 	nvlist_add_string(cmd, "name", name);
 	nvlist_add_string(cmd, "port", port ? port : "com1");
+	if (isatty(STDIN_FILENO))
+		nvlist_add_string(cmd, "tty", ttyname(STDIN_FILENO));
 
 	if ((res = send_recv(cmd)) == NULL) {
 		ret = 1;

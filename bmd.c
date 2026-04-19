@@ -227,6 +227,7 @@ register_event0(enum EVENT_TYPE type, struct kevent *kev, event_call_back cb,
 
 #define register_event(b, c, d)	       register_event0(EVENT, (b), (c), (d))
 #define register_plugin_event(b, c, d) register_event0(PLUGIN, (b), (c), (d))
+#define register_client_event(b, c, d) register_event0(CLIENT, (b), (c), (d))
 
 int
 register_events(struct kevent *kev, event_call_back *cb, void **data, int n)
@@ -292,6 +293,21 @@ plugin_wait_for_process(pid_t pid, plugin_call_back cb, void *data)
 	}
 	return 0;
 }
+
+int
+wait_for_client(pid_t pid, event_call_back cb, void *data)
+{
+	struct kevent kev;
+
+	EV_SET(&kev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
+
+	if (register_client_event(&kev, cb, data) < 0) {
+		ERR("failed to wait for process (%s)\n", strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
 
 struct plugin_fd_filter {
 	int fd;
@@ -498,21 +514,23 @@ plugin_logger(int priority, PLUGIN_DESC *desc, const char *fmt, ...)
 }
 
 int
-send_fd(int sock, int fd)
+send_fd(int sock, int fd, void *buf, size_t buflen)
 {
 	int rc;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
-	struct iovec iov;
+	struct iovec iov[2];
 	char result;
 
 	result = fd < 0 ? 0 : 1;
 	memset(&msg, 0, sizeof(msg));
-	iov.iov_base = &result;
-	iov.iov_len = sizeof(result);
+	iov[0].iov_base = &result;
+	iov[0].iov_len = sizeof(result);
+	iov[1].iov_base = buf;
+	iov[1].iov_len = buflen;
 
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
+	msg.msg_iov = iov;
+	msg.msg_iovlen = 2;
 	if (result) {
 		msg.msg_controllen = CMSG_SPACE(sizeof(int));
 		msg.msg_control = calloc(1, msg.msg_controllen);
@@ -535,21 +553,23 @@ send_fd(int sock, int fd)
 }
 
 int
-recv_fd(int sock)
+recv_fd(int sock, void *buf, size_t buflen)
 {
 	int rc, fd;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
-	struct iovec iov;
+	struct iovec iov[2];
 	char result = 0;
 
 	memset(&msg, 0, sizeof(msg));
 	memset(&iov, 0, sizeof(iov));
-	iov.iov_base = &result;
-	iov.iov_len = sizeof(result);
+	iov[0].iov_base = &result;
+	iov[0].iov_len = sizeof(result);
+	iov[1].iov_base = buf;
+	iov[1].iov_len = buflen;
 
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
+	msg.msg_iov = iov;
+	msg.msg_iovlen = 2;
 	msg.msg_controllen = CMSG_SPACE(sizeof(int));
 	msg.msg_control = calloc(1, msg.msg_controllen);
 	if (msg.msg_control == NULL)
@@ -1701,8 +1721,8 @@ clear_virt_console(struct vm *vm)
 {
 	char **p, *sep;
 
-	free(vm->virt_console_random);
-	vm->virt_console_random = NULL;
+	free(vm->virt_console_users);
+	vm->virt_console_users = NULL;
 	if (vm->virt_console_paths != NULL) {
 		for (p = vm->virt_console_paths;
 		     p < &vm->virt_console_paths[vm->virt_console_npaths];
@@ -1728,17 +1748,18 @@ get_virt_console_sockpath(struct vm *vm, int ci, int pi)
 	return NULL;
 }
 
-static char *
-remove_whitespace(char *s)
+static int
+fwrite_random(FILE *fp, unsigned int size)
 {
-	char *p, *q;
+	static const char cs[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		"abcdefghijklmnopqrstuvwxyz";
+	unsigned int i;
 
-	for (p = q = s; *q != '\0'; q++)
-		if (!isspace(*q))
-			*p++ = *q;
-	*p = '\0';
+	for (i = 0; i < size; i++)
+		if (fputc(cs[arc4random_uniform(sizeof(cs) - 1)], fp) == EOF)
+			return -1;
 
-	return s;
+	return i;
 }
 
 char *
@@ -1767,7 +1788,9 @@ get_virt_console_port(struct vm *vm, int ci, int pi)
 		return NULL;
 	tmpl = get_virt_console_template(conf);
 	for (p = tmpl; *p != '\0'; p++) {
-		if (*p == '%') {
+		if (isspace(*p))
+			continue;
+		else if (*p == '%') {
 			p++;
 			switch (*p) {
 			case '\0':
@@ -1783,7 +1806,7 @@ get_virt_console_port(struct vm *vm, int ci, int pi)
 				fprintf(out, "%d", pi);
 				break;
 			case 'r':
-				fprintf(out, "%s", vm->virt_console_random);
+				fwrite_random(out, 8);
 				break;
 			case '%':
 				fputc('%', out);
@@ -1798,23 +1821,7 @@ get_virt_console_port(struct vm *vm, int ci, int pi)
 loop_end:
 
 	fclose(out);
-	ret = remove_whitespace(ret);
 	vm->virt_console_paths[idx] = ret;
-	return ret;
-}
-
-static char *
-make_virt_console_random(unsigned int size)
-{
-	static const char cs[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		"abcdefghijklmnopqrstuvwxyz";
-	char *p, *ret;
-
-	if ((ret = malloc(size + 1)) == NULL)
-		return NULL;
-	for (p = ret; p < ret + size; p++)
-		*p = cs[arc4random_uniform(sizeof(cs) - 1)];
-	*p = '\0';
 	return ret;
 }
 
@@ -1823,27 +1830,27 @@ allocate_virt_console(struct vm *vm)
 {
 	struct vm_conf *conf = vm->conf;
 	int i, j, n;
-	char *r;
 	char **l;
+	struct virt_console_user *u;
 
 	n = conf->virt_console_ncontrollers * conf->virt_console_nports;
 	if (n == 0)
 	    return 0;
 
-	r = make_virt_console_random(8);
 	l = calloc(n, sizeof(char *));
-	if (r == NULL || l == NULL)
+	u = calloc(n, sizeof(struct virt_console_user));
+	if (l == NULL || u == NULL)
 		goto err;
 
 	clear_virt_console(vm);
-	vm->virt_console_random = r;
 	vm->virt_console_paths = l;
 	vm->virt_console_npaths = n;
+	vm->virt_console_users = u;
 	VIRT_CONSOLE_FOREACH(i, j, conf)
 		get_virt_console_port(vm, i, j);
 	return 0;
 err:
-	free(r);
+	free(u);
 	free(l);
 	return -1;
 }
@@ -2049,6 +2056,17 @@ lookup_vm_by_name(const char *name)
 
 	SLIST_FOREACH(vm_ent, &vm_list, next)
 		if (strcmp(VM_CONF(vm_ent)->name, name) == 0)
+			return vm_ent;
+	return NULL;
+}
+
+struct vm_entry *
+lookup_vm_by_id(unsigned int id)
+{
+	struct vm_entry *vm_ent;
+
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		if (VM_CONF(vm_ent)->id == id)
 			return vm_ent;
 	return NULL;
 }

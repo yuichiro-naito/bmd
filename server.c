@@ -25,6 +25,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <sys/nv_namespace.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -53,7 +54,54 @@
 #include "server.h"
 #include "vm.h"
 
-#define FIND_VPORT "_find_vport_"
+#define NO_VPORT "not assigned"
+
+LIST_HEAD(client_console_head, client_console);
+struct client_console {
+	LIST_ENTRY(client_console) next;
+	client_console_id id;
+	pid_t pid;
+	uid_t uid;
+	unsigned int vmid;
+	char tty[16];
+	int  index;
+};
+static struct client_console_head client_console_list = LIST_HEAD_INITIALIZER();
+
+struct client_console *
+lookup_client_console(client_console_id id)
+{
+	struct client_console *p;
+	LIST_FOREACH(p, &client_console_list, next)
+		if (p->id == id)
+			return p;
+	return NULL;
+}
+
+static struct client_console *
+create_client_console(struct xucred *peer)
+{
+	static client_console_id last_id = 0;
+	struct client_console *ret;
+	if ((ret = malloc(sizeof(*ret))) == NULL)
+		return NULL;
+	ret->id = last_id++;
+	ret->pid = peer->cr_pid;
+	ret->uid = peer->cr_uid;
+	ret->index = -1;
+	ret->tty[0] = '\0';
+	LIST_INSERT_HEAD(&client_console_list, ret, next);
+	return ret;
+}
+
+static void
+destroy_client_console(struct client_console *p)
+{
+	if (p == NULL)
+		return;
+	LIST_REMOVE(p, next);
+	free(p);
+}
 
 static struct sock_list sock_list = LIST_HEAD_INITIALIZER();
 
@@ -74,6 +122,7 @@ struct com_opener {
 	sock_buf_id sid;
 	pid_t pid;
 	nvlist_t *res;
+	client_console_id cc_id;
 };
 static struct com_opener_head com_opener_list = LIST_HEAD_INITIALIZER();
 
@@ -584,7 +633,7 @@ chown_comport(const char *comport, struct xucred *ucred)
 static int
 open_comport_fd(const char *comport)
 {
-	int fd;
+	int fd, saved;
 
 	/*
 	 * Note that O_NONBLOCK doesn't work at this point.
@@ -603,8 +652,11 @@ open_comport_fd(const char *comport)
 
 	return fd;
 err2:
+	saved = errno;
 	close(fd);
+	errno = saved;
 err:
+	ERR("failed to open %s (%s)\n", comport, strerror(errno));
 	return -1;
 }
 
@@ -674,7 +726,8 @@ connect_to_comport(const char *comport)
 	return s;
 
 err2:
-	ERR("failed to connect %s %s (%s)\n", host, port, strerror(errno));
+	ERR("failed to connect to %s:%s (%s)\n", host, port,
+	    strerror(errno));
 	freeaddrinfo(r);
 	if (s != -1)
 		close(s);
@@ -706,32 +759,89 @@ is_connected(int s)
 }
 
 static int
-search_vconsole(struct vm *vm)
+connect_to_vconsole(char *path)
 {
-	int i, s;
-	char **p, *sep;
-	for (i = 0; i < vm->virt_console_npaths; i++) {
-		p = &vm->virt_console_paths[i];
-		if (*p == NULL || (sep = strchr(*p, '=')) == NULL)
-			continue;
-		if ((s = connect_to_comport(sep + 1)) >= 0) {
-			if (is_connected(s))
-				return s;
-			close(s);
-		}
-	}
+	int s;
+	char *sep;
+
+	if (path == NULL || (sep = strchr(path, '=')) == NULL)
+		return -1;
+
+	if ((s = connect_to_comport(sep + 1)) < 0)
+		goto err;
+
+	if (is_connected(s))
+		return s;
+
+	close(s);
+	errno = EBUSY;
+err:
+	ERR("failed to connect to %s (%s)\n", sep, strerror(errno));
 	return -1;
 }
 
 static int
-open_comport(const char *c, struct vm *vm)
+search_vconsole(struct vm *vm, struct client_console *cc, int *index)
+{
+	int s;
+	struct virt_console_user *cu;
+
+#define VCONSOLE_USERS_INDEX(c, v) \
+	((c) - (v)->virt_console_users)
+
+#define VCONSOLE_USERS_PATH(c, v) \
+	(v)->virt_console_paths[VCONSOLE_USERS_INDEX(c, v)]
+
+#define VCONSOLE_USERS_FOREACH(c, v) \
+	for ((c) = (v)->virt_console_users;				\
+	     (c) < &(v)->virt_console_users[(v)->virt_console_npaths]; (c)++)
+
+#define CONNECT_TO_VCONSOLE(c, v, s)					\
+	(s = connect_to_vconsole(VCONSOLE_USERS_PATH(c, v)))
+
+	/* Looking for a vconsole where the client used to connect. */
+	VCONSOLE_USERS_FOREACH (cu, vm)
+		if (!cu->used && cu->user == cc->uid &&
+		    strcmp(cu->tty, cc->tty) == 0 &&
+		    CONNECT_TO_VCONSOLE(cu, vm, s) >= 0)
+			goto done;
+
+	/* Looking for a vconsole that a client has never connected to. */
+	VCONSOLE_USERS_FOREACH (cu, vm)
+		if (!cu->used && cu->tty[0] == 0 &&
+		    CONNECT_TO_VCONSOLE(cu, vm, s) >= 0)
+			goto done;
+
+	/* Looking for a vconsole that the owner has connect to. */
+	VCONSOLE_USERS_FOREACH (cu, vm)
+		if (!cu->used && cu->user == cc->uid &&
+		    CONNECT_TO_VCONSOLE(cu, vm, s) >= 0)
+			goto done;
+
+	/* Looking for a vconsole that no client is currently connected to. */
+	VCONSOLE_USERS_FOREACH (cu, vm)
+		if (!cu->used && CONNECT_TO_VCONSOLE(cu, vm, s) >= 0)
+			goto done;
+	return -1;
+done:
+	if (index)
+		*index = VCONSOLE_USERS_INDEX(cu, vm);
+	return s;
+#undef VCONSOLE_USERS_INDEX
+#undef VCONSOLE_USERS_PATH
+#undef VCONSOLE_USERS_FOREACH
+#undef CONECT_TO_VCONSOLE
+}
+
+static int
+open_comport(const char *c, struct vm *vm, struct client_console *cc, int *index)
 {
 	if (c == NULL)
 		return -1;
 	if (IS_NMDM(c))
 		return open_comport_fd(c);
-	if (strcmp(c, FIND_VPORT) == 0)
-		return search_vconsole(vm);
+	if (strcmp(c, NO_VPORT) == 0)
+		return search_vconsole(vm, cc, index);
 	return connect_to_comport(c);
 }
 
@@ -760,12 +870,30 @@ create_com_opener(sock_buf_id sid)
 }
 
 static int
+on_console_client_terminate(int ident __unused, void *data)
+{
+	struct client_console *cc = data;
+	struct vm_entry *vm_ent;
+
+	if (cc->index != -1 && (vm_ent = lookup_vm_by_id(cc->vmid)) != NULL &&
+	    VM_PTR(vm_ent)->virt_console_users != NULL)
+		VM_PTR(vm_ent)->virt_console_users[cc->index].used = false;
+
+	destroy_client_console(cc);
+	return 0;
+}
+
+static int
 on_read_open_comport(int ident, void *data)
 {
+	int index;
 	struct com_opener *cp = data;
+	struct client_console *cc;
 
-	cp->fd = recv_fd(ident);
+	cp->fd = recv_fd(ident, &index, sizeof(index));
 	send_ack(ident);
+	if ((cc = lookup_client_console(cp->cc_id)) != NULL)
+		cc->index = index;
 
 	return 0;
 }
@@ -775,7 +903,10 @@ on_exit_open_comport(int ident __unused, void *data)
 {
 	int status;
 	struct com_opener *cp = data;
+	struct client_console *cc;
 	struct sock_buf *sb;
+	struct vm_entry *ent;
+	struct virt_console_user *cu;
 	nvlist_t *res = cp->res;
 
 	while (waitpid(cp->pid, &status, 0) < 0)
@@ -785,6 +916,24 @@ on_exit_open_comport(int ident __unused, void *data)
 		cp->fd = -1;
 
 	close(cp->sock);
+
+	/* If the console client has already quit, nothing to wait for. */
+	if ((cc = lookup_client_console(cp->cc_id)) != NULL) {
+		if (wait_for_client(cc->pid, on_console_client_terminate, cc) < 0)
+			ERR("%s\n", "failed to wait for client");
+		if (cc->index != -1 && (ent = lookup_vm_by_id(cc->vmid)) != NULL) {
+			cu = &VM_PTR(ent)->virt_console_users[cc->index];
+			strncpy(cu->tty, cc->tty, sizeof(cu->tty));
+			cu->client = cc->pid;
+			cu->user = cc->uid;
+			cu->used = true;
+			if (nvlist_exists_string(res, "console"))
+				nvlist_free_string(res, "console");
+			nvlist_add_string(res, "console",
+			    VM_PTR(ent)->virt_console_paths[cc->index]);
+
+		}
+	}
 
 	/* check if sock_buf is already closed. */
 	if ((sb = lookup_sock_buf(cp->sid)) == NULL) {
@@ -819,11 +968,11 @@ on_exit_open_comport(int ident __unused, void *data)
 }
 
 static int
-delayed_open_comport(struct sock_buf *sb, const char *comport,
-    struct vm_entry *vm_ent, nvlist_t *res)
+delayed_open_comport(struct sock_buf *sb, const char *comport, int index,
+    struct vm_entry *vm_ent, struct client_console *cc, nvlist_t *res)
 {
 	pid_t pid;
-	int socks[2];
+	int fd, socks[2];
 	struct com_opener *cp;
 	struct kevent kev[2];
 	static event_call_back cb[2] = { on_read_open_comport,
@@ -840,6 +989,7 @@ delayed_open_comport(struct sock_buf *sb, const char *comport,
 	}
 
 	if ((pid = fork()) < 0) {
+		destroy_client_console(cc);
 		close(socks[0]);
 		close(socks[1]);
 		destroy_com_opener(cp);
@@ -852,7 +1002,8 @@ delayed_open_comport(struct sock_buf *sb, const char *comport,
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
 		close(socks[0]);
-		send_fd(socks[1], open_comport(comport, VM_PTR(vm_ent)));
+		fd = open_comport(comport, VM_PTR(vm_ent), cc, &index);
+		send_fd(socks[1], fd, &index, sizeof(index));
 		recv_ack(socks[1]);
 		close(socks[1]);
 		exit(0);
@@ -863,6 +1014,7 @@ delayed_open_comport(struct sock_buf *sb, const char *comport,
 	cp->res = res;
 	cp->sock = socks[0];
 	cp->sid = sb->id;
+	cp->cc_id = cc->id;
 	EV_SET(&kev[0], socks[0], EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
 	EV_SET(&kev[1], pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0,
 	    NULL);
@@ -1005,7 +1157,7 @@ install_command(struct sock_buf *s, const nvlist_t *nv, struct xucred *ucred)
 }
 
 static char *
-get_com_port(struct vm_entry *vm_ent, const char *port)
+get_com_port(struct vm_entry *vm_ent, const char *port, int *index)
 {
 	struct vm_conf *conf = VM_CONF(vm_ent);
 	char *cons, *ep;
@@ -1020,24 +1172,46 @@ get_com_port(struct vm_entry *vm_ent, const char *port)
 
 	if (strncmp(port, "vconsole", 8) == 0) {
 		if (port[strlen("vconsole")] == '\0')
-			return strdup(FIND_VPORT);
+			return strdup(NO_VPORT);
 		v[0] = strtol(&port[8], &ep, 10);
-		if (*ep == '\0') {
-			cons = get_virt_console_sockpath(VM_PTR(vm_ent),
-			    v[0] / conf->virt_console_nports,
-			    v[0] % conf->virt_console_nports);
-			return cons ? strdup(cons) : NULL;
-		} else if (*ep == '.') {
+		switch (*ep) {
+		case '\0':
+			i = v[0];
+			v[1] = v[0] % conf->virt_console_nports;
+			v[0] = v[0] / conf->virt_console_nports;
+			break;
+		case '.':
 			v[1] = strtol(ep + 1, &ep, 10);
 			if (*ep != '\0')
 				return NULL;
-			cons = get_virt_console_sockpath(VM_PTR(vm_ent),
-			    v[0], v[1]);
-			return cons ? strdup(cons) : NULL;
+			i = v[0] * conf->virt_console_nports + v[1];
+			break;
+		default:
+			return NULL;
 		}
+		cons = get_virt_console_sockpath(VM_PTR(vm_ent), v[0], v[1]);
+		if (cons == NULL)
+			return NULL;
+		if (index)
+			*index = i;
+		return strdup(cons);
 	}
 
 	return NULL;
+}
+
+static char *
+strrevcpy(char *dst, size_t dstlen, const char *src)
+{
+	const char *p;
+	char *q;
+
+	for (p = &src[strlen(src) - 1], q = dst;
+	     p >= src && (size_t)(q - dst) < dstlen; p--, q++)
+		*q = *p;
+
+	*q = '\0';
+	return dst;
 }
 
 static nvlist_t *
@@ -1046,10 +1220,11 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 {
 	const char *name, *port, *reason;
 	struct vm_entry *vm_ent;
-	int rc = -1;
+	int rc = -1, index = -1;
 	nvlist_t *res;
 	bool error = false;
 	char *cons = NULL;
+	struct client_console *cc = NULL;
 
 	res = nvlist_create(0);
 
@@ -1061,9 +1236,8 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 		goto ret;
 	}
 
-
 	if ((port = nvlist_get_string(nv, "port")) == NULL ||
-	    (cons = get_com_port(vm_ent, port)) == NULL) {
+	    (cons = get_com_port(vm_ent, port, &index)) == NULL) {
 		error = true;
 		reason = "invalid port";
 		goto ret;
@@ -1073,7 +1247,15 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 	    VM_STATE(vm_ent) == RUN) {
 		chown_comport(cons, ucred);
 
-		if ((rc = delayed_open_comport(s, cons, vm_ent, res)) < 0) {
+		if ((cc = create_client_console(&s->peer)) == NULL)
+			goto ret;
+		cc->vmid = VM_CONF(vm_ent)->id;
+		/* The trailing number of the ttyname is the most important. */
+		if (nvlist_exists_string(nv, "tty"))
+			strrevcpy(cc->tty, sizeof(cc->tty),
+			    nvlist_get_string(nv, "tty"));
+
+		if ((rc = delayed_open_comport(s, cons, index, vm_ent, cc, res)) < 0) {
 			error = true;
 			reason = "failed to open comport";
 			goto ret;
@@ -1090,8 +1272,10 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 ret:
 	free(cons);
 	nvlist_add_bool(res, "error", error);
-	if (error)
+	if (error) {
 		nvlist_add_string(res, "reason", reason);
+		destroy_client_console(cc);
+	}
 	return rc == 0 ? NULL : res;
 }
 

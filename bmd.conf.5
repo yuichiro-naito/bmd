@@ -157,8 +157,7 @@ Sequence number for all ports across controllers.
 .It Cm %r
 Random 8 characters that consist of
 .Bq a-zA-Z0-9 .
-Random characters are re-created on each VM boot. The characters are shared
-among all ports.
+Random characters are created for each port and re-created on each VM boot.
 .El
 .It Cm vconsole_tmpl = Ar portname | Dq Ar portname = sockpath ;
 Alias to the

@@ -213,6 +213,13 @@ struct vm_conf {
 	char *virt_console_template;
 };
 
+struct virt_console_user {
+	bool used;
+	uid_t user;
+	pid_t client;
+	char tty[16];
+};
+
 struct vm {
 	struct vm_conf *conf;
 	enum STATE state;
@@ -228,8 +235,8 @@ struct vm {
 	int logfd;
 	int ntaps;
 	int virt_console_npaths;
-	char *virt_console_random;
 	char **virt_console_paths;
+	struct virt_console_user *virt_console_users;
 };
 
 #define ARRAY_FOREACH(p, a)	for (p = &a[0]; p < &a[nitems(a)]; p++)
