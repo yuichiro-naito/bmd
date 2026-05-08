@@ -919,8 +919,6 @@ on_vm_exit(int ident __unused, void *data)
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
 		stop_virtual_machine(vm_ent);
-		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
-		free_vm_entry(vm_ent);
 		break;
 	case PRESTART:
 	case POSTSTOP:
@@ -1922,8 +1920,6 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 		if (call_poststop_plugins(vm_ent) > 0)
 			return 0;
 		stop_virtual_machine(vm_ent);
-		SLIST_REMOVE(&vm_list, vm_ent, vm_entry, next);
-		free_vm_entry(vm_ent);
 		return 0;
 	}
 
