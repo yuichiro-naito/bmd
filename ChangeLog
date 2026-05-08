@@ -1,4 +1,6 @@
 * 3.6
+	- Bugfix: Segmentation falut while removing the running VM configuration.
+	  (9702821ebf2d587181a0f139228ff2bdb5f29288)
         - Add support of `bmdctl vconsole` subcommand.
           (a29b9d7541b3b45bf0c3f53ce45ff0d69f4466b0)
 	- Introduce `bmdctl show` subcommand.
