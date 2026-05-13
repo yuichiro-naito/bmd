@@ -52,7 +52,6 @@ int remove_taps(struct vm *);
 int activate_taps(struct vm *);
 int assign_taps(struct vm *);
 ssize_t writen(int, const void *, size_t);
-int write_err_log(int, struct vm *);
 int write_mapfile(struct vm_conf *, char **);
 char **split_args(char *);
 

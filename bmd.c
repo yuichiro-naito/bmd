@@ -27,10 +27,12 @@
  */
 #include <sys/dirent.h>
 #include <sys/event.h>
+#include <sys/ioctl.h>
 #include <sys/procctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 
 #include <ctype.h>
@@ -41,6 +43,7 @@
 #include <pwd.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -308,6 +311,19 @@ wait_for_client(pid_t pid, event_call_back cb, void *data)
 	return 0;
 }
 
+static int
+wait_for_client_read(int fd, event_call_back cb, void *data)
+{
+	struct kevent kev;
+
+	EV_SET(&kev, fd, EVFILT_READ, EV_ADD, NOTE_EXIT, 0, NULL);
+
+	if (register_client_event(&kev, cb, data) < 0) {
+		ERR("failed to wait for process (%s)\n", strerror(errno));
+		return -1;
+	}
+	return 0;
+}
 
 struct plugin_fd_filter {
 	int fd;
@@ -322,7 +338,7 @@ plugin_fd(struct event *ev, void *data)
 	struct plugin_fd_filter *f = data;
 
 	return ev->data == f->data && k->filter == f->filter &&
-		ev->type == PLUGIN && ((int)k->ident == f->fd);
+	    ev->type == PLUGIN && ((int)k->ident == f->fd);
 }
 
 void
@@ -621,8 +637,62 @@ recv_ack(int sock)
 	return rc;
 }
 
+struct open_err_log {
+	int vm_id;
+};
+
+static int write_err_log(struct vm_entry *);
+
 static int
-open_err_logfile(struct vm_conf *conf)
+on_exit_openerrlog(int ident, void *data)
+{
+	struct open_err_log *el = data;
+	struct vm_entry *vm_ent;
+
+	while (waitpid(ident, NULL, 0) < 0)
+		if (errno != EINTR)
+			break;
+
+	if ((vm_ent = lookup_vm_by_id(el->vm_id)) != NULL) {
+		vm_ent->logwriter = 0;
+		if (vm_ent->lbuf_len > 0)
+			write_err_log(vm_ent);
+	}
+
+	free(el);
+	return 0;
+}
+
+static bool
+client_read(struct event *ev, void *data)
+{
+	struct open_err_log *el = data;
+
+	return (ev->type == CLIENT && ev->kev.filter == EVFILT_READ &&
+	    ev->data == el);
+}
+
+static int
+on_read_openerrlog(int ident, void *data)
+{
+	int fd;
+	struct open_err_log *el = data;
+	struct vm_entry *vm_ent;
+
+	fd = recv_fd(ident, NULL, 0);
+	send_ack(ident);
+	stop_waiting_for(client_read, el);
+	close(ident);
+
+	/* Store the returned fd, even if it's an error. */
+	if ((vm_ent = lookup_vm_by_id(el->vm_id)) != NULL)
+		VM_LOGFD(vm_ent) = fd;
+
+	return 0;
+}
+
+static int
+open_err_logfile(struct vm_entry *vm_ent)
 {
 	int fd;
 	pid_t pid;
@@ -630,18 +700,31 @@ open_err_logfile(struct vm_conf *conf)
 	struct stat st;
 	int64_t group;
 	struct passwd *pwd;
+	sigset_t nmask;
+	struct vm_conf *conf = VM_CONF(vm_ent);
+	struct open_err_log *el;
 
 	if (socketpair(PF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0)
-		return -1;
+		goto err;
 
-	if ((pid = fork()) < 0) {
+	if ((el = malloc(sizeof(*el))) == NULL) {
 		close(socks[0]);
 		close(socks[1]);
-		return -1;
+		goto err;
+	}
+
+	if ((pid = fork()) < 0) {
+		free(el);
+		close(socks[0]);
+		close(socks[1]);
+		goto err;
 	}
 
 	if (pid == 0) {
 		setproctitle("err_logfile opener");
+		sigemptyset(&nmask);
+		sigaddset(&nmask, SIGTERM);
+		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
 		close(socks[0]);
 		if (conf->owner > 0) {
 			if ((group = conf->group) == -1)
@@ -671,17 +754,121 @@ open_err_logfile(struct vm_conf *conf)
 	}
 
 	close(socks[1]);
+	vm_ent->logwriter = pid;
+	el->vm_id = VM_CONF(vm_ent)->id;
 
-	fd = recv_fd(socks[0], NULL ,0);
-	send_ack(socks[0]);
-	while (waitpid(pid, NULL, 0) < 0)
-		if (errno != EINTR)
+	if (wait_for_client_read(socks[0], on_read_openerrlog, el) < 0 ||
+	    wait_for_client(pid, on_exit_openerrlog, el) < 0)
+		ERR("%s: failed to wait for err_logfile opener.\n", conf->name);
+
+	return 0;
+err:
+	ERR("%s: failed to open %s\n", conf->name, conf->err_logfile);
+	return -1;
+}
+
+static int
+do_write_err_log(struct vm_entry *vm_ent)
+{
+	int fd = VM_LOGFD(vm_ent);
+	struct iovec *iov;
+	struct log_message *lm;
+	ssize_t size = 0;
+	int rc, i, n = 0, left;
+
+	if ((iov = malloc(vm_ent->lwrite_len * sizeof(*iov))) == NULL)
+		return -1;
+
+retry:
+	i = 0;
+	STAILQ_FOREACH(lm, &vm_ent->lwrite, next) {
+		left = lm->len - lm->sent;
+		if (left > 0) {
+			iov[i].iov_base = &lm->message[lm->sent];
+			iov[i].iov_len = left;
+			i++;
+			size += left;
+		}
+	}
+
+	while ((rc = writev(fd, iov, i)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
 			break;
+	if (rc < 0)
+		ERR("%s: failed to write err_logfile (%s)\n",
+		    VM_CONF(vm_ent)->name, strerror(errno));
+	if (rc <= 0) {
+		close(VM_LOGFD(vm_ent));
+		VM_LOGFD(vm_ent) = -1;
+		free(iov);
+		return -1;
+	}
+	n += rc;
+	STAILQ_FOREACH(lm, &vm_ent->lwrite, next) {
+		if (rc == 0)
+			break;
+		left = lm->len - lm->sent;
+		if (left == 0)
+			continue;
+		if (rc > left) {
+			lm->sent += left;
+			rc -= left;
+		} else {
+			lm->sent += rc;
+			rc = 0;
+		}
+	}
+	if (n < size)
+		goto retry;
 
-	close(socks[0]);
-	if (fd < 0)
-		ERR("%s: failed to open %s\n", conf->name, conf->err_logfile);
-	return fd;
+	free(iov);
+	return 0;
+}
+
+static int
+write_err_log(struct vm_entry *vm_ent)
+{
+	char *name = VM_CONF(vm_ent)->name;
+	struct log_message *lm, *ln;
+	struct open_err_log *el;
+	pid_t pid;
+	sigset_t nmask;
+
+	if ((el = malloc(sizeof(*el))) == NULL)
+		return -1;
+
+	STAILQ_CONCAT(&vm_ent->lwrite, &vm_ent->lbuf);
+	vm_ent->lwrite_len += vm_ent->lbuf_len;
+	vm_ent->lbuf_len = 0;
+	STAILQ_INIT(&vm_ent->lbuf);
+
+	if ((pid = fork()) < 0) {
+		ERR("%s: failed to fork.\n", name);
+		free(el);
+		return -1;
+	}
+
+	if (pid == 0) {
+		setproctitle("err_logfile writer");
+		sigemptyset(&nmask);
+		sigaddset(&nmask, SIGTERM);
+		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
+		exit((do_write_err_log(vm_ent) < 0) ? 1 : 0);
+	}
+
+	vm_ent->logwriter = pid;
+	el->vm_id = VM_CONF(vm_ent)->id;
+	if (wait_for_client(pid, on_exit_openerrlog, el) < 0) {
+		ERR("%s: failed to wait for err_log opener.\n", name);
+		free(el);
+	}
+
+	STAILQ_FOREACH_SAFE(lm, &vm_ent->lwrite, next, ln)
+		free(lm);
+	vm_ent->lwrite_len = 0;
+	STAILQ_INIT(&vm_ent->lwrite);
+
+	return 0;
 }
 
 static int
@@ -690,8 +877,30 @@ on_read_vm_output(int fd, void *data)
 	struct vm_entry *vm_ent = data;
 	struct event *ev, *evn;
 	struct kevent *kev;
+	struct log_message *lm;
+	int len;
+	ssize_t size;
+	bool limited;
 
-	if (write_err_log(fd, VM_PTR(vm_ent)) == 0) {
+retry:
+	if (ioctl(fd, FIONREAD, &len) < 0)
+		return -1;
+	if ((limited = (len > MAX_LOG_PER_LINE)))
+		len = MAX_LOG_PER_LINE;
+	if (len == 0)
+		len++;
+	if ((lm = malloc(sizeof(*lm) + len)) == NULL)
+		return -1;
+	while ((size = read(fd, lm->message, len)) < 0)
+		if (errno != EINTR && errno != EAGAIN)
+			break;
+	if (size <= 0) {
+		close(fd);
+		free(lm);
+		if (VM_OUTFD(vm_ent) == fd)
+			VM_OUTFD(vm_ent) = -1;
+		if (VM_ERRFD(vm_ent) == fd)
+			VM_ERRFD(vm_ent) = -1;
 		LIST_FOREACH_SAFE(ev, &event_list, next, evn) {
 			kev = &ev->kev;
 			if (ev->data != vm_ent || (int)kev->ident != fd ||
@@ -704,8 +913,24 @@ on_read_vm_output(int fd, void *data)
 			LIST_REMOVE(ev, next);
 			free(ev);
 		}
+		return 0;
 	}
-	return 0;
+	lm->sent = 0;
+	lm->len = size;
+
+	if (vm_ent->lbuf_len > MAX_LOG_LINES) {
+		free(lm);
+	} else {
+		STAILQ_INSERT_TAIL(&vm_ent->lbuf, lm, next);
+		vm_ent->lbuf_len++;
+	}
+	if (limited)
+		goto retry;
+
+	if (VM_LOGFD(vm_ent) == -1 || vm_ent->logwriter != 0)
+		return 0;
+
+	return write_err_log(vm_ent);
 }
 
 static int
@@ -1535,6 +1760,8 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
 	STAILQ_INIT(VM_TAPS(vm_ent));
+	STAILQ_INIT(&vm_ent->lbuf);
+	STAILQ_INIT(&vm_ent->lwrite);
 	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 	LIST_INIT(VM_SIGTARGETS(vm_ent));
 
@@ -1773,7 +2000,7 @@ static int
 fwrite_random(FILE *fp, unsigned int size)
 {
 	static const char cs[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		"abcdefghijklmnopqrstuvwxyz";
+				 "abcdefghijklmnopqrstuvwxyz";
 	unsigned int i;
 
 	for (i = 0; i < size; i++)
@@ -1837,7 +2064,7 @@ get_virt_console_port(struct vm *vm, int ci, int pi)
 				fputc(*p, out);
 			}
 		} else
-			  fputc(*p, out);
+			fputc(*p, out);
 	}
 loop_end:
 
@@ -1856,7 +2083,7 @@ allocate_virt_console(struct vm *vm)
 
 	n = conf->virt_console_ncontrollers * conf->virt_console_nports;
 	if (n == 0)
-	    return 0;
+		return 0;
 
 	l = calloc(n, sizeof(char *));
 	u = calloc(n, sizeof(struct virt_console_user));
@@ -1929,8 +2156,8 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 			return -1;
 		}
 
-	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1)
-		VM_LOGFD(vm_ent) = open_err_logfile(conf);
+	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1 && vm_ent->logwriter == 0)
+		open_err_logfile(vm_ent);
 
 	if (VM_STATE(vm_ent) == TERMINATE) {
 		init_plugin_results(vm_ent);
@@ -2139,7 +2366,8 @@ reload_virtual_machines(void)
 		if (VM_LOGFD(vm_ent) != -1 &&
 		    VM_CONF(vm_ent)->err_logfile != NULL) {
 			VM_CLOSE(vm_ent, LOGFD);
-			VM_LOGFD(vm_ent) = open_err_logfile(conf);
+			VM_LOGFD(vm_ent) = -1;
+			open_err_logfile(vm_ent);
 		}
 		copy_plugin_data(conf_ent, VM_CONF_ENT(vm_ent));
 		VM_TMPCONF(vm_ent) = conf_ent;
@@ -2288,6 +2516,8 @@ stop_virtual_machines(void)
 			count++;
 			VM_ACPI_POWEROFF(vm_ent);
 			set_timer(vm_ent, VM_CONF(vm_ent)->stop_timeout);
+			if (vm_ent->logwriter != 0)
+				kill(vm_ent->logwriter, SIGTERM);
 		}
 	}
 

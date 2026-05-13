@@ -43,6 +43,9 @@
 
 #define FD_KEY	    "_file_descriptor_"
 
+#define MAX_LOG_PER_LINE 1024
+#define MAX_LOG_LINES    128
+
 /*
   Plugin module
  */
@@ -158,6 +161,14 @@ enum EVENT_TYPE { EVENT, PLUGIN, CLIENT };
 		}                          \
 	} while (0)
 
+STAILQ_HEAD(log_messages, log_message);
+struct log_message {
+	STAILQ_ENTRY(log_message) next;
+	unsigned int sent;
+	unsigned int len;
+	char message[0];
+};
+
 /*
   Entry of vm list.
   The individual entries indicate the virtual machine process.
@@ -173,6 +184,11 @@ struct vm_entry {
 	nvlist_t *pl_ld_conf;
 	struct signal_targets signal_targets;
 	enum STATE saved_state;
+	pid_t logwriter;
+	struct log_messages lbuf;
+	struct log_messages lwrite;
+	int lbuf_len;
+	int lwrite_len;
 };
 
 /*
