@@ -446,7 +446,6 @@ do_console(const char *name, const char *port)
 	nvlist_add_string(cmd, "command", "showconsole");
 	nvlist_add_string(cmd, "port", port ? port : "com1");
 	nvlist_add_string(cmd, "name", name);
-	nvlist_add_number(cmd, "sigtrigger_pid", getpid());
 	nvlist_add_number(cmd, "sigtrigger_num", SIGHUP);
 	if (isatty(STDIN_FILENO))
 		nvlist_add_string(cmd, "tty", ttyname(STDIN_FILENO));

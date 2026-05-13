@@ -1260,10 +1260,8 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 			reason = "failed to open comport";
 			goto ret;
 		}
-		if (nvlist_exists_number(nv, "sigtrigger_pid") &&
-		    nvlist_exists_number(nv, "sigtrigger_num"))
-			register_signal_target(vm_ent,
-			    nvlist_get_number(nv, "sigtrigger_pid"),
+		if (nvlist_exists_number(nv, "sigtrigger_num"))
+			register_signal_target(vm_ent, ucred->cr_pid,
 			    nvlist_get_number(nv, "sigtrigger_num"));
 	}
 
