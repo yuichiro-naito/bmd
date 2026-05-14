@@ -240,7 +240,7 @@ is_directory(int df, struct dirent *e)
 	    S_ISDIR(s.st_mode));
 }
 
-bool
+static bool
 is_file(const char *path)
 {
 	struct stat s;
@@ -266,6 +266,20 @@ err2:
 	free(path);
 err:
 	return -1;
+}
+
+static bool
+is_expected_openbsd_arch(const char *arch)
+{
+	static const char **p, *arch_list[] = {
+		"amd64", "i386"
+	};
+
+	ARRAY_FOREACH(p, arch_list)
+		if (strcmp(arch, *p) == 0)
+			return true;
+
+	return false;
 }
 
 static int
@@ -311,7 +325,8 @@ inspect_openbsd_iso(struct inspection *ins)
 	while ((e = readdir(d)) != NULL) {
 		if (e->d_name[0] == '.')
 			continue;
-		if (is_directory(dirfd(d), e)) {
+		if (is_directory(dirfd(d), e) &&
+		    is_expected_openbsd_arch(e->d_name)) {
 			if (asprintf(&npath, "%s/%s/%s", path, e->d_name,
 				OPENBSD_RAMDISK_KERNEL) < 0)
 				goto err2;
