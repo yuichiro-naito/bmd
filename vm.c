@@ -75,10 +75,18 @@
 #define UEFI_FIRMWARE_VARS LOCALBASE "/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
 
 #if __FreeBSD_version > 1400000
+static bool
+check_vars_file(const char *path)
+{
+	struct stat s;
+
+	return (lstat(path, &s) == 0 && S_ISREG(s.st_mode) && s.st_size > 0);
+}
+
 static int
 copy_uefi_vars(struct vm *vm)
 {
-	char *p;
+	char *p, *tmp;
 	int out, in, rc;
 	ssize_t n;
 	off_t len = 0;
@@ -97,7 +105,7 @@ copy_uefi_vars(struct vm *vm)
 		fn = get_varsfile(vm);
 	}
 
-	if (is_install(conf) == false && is_file(fn))
+	if (is_install(conf) == false && check_vars_file(fn))
 		return 0;
 
 	while ((in = open(origin, O_RDONLY)) < 0)
@@ -108,12 +116,15 @@ copy_uefi_vars(struct vm *vm)
 		return -1;
 	}
 
-	while ((out = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
-		if (errno != EINTR)
-			break;
-	if (out < 0) {
-		ERR("can't create %s\n", fn);
+	if (asprintf(&tmp, "%s.XXXXXX", fn) < 0) {
 		close(in);
+		return -1;
+	}
+
+	if ((out = mkstemp(tmp)) < 0) {
+		ERR("can't create %s\n", tmp);
+		close(in);
+		free(tmp);
 		return -1;
 	}
 
@@ -133,11 +144,20 @@ retry:
 
 	close(in);
 	close(out);
+
+	if ((rc = rename(tmp, fn)) < 0) {
+		ERR("can't create %s\n", fn);
+		goto err2;
+	}
+
+	chmod(fn, 0644);
 	return 0;
 err:
 	close(in);
 	close(out);
-	unlink(fn);
+err2:
+	unlink(tmp);
+	free(tmp);
 	return -1;
 }
 #else
