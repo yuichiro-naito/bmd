@@ -52,7 +52,6 @@
 
 #include "bmd_plugin.h"
 #include "conf.h"
-#include "inspect.h"
 #include "log.h"
 #include "vm.h"
 
@@ -60,9 +59,20 @@
 #define MAX_PCI_SLOT 32
 #define MAX_PCI_DEVICES (MAX_PCI_BUS * MAX_PCI_SLOT)
 
-#define PCISLOT(fp, fmt, s, ...)                                      \
+#define PCISLOT(a, fmt, s, ...)                                      \
 	{                                                             \
-		fprintf(fp, "-s\n%d:%d:0," fmt, (s) >> 5, (s) & 0x1f, \
+		ARG_OPT(a, "-s", "%d:%d:0," fmt, (s) >> 5, (s) & 0x1f,	\
+		    __VA_ARGS__);                                     \
+		if (++s > MAX_PCI_DEVICES) {                          \
+			ERR("too many PCI devices\n", NULL);          \
+			exit(1);                                      \
+		}                                                     \
+	}
+
+#define PCIWRITE(a, fmt, s, ...)                                      \
+	{                                                             \
+	        ARG_PUT(a, "-s");				      \
+		ARG_WRITE(a, "%d:%d:0," fmt, (s) >> 5, (s) & 0x1f,    \
 		    __VA_ARGS__);                                     \
 		if (++s > MAX_PCI_DEVICES) {                          \
 			ERR("too many PCI devices\n", NULL);          \
@@ -168,6 +178,135 @@ copy_uefi_vars(struct vm *vm __unused)
 }
 #endif
 
+struct arg_builder *
+arg_init(void)
+{
+	struct arg_builder *a;
+	if ((a = malloc(sizeof(*a))) == NULL)
+		goto err3;
+	a->args_size = DEFAULT_ARG_SIZE;
+	a->args_len = 0;
+	if ((a->args = malloc(sizeof(char *) * a->args_size)) == NULL)
+		goto err2;
+	if ((a->cur = open_memstream(&a->cur_buf, &a->cur_len)) == NULL)
+		goto err;
+
+	return a;
+err:
+	free(a->args);
+err2:
+	free(a);
+err3:
+	return NULL;
+}
+
+void
+arg_free(struct arg_builder *a)
+{
+	size_t i;
+
+	if (a == NULL)
+		return;
+
+	for (i = 0; i < a->args_len; i++)
+		free(a->args[i]);
+	fclose(a->cur);
+	free(a->cur_buf);
+	free(a->args);
+	free(a);
+}
+
+int
+arg_write(struct arg_builder *a, const char *f, ...)
+{
+	int rc;
+	va_list va;
+
+	va_start(va, f);
+	rc = vfprintf(a->cur, f, va);
+	va_end(va);
+
+	return rc;
+}
+
+static int
+arg_expand(struct arg_builder *a)
+{
+	size_t ns;
+	char **p;
+
+	if (a->args_len < a->args_size)
+		return 0;
+
+	ns = a->args_size + DEFAULT_ARG_SIZE;
+	if ((p = realloc(a->args, sizeof(char *) * ns)) == NULL)
+		return -1;
+	a->args = p;
+	a->args_size = ns;
+	return 0;
+}
+
+int
+arg_next(struct arg_builder *a)
+{
+	if (arg_expand(a) < 0)
+		return -1;
+	fclose(a->cur);
+	a->args[a->args_len++] = a->cur_buf;
+	if ((a->cur = open_memstream(&a->cur_buf, &a->cur_len)) == NULL)
+		return -1;
+
+	return 0;
+}
+
+int
+arg_put(struct arg_builder *a, const char *s)
+{
+	return (fprintf(a->cur, "%s", s) < 0 || arg_next(a) < 0) ? -1 : 0;
+}
+
+int
+arg_opt(struct arg_builder *a, const char *s, const char *f, ...)
+{
+	int rc;
+	va_list va;
+
+	if (arg_put(a, s) < 0)
+		return -1;
+	va_start(va, f);
+	rc = vfprintf(a->cur, f, va);
+	va_end(va);
+	if (rc < 0 || arg_next(a) < 0)
+		return -1;
+	return 0;
+}
+
+void
+arg_print(FILE *f, struct arg_builder *a)
+{
+	size_t i = 0;
+
+	if (a->args_len == 0)
+		return;
+
+	fprintf(f, "%s", a->args[i++]);
+	while (i < a->args_len)
+		fprintf(f, " %s", a->args[i++]);
+	fprintf(f, "\n");
+	fflush(f);
+	return;
+}
+
+int
+arg_execv(const char *p, struct arg_builder *a)
+{
+	if (arg_expand(a) < 0)
+		return -1;
+	a->args[a->args_len++] = NULL;
+
+	return execv(p, a->args);
+}
+
 /*
  * split_args() separates an buffer that contains '\n' as the delimiter.
  * The results will be an array of pointers to portions of the buffer,
@@ -251,10 +390,7 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 	}
 
 	if (pid == 0) {
-		char **argv;
-		FILE *fp;
-		char *bp;
-		size_t len;
+		struct arg_builder *a;
 
 		if (dopipe) {
 			close(outfd[0]);
@@ -262,44 +398,35 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			dup2(outfd[1], 1);
 			dup2(errfd[1], 2);
 		}
-		if ((fp = open_memstream(&bp, &len)) == NULL) {
-			ERR("cannot open memstream (%s)\n", strerror(errno));
+		if ((a = arg_init()) == NULL) {
+			ERR("%s\n", "failed to alloc arg_builder");
 			exit(1);
 		}
-		flockfile(fp);
 
-		fprintf(fp, "/usr/sbin/bhyveload\n");
+		ARG_PUT(a, strrchr(BHYVELOAD_PATH, '/') + 1);
 		if (conf->wired_memory == true)
-			fprintf(fp, "-S\n");
+			ARG_PUT(a, "-S");
 		if (conf->single_user)
-			fprintf(fp, "-e\nboot_single=YES\n");
+			ARG_OPT(a, "-e", "boot_single=%s", "YES");
 		STAILQ_FOREACH(be, &conf->bhyveload_envs, next)
-			fprintf(fp, "-e\n%s\n", &be->env[0]);
+			ARG_OPT(a, "-e", "%s", &be->env[0]);
 		if (conf->bhyveload_loader)
-			fprintf(fp, "-l\n%s\n", conf->bhyveload_loader);
-		fprintf(fp, "-c\n%s\n", com != NULL ? com : "stdio");
-		fprintf(fp, "-m\n%s\n", conf->memory);
-		fprintf(fp, "-d\n%s\n",
+			ARG_OPT(a, "-l", "%s", conf->bhyveload_loader);
+		ARG_OPT(a, "-c", "%s", com != NULL ? com : "stdio");
+		ARG_OPT(a, "-m", "%s", conf->memory);
+		ARG_OPT(a, "-d", "%s",
 		    (conf->install) ? STAILQ_FIRST(&conf->isoes)->path :
 				      STAILQ_FIRST(&conf->disks)->path);
-		fprintf(fp, "%s\n", conf->name);
-		funlockfile(fp);
-		fclose(fp);
+		ARG_PUT(a, conf->name);
 
-		argv = split_args(bp);
-		if (argv == NULL) {
-			ERR("malloc %s\n", strerror(errno));
-			exit(1);
-		}
-		if (dopipe) {
-			char **t;
-			for (t = argv; *t != NULL; t++)
-				printf("%s ", *t);
-			printf("\n");
-			fflush(stdout);
-		}
-		execv(argv[0], argv);
-		ERR("cannot exec %s\n", argv[0]);
+		if (dopipe)
+			arg_print(stdout, a);
+		arg_execv(BHYVELOAD_PATH, a);
+		ERR("cannot exec %s (%s)\n", BHYVELOAD_PATH,
+		    strerror(errno));
+		exit(1);
+	arg_error:
+		ERR("cannot build %s arguments\n", BHYVELOAD_PATH);
 		exit(1);
 	}
 
@@ -458,10 +585,9 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 	}
 
 	if (pid == 0) {
-		char **args, **com, *buf;
-		size_t buf_size;
+		struct arg_builder *a;
+		char **com;
 		unsigned int pcid = 0;
-		FILE *fp;
 
 		/* child process */
 		if (dopipe) {
@@ -475,151 +601,148 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 			if (putenv(be->env) < 0)
 				ERR("invalid environment: %s\n", be->env);
 
-		if ((fp = open_memstream(&buf, &buf_size)) == NULL) {
-			ERR("cannot open memstream (%s)\n", strerror(errno));
+		if ((a = arg_init()) == NULL) {
+			ERR("%s\n", "failed to alloc arg_builder");
 			exit(1);
 		}
-		flockfile(fp);
 
-#if __FreeBSD_version > 1500023
-		fprintf(fp, "/usr/sbin/bhyve\n-H\n-w\n");
-#else
-		fprintf(fp, "/usr/sbin/bhyve\n-A\n-H\n-w\n");
+		ARG_PUT(a, strrchr(BHYVE_PATH, '/') + 1);
+#if __FreeBSD_version < 1500024
+		ARG_PUT(a, "-A");
 #endif
-		if (conf->x2apic == true)
-			fprintf(fp, "-x\n");
-		if (conf->utctime == true)
-			fprintf(fp, "-u\n");
-		if (conf->wired_memory == true)
-			fprintf(fp, "-S\n");
-		if (conf->debug_port != NULL)
-			fprintf(fp, "-G\n%s\n", conf->debug_port);
+		ARG_PUT(a, "-H");
+		ARG_PUT(a, "-w");
 
-		fprintf(fp, "-c\ncpus=%d,sockets=%d,cores=%d,threads=%d\n",
+		if (conf->x2apic == true)
+			ARG_PUT(a, "-x");
+		if (conf->utctime == true)
+			ARG_PUT(a, "-u");
+		if (conf->wired_memory == true)
+			ARG_PUT(a, "-S");
+		if (conf->debug_port != NULL)
+			ARG_OPT(a, "-G", "%s", conf->debug_port);
+
+		ARG_OPT(a, "-c", "cpus=%d,sockets=%d,cores=%d,threads=%d",
 		    conf->ncpu, conf->ncpu_sockets, conf->ncpu_cores,
 		    conf->ncpu_threads);
 		STAILQ_FOREACH(cp, &conf->cpu_pins, next)
-			fprintf(fp, "-p\n%d:%d\n", cp->vcpu, cp->hostcpu);
-		fprintf(fp, "-m\n%s\n", conf->memory);
+			ARG_OPT(a, "-p", "%d:%d", cp->vcpu, cp->hostcpu);
+		ARG_OPT(a, "-m", "%s", conf->memory);
 		ARRAY_FOREACH(com, vm->assigned_com)
 			if (*com != NULL)
-				fprintf(fp, "-l\ncom%ld,%s\n",
+				ARG_OPT(a, "-l", "com%ld,%s",
 				    CONF_COM_NUM(com, vm->assigned_com), *com);
 
 		if (conf->keymap != NULL)
-			fprintf(fp, "-K\n%s\n", conf->keymap);
+			ARG_OPT(a, "-K", "%s", conf->keymap);
 
 		if (vm->bootrom != NULL) {
-			fprintf(fp, "-l\nbootrom,%s", vm->bootrom);
+			ARG_PUT(a, "-l");
+			ARG_WRITE(a, "bootrom,%s", vm->bootrom);
 			if (vm->varsfile)
-				fprintf(fp, ",%s", vm->varsfile);
-			fprintf(fp, "\n");
+				ARG_WRITE(a, ",%s", vm->varsfile);
+			ARG_NEXT(a);
 		}
 
 		if (conf->tpm_dev) {
-			if (conf->tpm_version)
-				fprintf(fp, "-l\ntpm,%s,%s,version=%s\n",
+			if (conf->tpm_version) {
+				ARG_OPT(a, "-l", "tpm,%s,%s,version=%s",
 				    conf->tpm_type, conf->tpm_dev,
 				    conf->tpm_version);
-			else
-				fprintf(fp, "-l\ntpm,%s,%s\n", conf->tpm_type,
+			} else {
+				ARG_OPT(a, "-l", "tpm,%s,%s", conf->tpm_type,
 				    conf->tpm_dev);
+			}
 		}
 
 		switch (conf->hostbridge) {
 		case NONE:
 			break;
 		case INTEL:
-			PCISLOT(fp, "hostbridge\n", pcid, NULL);
+			PCISLOT(a, "hostbridge", pcid, NULL);
 			break;
 		case AMD:
-			PCISLOT(fp, "amd_hostbridge\n", pcid, NULL);
+			PCISLOT(a, "amd_hostbridge", pcid, NULL);
 			break;
 		}
-		PCISLOT(fp, "lpc\n", pcid, NULL);
+		PCISLOT(a, "lpc", pcid, NULL);
 
 		if (conf->virt_random)
-			PCISLOT(fp, "virtio-rnd\n", pcid, NULL);
+			PCISLOT(a, "virtio-rnd", pcid, NULL);
 		STAILQ_FOREACH(dc, &conf->disks, next) {
-			PCISLOT(fp, "%s,%s", pcid, dc->type, dc->path);
+			PCIWRITE(a, "%s,%s", pcid, dc->type, dc->path);
 			if (dc->nocache)
-				fprintf(fp, ",nocache");
+				ARG_WRITE(a, "%s", ",nocache");
 			if (dc->direct)
-				fprintf(fp, ",direct");
+				ARG_WRITE(a, "%s", ",direct");
 			if (dc->readonly)
-				fprintf(fp, ",ro");
+				ARG_WRITE(a, "%s", ",ro");
 			if (dc->nodelete)
-				fprintf(fp, ",nodelete");
-			fprintf(fp, "\n");
+				ARG_WRITE(a, "%s", ",nodelete");
+			ARG_NEXT(a);
 		}
 		STAILQ_FOREACH(ic, &conf->isoes, next)
-			PCISLOT(fp, "%s,%s\n", pcid, ic->type, ic->path);
+			PCISLOT(a, "%s,%s", pcid, ic->type, ic->path);
 		STAILQ_FOREACH(sc, &conf->sharefss, next)
-			PCISLOT(fp, "virtio-9p,%s=%s%s\n", pcid, sc->name,
+			PCISLOT(a, "virtio-9p,%s=%s%s", pcid, sc->name,
 			    sc->path, (sc->readonly) ? ",ro" : "");
 		STAILQ_FOREACH(nc, &vm->taps, next) {
-			PCISLOT(fp, "%s", pcid, nc->type);
-			if (nc->tap)
-				fprintf(fp, ",%s", nc->tap);
-			else if (nc->vale)
-				fprintf(fp, ",%s:%s", nc->vale, nc->vale_port);
-			if (nc->mac)
-				fprintf(fp, ",mac=%s", nc->mac);
-			fprintf(fp, "\n");
+			PCIWRITE(a, "%s", pcid, nc->type);
+			if (nc->tap) {
+				ARG_WRITE(a, ",%s", nc->tap);
+			} else if (nc->vale) {
+				ARG_WRITE(a, ",%s:%s", nc->vale, nc->vale_port);
+			} if (nc->mac) {
+				ARG_WRITE(a, ",mac=%s", nc->mac);
+			}
+			ARG_NEXT(a);
 		}
 		STAILQ_FOREACH(pc, &conf->passthrues, next)
-			PCISLOT(fp, "passthru,%s\n", pcid, pc->devid);
+			PCISLOT(a, "passthru,%s", pcid, pc->devid);
 		STAILQ_FOREACH(hc, &conf->hdas, next) {
-			PCISLOT(fp, "hda", pcid, NULL);
+			PCIWRITE(a, "hda", pcid, NULL);
 			if (*hc->play_dev != '\0')
-				fprintf(fp, ",play=%s", hc->play_dev);
+				ARG_WRITE(a, ",play=%s", hc->play_dev);
 			if (*hc->rec_dev != '\0')
-				fprintf(fp, ",rec=%s", hc->rec_dev);
-			fprintf(fp, "\n");
+				ARG_WRITE(a, ",rec=%s", hc->rec_dev);
+			ARG_NEXT(a);
 		}
 		for (i = 0, k = 0; i < conf->virt_console_ncontrollers; i++) {
-			PCISLOT(fp, "virtio-console", pcid, NULL);
+			PCIWRITE(a, "virtio-console", pcid, NULL);
 			for (j = 0; j < conf->virt_console_nports; j++, k++)
-				fprintf(fp, ",%s", vm->virt_console_paths[k]);
-			fprintf(fp, "\n");
+				ARG_WRITE(a, ",%s", vm->virt_console_paths[k]);
+			ARG_NEXT(a);
                 }
 		if (conf->fbuf->enable) {
 			struct fbuf *fb = conf->fbuf;
 			if (fb->unixpath) {
-				PCISLOT(fp, "fbuf,rfb=unix:%s,w=%d,h=%d,vga=%s%s",
+				PCIWRITE(a, "fbuf,rfb=unix:%s,w=%d,h=%d,vga=%s%s",
 				    pcid, fb->unixpath, fb->width, fb->height,
 				    fb->vgaconf, fb->wait ? ",wait" : "");
 			} else {
-				PCISLOT(fp, "fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
+				PCIWRITE(a, "fbuf,tcp=%s:%d,w=%d,h=%d,vga=%s%s",
 				    pcid, fb->ipaddr, fb->port, fb->width,
 				    fb->height, fb->vgaconf,
 				    fb->wait ? ",wait" : "");
 			}
 			if (fb->password)
-				fprintf(fp, ",password=%s", fb->password);
-			fprintf(fp, "\n");
+				ARG_WRITE(a, ",password=%s", fb->password);
+			ARG_NEXT(a);
 		}
 		if (conf->mouse)
-			PCISLOT(fp, "xhci,tablet\n", pcid, NULL);
+			PCISLOT(a, "xhci,tablet", pcid, NULL);
 		if (pcid > MAX_PCI_SLOT)
-			fprintf(fp, "-Y\n");
-		fprintf(fp, "%s\n", conf->name);
+			ARG_PUT(a, "-Y");
+		ARG_PUT(a, conf->name);
 
-		funlockfile(fp);
-		fclose(fp);
-		if ((args = split_args(buf)) == NULL) {
-			ERR("malloc %s\n", strerror(errno));
-			exit(1);
-		}
-		if (dopipe) {
-			char **t;
-			for (t = args; *t != NULL; t++)
-				printf("%s ", *t);
-			printf("\n");
-			fflush(stdout);
-		}
-		execv(args[0], args);
-		ERR("cannot exec %s\n", args[0]);
+		if (dopipe)
+			arg_print(stdout, a);
+		arg_execv(BHYVE_PATH, a);
+		ERR("cannot exec %s (%s)\n", BHYVE_PATH,
+		    strerror(errno));
+		exit(1);
+	arg_error:
+		ERR("cannot build %s arguments\n", BHYVE_PATH);
 		exit(1);
 	}
 

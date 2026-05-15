@@ -51,8 +51,6 @@
 
 #define PIPE_BUFFER_SIZE (4 * 1024)
 
-extern char **split_args(char *);
-
 struct proc_pipe {
 	pid_t pid;
 	char *vm_name;
@@ -314,40 +312,31 @@ spawn_grub(struct proc_pipe *pp)
 	if ((pid = fork()) < 0)
 		goto err;
 	if (pid == 0) {
-		char **argv;
-		FILE *fp;
-		char *bp;
-		size_t len;
+		struct arg_builder *a;
 
 		close(pfd[0]);
 		setenv("TERM", "xterm", 1);
 
-		fp = open_memstream(&bp, &len);
-		if (fp == NULL) {
-			ERR("cannot open memstrem (%s)\n", strerror(errno));
+		if ((a = arg_init()) == NULL) {
+			ERR("%s\n", "failed to alloc arg_builder");
 			exit(1);
 		}
-		flockfile(fp);
-		fprintf(fp,
-		    "grub-bhyve\n"
-		    "-n\n"
-		    "-e\n"
-		    "-m\n"
-		    "%s\n"
-		    "%s\n",
-		    pp->mapfile, pp->vm_name);
-		funlockfile(fp);
-		fclose(fp);
-		argv = split_args(bp);
-		if (argv == NULL) {
-			ERR("malloc: %s\n", strerror(errno));
-			exit(1);
-		}
+		ARG_PUT(a, strrchr(GRUB_PATH, '/') + 1);
+		ARG_PUT(a, "-n");
+		ARG_PUT(a, "-e");
+		ARG_OPT(a, "-m", "%s", pp->mapfile);
+		ARG_PUT(a, pp->vm_name);
+
 		dup2(pfd[1], 0);
 		dup2(pfd[1], 1);
 		dup2(pfd[1], 2);
 
-		execv(LOCALBASE "/sbin/grub-bhyve", argv);
+		arg_execv(GRUB_PATH, a);
+		ERR("cannot exec %s (%s)\n", GRUB_PATH,
+		    strerror(errno));
+		exit(1);
+	arg_error:
+		ERR("cannot build %s arguments\n", GRUB_PATH);
 		exit(1);
 	}
 	pp->pid = pid;

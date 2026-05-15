@@ -33,6 +33,45 @@
 struct vm;
 struct vm_conf;
 
+struct arg_builder {
+	FILE *cur;
+	char *cur_buf;
+	char **args;
+	size_t args_len;
+	size_t args_size;
+	size_t cur_len;
+};
+
+struct arg_builder *arg_init(void);
+void arg_free(struct arg_builder *);
+int arg_write(struct arg_builder *, const char *, ...);
+int arg_put(struct arg_builder *, const char *);
+int arg_opt(struct arg_builder *, const char *, const char *, ...);
+int arg_next(struct arg_builder *);
+void arg_print(FILE *, struct arg_builder *);
+int arg_execv(const char *, struct arg_builder *);
+
+#define ARG_WRITE(a, f, ...)                              \
+		if (arg_write((a), (f), __VA_ARGS__) < 0) \
+			goto arg_error;
+
+#define ARG_PUT(a, s)				\
+		if (arg_put((a), (s)) < 0)	\
+			goto arg_error;
+
+#define ARG_OPT(a, o, f, ...)                                \
+		if (arg_opt((a), (o), (f), __VA_ARGS__) < 0) \
+			goto arg_error;
+
+#define ARG_NEXT(a)                     \
+		if (arg_next((a)) < 0)  \
+			goto arg_error;
+
+#define DEFAULT_ARG_SIZE 32
+#define BHYVE_PATH "/usr/sbin/bhyve"
+#define BHYVELOAD_PATH "/usr/sbin/bhyveload"
+#define GRUB_PATH LOCALBASE"/sbin/grub-bhyve"
+
 #define IS_NMDM(c) (strstr((c), "nmdm") != NULL)
 
 #define PLUGIN_MODULE_VAR(v)					\

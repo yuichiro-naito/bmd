@@ -356,7 +356,6 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 	int ifd[2], ofd[2], efd[2], rc;
 	pid_t pid;
 	struct vm_conf *conf = vm_get_conf(vm);
-	size_t len;
 	char *mapfile = NULL;
 	struct grub_pty *p;
 
@@ -401,8 +400,7 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		goto err;
 	}
 	if (pid == 0) {
-		FILE *fp;
-		char **argv, *bp, **t;
+		struct arg_builder *a;
 
 		close(ifd[1]);
 		close(ofd[0]);
@@ -410,42 +408,34 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		dup2(ifd[0], 0);
 		dup2(ofd[1], 1);
 		dup2(efd[1], 2);
-		fp = open_memstream(&bp, &len);
-		if (fp == NULL) {
-			ERR("cannot open memstream (%s)\n", strerror(errno));
+
+		if ((a = arg_init()) == NULL) {
+			ERR("%s\n", "failed to alloc arg_builder");
 			exit(1);
 		}
-		flockfile(fp);
 
 		setenv("TERM", "vt100", 1);
-		fprintf(fp, LOCALBASE "/sbin/grub-bhyve\n");
+		ARG_PUT(a, strrchr(GRUB_PATH, '/') + 1);
 		if (is_wired_memory(conf))
-			fprintf(fp, "-S\n");
-		fprintf(fp, "-c\n%s\n", p->ptyname);
-		fprintf(fp, "-r\n");
-		if (is_install(conf))
-			fprintf(fp, "cd0\n");
-		else if (get_grub_run_partition(conf))
-			fprintf(fp, "hd0,%s\n", get_grub_run_partition(conf));
-		else
-			fprintf(fp, "hd0,1\n");
-		fprintf(fp, "-M\n%s\n", get_memory(conf));
-		fprintf(fp, "-m\n%s\n", get_mapfile(vm));
-		fprintf(fp, "%s\n", get_name(conf));
-		funlockfile(fp);
-		fclose(fp);
-
-		argv = split_args(bp);
-		if (argv == NULL) {
-			ERR("malloc: %s\n", strerror(errno));
-			exit(1);
+			ARG_PUT(a, "-S");
+		ARG_OPT(a, "-c", "%s", p->ptyname);
+		if (is_install(conf)) {
+			ARG_OPT(a, "-r", "%s", "cd0");
+		} else if (get_grub_run_partition(conf)) {
+			ARG_OPT(a, "-r", "hd0,%s", get_grub_run_partition(conf));
+		} else {
+			ARG_OPT(a, "-r", "%s", "hd0,1");
 		}
-		for (t = argv; *t != NULL; t++)
-			printf("%s ", *t);
-		printf("\n");
-		fflush(stdout);
-		execv(argv[0], argv);
-		ERR("cannot exec %s\n", argv[0]);
+		ARG_OPT(a, "-M", "%s", get_memory(conf));
+		ARG_OPT(a, "-m", "%s", get_mapfile(vm));
+		ARG_PUT(a, get_name(conf));
+		arg_print(stdout, a);
+		arg_execv(GRUB_PATH, a);
+		ERR("cannot exec %s (%s)\n", GRUB_PATH,
+		    strerror(errno));
+		exit(1);
+	arg_error:
+		ERR("cannot build %s arguments\n", GRUB_PATH);
 		exit(1);
 	}
 
