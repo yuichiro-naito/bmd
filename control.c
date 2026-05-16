@@ -705,14 +705,17 @@ sub_showconfig(int argc, char *argv[])
 static int
 sub_show(int argc, char *argv[])
 {
+	if (argc < 2)
+		return 2;
+
 	if (strcmp(argv[1], "config") == 0)
 		return do_showconfig(argc > 2 ? argv[2] : NULL);
 
 	if (argc < 3)
-		return 3;
+		return 2;
 
 	if (strcmp(argv[1], "vgaport") == 0)
-		return do_show_vgaport(argv[1]);
+		return do_show_vgaport(argv[2]);
 
 	if (strncmp(argv[1], "com", 3) == 0 && argv[1][3] > '0' &&
 	    argv[1][3] < '5' )
