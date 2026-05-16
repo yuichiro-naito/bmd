@@ -1285,6 +1285,7 @@ showvgaport_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 	struct vm_entry *vm_ent;
 	nvlist_t *res;
 	bool error = false;
+	struct fbuf *fbuf;
 	char vgaport[128];
 
 	res = nvlist_create(0);
@@ -1297,12 +1298,24 @@ showvgaport_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 		goto ret;
 	}
 
-	if (VM_CONF(vm_ent)->fbuf->enable &&
-	    snprintf(vgaport, sizeof(vgaport), "%s %d",
-		VM_CONF(vm_ent)->fbuf->ipaddr, VM_CONF(vm_ent)->fbuf->port) > 0)
-		nvlist_add_string(res, "vgaport", vgaport);
-	else
+	fbuf = VM_CONF(vm_ent)->fbuf;
+	if (!fbuf->enable) {
 		nvlist_add_string(res, "vgaport", "(disabled)");
+		goto ret;
+	}
+
+	if (fbuf->unixpath != NULL) {
+		nvlist_add_string(res, "vgaport", fbuf->unixpath);
+		goto ret;
+	}
+
+	if (snprintf(vgaport, sizeof(vgaport), "%s %d",
+		VM_CONF(vm_ent)->fbuf->ipaddr,
+		VM_CONF(vm_ent)->fbuf->port) < 0) {
+		nvlist_add_string(res, "vgaport", "(disabled)");
+		goto ret;
+	}
+	nvlist_add_string(res, "vgaport", vgaport);
 
 ret:
 	nvlist_add_bool(res, "error", error);
