@@ -230,30 +230,29 @@ arg_write(struct arg_builder *a, const char *f, ...)
 }
 
 static int
-arg_expand(struct arg_builder *a)
+arg_push(struct arg_builder *a, char *v)
 {
 	size_t ns;
 	char **p;
 
-	if (a->args_len < a->args_size)
-		return 0;
+	if (a->args_len >= a->args_size) {
+		ns = a->args_size + DEFAULT_ARG_SIZE;
+		if ((p = realloc(a->args, sizeof(char *) * ns)) == NULL)
+			return -1;
+		a->args = p;
+		a->args_size = ns;
+	}
 
-	ns = a->args_size + DEFAULT_ARG_SIZE;
-	if ((p = realloc(a->args, sizeof(char *) * ns)) == NULL)
-		return -1;
-	a->args = p;
-	a->args_size = ns;
+	a->args[a->args_len++] = v;
 	return 0;
 }
 
 int
 arg_next(struct arg_builder *a)
 {
-	if (arg_expand(a) < 0)
-		return -1;
 	fclose(a->cur);
-	a->args[a->args_len++] = a->cur_buf;
-	if ((a->cur = open_memstream(&a->cur_buf, &a->cur_len)) == NULL)
+	if (arg_push(a, a->cur_buf) < 0 ||
+	    (a->cur = open_memstream(&a->cur_buf, &a->cur_len)) == NULL)
 		return -1;
 
 	return 0;
@@ -300,9 +299,8 @@ arg_print(FILE *f, struct arg_builder *a)
 int
 arg_execv(const char *p, struct arg_builder *a)
 {
-	if (arg_expand(a) < 0)
+	if (arg_push(a, NULL) < 0)
 		return -1;
-	a->args[a->args_len++] = NULL;
 
 	return execv(p, a->args);
 }
