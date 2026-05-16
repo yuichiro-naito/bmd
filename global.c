@@ -29,7 +29,6 @@
 #include <string.h>
 
 #include "bmd.h"
-#include "bmd_plugin.h"
 #include "conf.h"
 #include "server.h"
 

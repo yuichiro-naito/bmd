@@ -34,7 +34,6 @@
 #include <net/if_bridgevar.h>
 
 #include <errno.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "log.h"
