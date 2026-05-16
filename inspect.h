@@ -28,6 +28,8 @@
 #ifndef _INSPECT_H
 #define _INSPECT_H
 
+#include <sys/types.h>
+
 #define NETBSD_KERNEL	       "netbsd"
 #define OPENBSD_KERNEL	       "bsd"
 #define OPENBSD_RAMDISK_KERNEL "bsd.rd"
