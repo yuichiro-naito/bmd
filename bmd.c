@@ -105,6 +105,8 @@ static void trigger_signal(struct vm_entry *);
 static int allocate_virt_console(struct vm *);
 static void clear_virt_console(struct vm *);
 static void remove_vm_filedescs(struct vm_entry *);
+static int write_err_log(struct vm_entry *);
+static int open_err_logfile(struct vm_entry *);
 
 static int
 create_eventq(void)
@@ -641,10 +643,29 @@ struct open_err_log {
 	int vm_id;
 };
 
-static int write_err_log(struct vm_entry *);
+static int
+schedule_reopen(void)
+{
+	struct vm_entry *vm_ent;
+
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		if (VM_REOPEN(vm_ent) && vm_ent->logwriter == 0 &&
+		    open_err_logfile(vm_ent) == 0)
+			return 1;
+	return 0;
+}
 
 static int
-on_exit_openerrlog(int ident, void *data)
+on_timeout_reopen(int ident __unused, void *data __unused)
+{
+	if (schedule_reopen() > 0)
+		plugin_set_timer(REOPEN_TIMEOUT_SEC, on_timeout_reopen, NULL);
+
+	return 0;
+}
+
+static int
+on_exit_writeerrlog(int ident, void *data)
 {
 	struct open_err_log *el = data;
 	struct vm_entry *vm_ent;
@@ -660,6 +681,14 @@ on_exit_openerrlog(int ident, void *data)
 	}
 
 	free(el);
+	return 0;
+}
+
+static int
+on_exit_openerrlog(int ident, void *data)
+{
+	on_exit_writeerrlog(ident, data);
+	schedule_reopen();
 	return 0;
 }
 
@@ -685,8 +714,12 @@ on_read_openerrlog(int ident, void *data)
 	close(ident);
 
 	/* Store the returned fd, even if it's an error. */
-	if ((vm_ent = lookup_vm_by_id(el->vm_id)) != NULL)
+	if ((vm_ent = lookup_vm_by_id(el->vm_id)) != NULL) {
+		if (VM_LOGFD(vm_ent) != -1)
+			close(VM_LOGFD(vm_ent));
 		VM_LOGFD(vm_ent) = fd;
+		VM_REOPEN(vm_ent) = false;
+	}
 
 	return 0;
 }
@@ -721,7 +754,7 @@ open_err_logfile(struct vm_entry *vm_ent)
 	}
 
 	if (pid == 0) {
-		setproctitle("err_logfile opener");
+		setproctitle("%s: open err_logfile", conf->name);
 		sigemptyset(&nmask);
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
@@ -849,7 +882,7 @@ write_err_log(struct vm_entry *vm_ent)
 	}
 
 	if (pid == 0) {
-		setproctitle("err_logfile writer");
+		setproctitle("%s: write err_logfile", name);
 		sigemptyset(&nmask);
 		sigaddset(&nmask, SIGTERM);
 		sigprocmask(SIG_UNBLOCK, &nmask, NULL);
@@ -858,7 +891,7 @@ write_err_log(struct vm_entry *vm_ent)
 
 	vm_ent->logwriter = pid;
 	el->vm_id = VM_CONF(vm_ent)->id;
-	if (wait_for_client(pid, on_exit_openerrlog, el) < 0) {
+	if (wait_for_client(pid, on_exit_writeerrlog, el) < 0) {
 		ERR("%s: failed to wait for err_log opener.\n", name);
 		free(el);
 	}
@@ -2239,19 +2272,36 @@ on_sighup(int ident __unused, void *data __unused)
 }
 
 static int
+on_sigusr1(int ident __unused, void *data __unused)
+{
+	struct vm_entry *vm_ent;
+	INFO("%s\n", "reopen err_logfiles");
+
+	SLIST_FOREACH(vm_ent, &vm_list, next)
+		if (VM_LOGFD(vm_ent) != -1)
+			VM_REOPEN(vm_ent) = true;
+
+	schedule_reopen();
+	plugin_set_timer(REOPEN_TIMEOUT_SEC, on_timeout_reopen, NULL);
+	return 0;
+}
+
+static int
 start_virtual_machines(void)
 {
 	struct vm_conf_entry *conf_ent;
 	struct vm_entry *vm_ent;
-	struct kevent sigev[3];
-	static event_call_back cb[3] = { on_sigterm, on_sigterm, on_sighup };
-	static void *data[3] = { NULL, NULL, NULL };
+	struct kevent sigev[4];
+	static event_call_back cb[4] = { on_sigterm, on_sigterm, on_sighup,
+					 on_sigusr1};
+	static void *data[4] = { NULL, NULL, NULL, NULL };
 
 	EV_SET(&sigev[0], SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[1], SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 	EV_SET(&sigev[2], SIGHUP, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+	EV_SET(&sigev[3], SIGUSR1, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
 
-	if (register_events(sigev, cb, data, 3) < 0)
+	if (register_events(sigev, cb, data, 4) < 0)
 		return -1;
 
 	LIST_FOREACH(conf_ent, &vm_conf_list, next) {
@@ -2640,6 +2690,7 @@ main(int argc, char *argv[])
 		sigaddset(&nmask, SIGINT);
 	sigaddset(&nmask, SIGHUP);
 	sigaddset(&nmask, SIGPIPE);
+	sigaddset(&nmask, SIGUSR1);
 	sigprocmask(SIG_BLOCK, &nmask, &omask);
 
 	if (procctl(P_PID, getpid(), PROC_SPROTECT, &(int[]) { PPROT_SET }[0]) <

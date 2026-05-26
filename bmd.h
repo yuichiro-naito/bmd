@@ -46,6 +46,8 @@
 #define MAX_LOG_PER_LINE 1024
 #define MAX_LOG_LINES    128
 
+#define REOPEN_TIMEOUT_SEC 5
+
 /*
   Plugin module
  */
@@ -160,6 +162,7 @@ enum EVENT_TYPE { EVENT, PLUGIN, CLIENT };
 			VM_##fd(v) = -1;   \
 		}                          \
 	} while (0)
+#define VM_REOPEN(v)     ((v)->reopen_errlogfile)
 
 STAILQ_HEAD(log_messages, log_message);
 struct log_message {
@@ -189,6 +192,7 @@ struct vm_entry {
 	struct log_messages lwrite;
 	int lbuf_len;
 	int lwrite_len;
+	bool reopen_errlogfile;
 };
 
 /*
