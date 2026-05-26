@@ -48,7 +48,7 @@
 
 struct id_entry {
 	SLIST_ENTRY(id_entry) next;
-	unsigned int id;
+	vm_id id;
 	char name[0];
 };
 
@@ -158,7 +158,7 @@ free_id_list(void)
 }
 
 static int
-assign_id(const char *name, unsigned int *id)
+assign_id(const char *name, vm_id *id)
 {
 	static unsigned int lastid = 0;
 	struct id_entry *e;
@@ -1070,7 +1070,7 @@ create_vm_conf(const char *vm_name)
 	char *name, *backend, idnum[12], *vct;
 	struct vm_conf *ret;
 	struct fbuf *fbuf;
-	unsigned int id;
+	vm_id id;
 	struct vartree *local;
 
 	ret = calloc(1, sizeof(typeof(*ret)));

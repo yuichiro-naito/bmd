@@ -131,6 +131,7 @@ enum EVENT_TYPE { EVENT, PLUGIN, CLIENT };
 #define VM_LD_CLEANUP(v)  (v)->loader_method->ld_cleanup(&(v)->vm, (v)->pl_ld_conf)
 #define VM_PTR(v)	  (&(v)->vm)
 #define VM_CONF(v)	  ((v)->vm.conf)
+#define VM_ID(v)	  ((v)->vm.conf->id)
 #define VM_CONF_ENT(v)	  ((struct vm_conf_entry *)((v)->vm.conf))
 #define VM_NEWCONF(v)	  ((v)->new_conf_ent)
 #define VM_TMPCONF(v)	  ((v)->tmp_conf_ent)
@@ -256,7 +257,7 @@ int create_plugin_data(struct plugin_data_list *);
 void free_plugin_data(struct plugin_data_list *);
 void free_vm_conf_entry(struct vm_conf_entry *);
 struct vm_entry *lookup_vm_by_name(const char *);
-struct vm_entry *lookup_vm_by_id(unsigned int);
+struct vm_entry *lookup_vm_by_id(vm_id);
 int set_timer(struct vm_entry *, int);
 int start_virtual_machine(struct vm_entry *);
 char *get_virt_console_sockpath(struct vm *, int, int);

@@ -45,6 +45,7 @@
 #define VIRT_CONSOLE_MAX_CONTROLLERS 16
 #define VIRT_CONSOLE_MAX_PORTS 16
 
+typedef unsigned int vm_id;
 
 struct global_conf {
 	char *config_file;
@@ -197,7 +198,7 @@ struct vm_conf {
 	int ncpu_sockets;
 	int ncpu_cores;
 	int ncpu_threads;
-	unsigned int id;
+	vm_id id;
 	char *tpm_dev;
 	char *tpm_type;
 	char *tpm_version;

@@ -62,7 +62,7 @@ struct client_console {
 	client_console_id id;
 	pid_t pid;
 	uid_t uid;
-	unsigned int vmid;
+	vm_id vmid;
 	char tty[16];
 	int  index;
 };
@@ -1249,7 +1249,7 @@ showconsole_command(struct sock_buf *s, const nvlist_t *nv,
 
 		if ((cc = create_client_console(&s->peer)) == NULL)
 			goto ret;
-		cc->vmid = VM_CONF(vm_ent)->id;
+		cc->vmid = VM_ID(vm_ent);
 		/* The trailing number of the ttyname is the most important. */
 		if (nvlist_exists_string(nv, "tty"))
 			strrevcpy(cc->tty, sizeof(cc->tty),

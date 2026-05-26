@@ -640,7 +640,7 @@ recv_ack(int sock)
 }
 
 struct open_err_log {
-	int vm_id;
+	vm_id vm_id;
 };
 
 static int
@@ -788,7 +788,7 @@ open_err_logfile(struct vm_entry *vm_ent)
 
 	close(socks[1]);
 	vm_ent->logwriter = pid;
-	el->vm_id = VM_CONF(vm_ent)->id;
+	el->vm_id = VM_ID(vm_ent);
 
 	if (wait_for_client_read(socks[0], on_read_openerrlog, el) < 0 ||
 	    wait_for_client(pid, on_exit_openerrlog, el) < 0)
@@ -890,7 +890,7 @@ write_err_log(struct vm_entry *vm_ent)
 	}
 
 	vm_ent->logwriter = pid;
-	el->vm_id = VM_CONF(vm_ent)->id;
+	el->vm_id = VM_ID(vm_ent);
 	if (wait_for_client(pid, on_exit_writeerrlog, el) < 0) {
 		ERR("%s: failed to wait for err_log opener.\n", name);
 		free(el);
@@ -2357,12 +2357,12 @@ lookup_vm_by_name(const char *name)
 }
 
 struct vm_entry *
-lookup_vm_by_id(unsigned int id)
+lookup_vm_by_id(vm_id id)
 {
 	struct vm_entry *vm_ent;
 
 	SLIST_FOREACH(vm_ent, &vm_list, next)
-		if (VM_CONF(vm_ent)->id == id)
+		if (VM_ID(vm_ent) == id)
 			return vm_ent;
 	return NULL;
 }
