@@ -2833,11 +2833,11 @@ trigger_signal(struct vm_entry *vm_ent)
 static int
 on_signal_target_exit(int ident, void *data)
 {
-	struct signal_target *t;
+	struct signal_target *t, *tn;
 	struct vm_entry *vm_ent = data;
 
 	/* Look for a signal target and remove it */
-	LIST_FOREACH(t, VM_SIGTARGETS(vm_ent), next)
+	LIST_FOREACH_SAFE(t, VM_SIGTARGETS(vm_ent), next, tn)
 		if (t->target_pid == ident) {
 			LIST_REMOVE(t, next);
 			free(t);
