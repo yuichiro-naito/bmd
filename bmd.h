@@ -33,6 +33,7 @@
 #include <sys/queue.h>
 #include <sys/ucred.h>
 
+#include "event_listener.h"
 #include "bmd_plugin.h"
 #include "conf.h"
 
@@ -56,11 +57,6 @@ extern const PLUGIN_DESC __stop_plugin_array;
 
 #define PLUGIN_FOREACH(p) \
 	for ((p) = &__start_plugin_array; (p) < &__stop_plugin_array; (p)++)
-
-/*
-  Command timeout in second.
- */
-#define COMMAND_TIMEOUT_SEC 30
 
 struct global_conf;
 
@@ -118,8 +114,6 @@ struct vm_conf_entry {
 	struct plugin_data_list pl_data;
 	LIST_ENTRY(vm_conf_entry) next;
 };
-
-enum EVENT_TYPE { EVENT, PLUGIN, CLIENT };
 
 #define VM_START(v)    (v)->vm_method->vm_start(&(v)->vm, (v)->pl_vm_conf)
 #define VM_RESET(v)    (v)->vm_method->vm_reset(&(v)->vm, (v)->pl_vm_conf)
@@ -194,19 +188,8 @@ struct vm_entry {
 	int lbuf_len;
 	int lwrite_len;
 	bool reopen_errlogfile;
-};
-
-/*
-   Event Structure.
- */
-typedef int (*event_call_back)(int ident, void *data);
-LIST_HEAD(event_list, event);
-struct event {
-	enum EVENT_TYPE type;
-	struct kevent kev;
-	void *data;
-	event_call_back cb;
-	LIST_ENTRY(event) next;
+	struct event_listener *vm_listener, *outfd_listener, *errfd_listener;
+	struct listener_list alarm_listeners;
 };
 
 /*
@@ -232,6 +215,7 @@ struct sock_buf {
 	time_t event_time;
 	struct xucred peer;
 	long cid; /* com_opener_id. set -1 if no opener is assigned. */
+	struct event_listener *recv_listener, *send_listener;
 };
 
 extern struct global_conf *gl_conf;
@@ -251,15 +235,13 @@ bool vm_method_exists(char *);
 bool loader_method_exists(char *);
 void copy_plugin_data(struct vm_conf_entry *, struct vm_conf_entry *);
 
-int wait_for_client(pid_t, event_call_back, void *);
-
 int create_plugin_data(struct plugin_data_list *);
 void free_plugin_data(struct plugin_data_list *);
 void free_vm_conf_entry(struct vm_conf_entry *);
 struct vm_entry *lookup_vm_by_name(const char *);
 struct vm_entry *lookup_vm_by_id(vm_id);
-int set_timer(struct vm_entry *, int);
 int start_virtual_machine(struct vm_entry *);
+int shutdown_virtual_machine(struct vm_entry *);
 char *get_virt_console_sockpath(struct vm *, int, int);
 
 int direct_run(const char *, bool, bool);
@@ -272,8 +254,6 @@ int send_fd(int, int, void *, size_t);
 int recv_fd(int, void *, size_t);
 int send_ack(int);
 int recv_ack(int);
-int register_events(struct kevent *, event_call_back *, void **, int);
-int set_sock_buf_wait_flags(struct sock_buf *, short, short);
 
 int register_signal_target(struct vm_entry *, pid_t, int);
 #if __FreeBSD_version <= 1500051
