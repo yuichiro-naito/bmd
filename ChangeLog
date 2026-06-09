@@ -1,4 +1,6 @@
 * 3.7
+	- Refactor event listener framework.
+	  (6c0af3251d4e90b53840f7b4d902e513d431cd00)
 	- Add support for reopening the log file.
 	  (621ce267595d0b4c330476f92464325ff3c8d3c1)
 * 3.6
