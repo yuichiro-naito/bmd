@@ -908,7 +908,7 @@ on_exit_open_comport(struct event_listener *el __unused, int ident __unused,
 	struct client_console *cc;
 	struct sock_buf *sb;
 	struct vm_entry *ent;
-	struct virt_console_user *cu;
+	struct virt_console_user *us, *cu;
 	nvlist_t *res = cp->res;
 
 	while (waitpid(cp->pid, &status, 0) < 0)
@@ -923,8 +923,9 @@ on_exit_open_comport(struct event_listener *el __unused, int ident __unused,
 			cc) == NULL)
 			ERR("%s\n", "failed to wait for client");
 		if (cc->index != -1 &&
-		    (ent = lookup_vm_by_id(cc->vmid)) != NULL) {
-			cu = &VM_PTR(ent)->virt_console_users[cc->index];
+		    (ent = lookup_vm_by_id(cc->vmid)) != NULL &&
+		    (us = VM_PTR(ent)->virt_console_users) != NULL) {
+			cu = &us[cc->index];
 			strncpy(cu->tty, cc->tty, sizeof(cu->tty));
 			cu->client = cc->pid;
 			cu->user = cc->uid;
