@@ -32,6 +32,8 @@
 
 struct vm;
 struct vm_conf;
+struct loader_pty;
+typedef void (*loader_pty_read_hook)(int, const char *, ssize_t, void *);
 
 struct arg_builder {
 	FILE *cur;
@@ -70,7 +72,6 @@ int arg_execv(const char *, struct arg_builder *);
 #define DEFAULT_ARG_SIZE 32
 #define BHYVE_PATH "/usr/sbin/bhyve"
 #define BHYVELOAD_PATH "/usr/sbin/bhyveload"
-#define GRUB_PATH LOCALBASE"/sbin/grub-bhyve"
 
 #define IS_NMDM(c) (strstr((c), "nmdm") != NULL)
 
@@ -91,8 +92,6 @@ int remove_taps(struct vm *);
 int activate_taps(struct vm *);
 int assign_taps(struct vm *);
 ssize_t writen(int, const void *, size_t);
-int write_mapfile(struct vm_conf *, char **);
-char **split_args(char *);
 
 /* Implemented in tap.c */
 int add_to_bridge(int, const char *, const char *);
@@ -100,5 +99,11 @@ int activate_tap(int, const char *);
 int create_tap(int, char **);
 int destroy_tap(int, const char *);
 int set_tap_description(int, const char *, char *);
+
+/* Implemented loader_pty.c */
+struct loader_pty *create_loader_pty(struct vm *, loader_pty_read_hook, void *);
+void free_loader_pty(struct loader_pty *);
+char *get_loader_ptyname(struct loader_pty *);
+void nvlist_force_add_number(nvlist_t *, const char *, long);
 
 #endif

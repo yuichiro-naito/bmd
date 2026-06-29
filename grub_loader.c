@@ -27,14 +27,8 @@
  */
 #include <sys/types.h>
 #include <sys/param.h>
-#include <sys/queue.h>
-#include <sys/signal.h>
-#include <sys/wait.h>
 
 #include <errno.h>
-#include <fcntl.h>
-#include <libutil.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,31 +37,19 @@
 #include <unistd.h>
 
 #include "bmd_plugin.h"
-#include "conf.h"
 #include "inspect.h"
 #include "log.h"
-#include "server.h"
 #include "vm.h"
 
-struct grub_pty {
-	int fdin;
-	int fdout;
-	int master;
-	int slave;
+struct grub_pty_buf {
 	size_t command_len;
 	char *command;
-	char ptyname[24];
-	struct termios defterm;
-	struct termios term;
 	int nwritten;
 	char buf[1024];
 };
 
 #define PTYKEY "grubpty"
-#define DEFAULT_COLUMNS 80
-#define DEFAULT_ROWS 24
-#define PIXELS_PER_COLUMN 8
-#define PIXELS_PER_ROW 16
+#define BUFKEY "grubbuf"
 
 int
 write_mapfile(struct vm_conf *conf, char **mapfile)
@@ -98,12 +80,12 @@ write_mapfile(struct vm_conf *conf, char **mapfile)
 
 	i = 0;
 	DISK_CONF_FOREACH(dc, conf)
-		if (fprintf(fp, "(hd%d) %s\n", i++, dc->path) < 0)
+		if (fprintf(fp, "(hd%d) %s\n", i++, get_disk_conf_path(dc)) < 0)
 			goto err;
 
 	i = 0;
 	ISO_CONF_FOREACH(ic, conf)
-		if (fprintf(fp, "(cd%d) %s\n", i++, ic->path) < 0)
+		if (fprintf(fp, "(cd%d) %s\n", i++, get_iso_conf_path(ic)) < 0)
 			goto err;
 
 	fclose(fp);
@@ -121,7 +103,15 @@ err2:
 static char *
 create_load_command(struct vm_conf *conf, size_t *length)
 {
-	const char **p, *repl[] = { "kopenbsd ", "knetbsd " };
+#define STRING_VALEN(s)  {(s), sizeof(s) - 1}
+	const static struct {
+		const char *cmd;
+		size_t len;
+	} *p, repl[] = {
+		STRING_VALEN("kopenbsd "),
+		STRING_VALEN("knetbsd "),
+	};
+#undef STRING_VALEN
 	size_t len = 0;
 	char *cmd = NULL;
 	char *t = (is_install(conf)) ? get_installcmd(conf) : get_loadcmd(conf);
@@ -140,11 +130,10 @@ create_load_command(struct vm_conf *conf, size_t *length)
 	}
 
 	if (is_single_user(conf))
-		ARRAY_FOREACH(p, repl) {
-			len = strlen(*p);
-			if (strncmp(t, *p, len) == 0) {
-				len = asprintf(&cmd, "%s-s %s\nboot\n", *p,
-				    t + len);
+		for (p = &repl[0]; p < &repl[nitems(repl)]; p++) {
+			if (strncmp(t, p->cmd, p->len) == 0) {
+				len = asprintf(&cmd, "%s-s %s\nboot\n", p->cmd,
+				    t + p->len);
 				goto end;
 			}
 		}
@@ -157,191 +146,65 @@ end:
 	return cmd;
 }
 
-static int
-on_read_master(int id, void *data)
+static struct grub_pty_buf *
+create_grub_pty_buf(struct vm *vm)
 {
-	struct grub_pty *p = data;
-	ssize_t size;
-	int n, peer, rc;
-	char buf[128];
+	struct grub_pty_buf *b;
 
-	peer = p->fdin;
-
-	while ((size = read(id, buf, sizeof(buf))) < 0)
-		if (errno != EINTR && errno != EAGAIN)
-			break;
-	if (size < 0)
-		return 0;
-	if (size == 0) {
-		plugin_stop_waiting_read_fd(id, p);
-		if (id > 2)
-			close(id);
-		p->master = -1;
-	}
-	if (p->command != NULL &&
-	    (n = MIN(size, (ssize_t)sizeof(p->buf) - p->nwritten)) > 0) {
-		memcpy(&p->buf[p->nwritten], buf, n);
-		p->nwritten += n;
-		if (memmem(p->buf, p->nwritten, "grub> ", 6) != NULL) {
-			if (writen(id, p->command, p->command_len) < 0)
-				ERR("failed to write loadcmd (%s)\n",
-				    strerror(errno));
-			free(p->command);
-			p->command = NULL;
-			p->command_len = 0;
-		}
-	}
-	if (peer != -1) {
-		if ((rc = writen(peer, buf, size)) < 0)
-			ERR("failed to write (%s)\n", strerror(errno));
-		if (rc <= 0) {
-			plugin_stop_waiting_read_fd(peer, p);
-			if (peer > 2)
-				close(peer);
-			p->fdin = -1;
-		}
-	}
-
-	return 0;
-}
-
-static int
-on_read_nmdm(int id, void *data)
-{
-	struct grub_pty *p = data;
-	ssize_t size;
-	int peer, rc;
-	char buf[128];
-
-	peer = p->master;
-
-	while ((size = read(id, buf, sizeof(buf))) < 0)
-		if (errno != EINTR && errno != EAGAIN)
-			break;
-	if (size < 0)
-		return 0;
-	if (size == 0) {
-		plugin_stop_waiting_read_fd(id, p);
-		if (id > 2)
-			close(id);
-		p->fdout = -1;
-		return 0;
-	}
-	if (peer != -1) {
-		if ((rc = writen(peer, buf, size)) < 0)
-			ERR("failed to write (%s)\n", strerror(errno));
-		if (rc <= 0) {
-			plugin_stop_waiting_read_fd(peer, p);
-			if (peer > 2)
-				close(peer);
-			p->master = -1;
-		}
-	}
-
-	return 0;
-}
-
-static struct grub_pty *
-create_grub_pty(struct vm *vm)
-{
-	int fd;
-	struct grub_pty *p;
-	char *com = get_assigned_com(vm, 0);
-	struct termios *term = NULL;
-	struct winsize winsz;
-
-	if ((p = malloc(sizeof(*p))) == NULL)
+	if ((b = malloc(sizeof(*b))) == NULL)
 		return NULL;
-
-	p->command = create_load_command(vm_get_conf(vm), &p->command_len);
-
-	p->nwritten = 0;
-
-	winsz.ws_col = DEFAULT_COLUMNS;
-	winsz.ws_xpixel = DEFAULT_COLUMNS * PIXELS_PER_COLUMN;
-	winsz.ws_row = DEFAULT_ROWS;
-	winsz.ws_ypixel = DEFAULT_ROWS * PIXELS_PER_ROW;
-	if (com != NULL) {
-		if (strcasecmp(com, "stdio") == 0) {
-			p->fdin = 1;
-			p->fdout = 0;
-			localttysetup(&p->defterm, &p->term);
-			term = &p->term;
-			tcgetwinsize(0, &winsz);
-		} else {
-			if ((fd = open(com, O_RDWR | O_NONBLOCK)) < 0) {
-				ERR("failed to open %s\n", com);
-				goto err;
-			}
-			ttysetup(fd, 115200);
-			p->fdin = p->fdout = fd;
-		}
-	} else
-		p->fdin = p->fdout = -1;
-
-	if (openpty(&p->master, &p->slave, p->ptyname, term, &winsz) < 0) {
-		ERR("%s\n", "failed to open pty");
-		goto err2;
-	}
-
-	if (plugin_wait_for_read_fd(p->master, on_read_master, p) < 0 ||
-	    (p->fdout != -1 &&
-		plugin_wait_for_read_fd(p->fdout, on_read_nmdm, p) < 0)) {
-		ERR("%s\n", "failed to wait for fds");
-		goto err3;
-	}
-
-	return p;
-err3:
-	close(p->master);
-	close(p->slave);
-	revoke(p->ptyname);
-err2:
-	if (p->fdin != p->fdout && p->fdin > 2)
-		close(p->fdin);
-	if (p->fdout > 2)
-		close(p->fdout);
-err:
-	free(p->command);
-	free(p);
-	return NULL;
+	b->command = create_load_command(vm_get_conf(vm), &b->command_len);
+	b->nwritten = 0;
+	return b;
 }
 
 static void
-free_grub_pty(struct grub_pty *p)
+free_grub_pty_buf(struct grub_pty_buf *b)
 {
-	if (p == NULL)
+	if (b == NULL)
+		return;
+	free(b->command);
+	free(b);
+}
+
+static void
+hook_read(int id, const char *buf, ssize_t size, void *data)
+{
+	struct grub_pty_buf *b = data;
+	int n;
+
+	if (b->command == NULL)
 		return;
 
-	if (p->fdin == 1 && p->fdout == 0)
-		rollbackttysetup(&p->defterm);
-
-	if (p->fdin != p->fdout && p->fdin > 2)
-		close(p->fdin);
-	if (p->fdout != -1)
-		plugin_stop_waiting_read_fd(p->fdout, p);
-	if (p->fdout > 2)
-		close(p->fdout);
-	if (p->master != -1) {
-		plugin_stop_waiting_read_fd(p->master, p);
-		close(p->master);
+	if ((n = MIN(size, (ssize_t)sizeof(b->buf) - b->nwritten)) > 0) {
+		memcpy(&b->buf[b->nwritten], buf, n);
+		b->nwritten += n;
+		if (memmem(b->buf, b->nwritten, "grub> ", 6) != NULL) {
+			if (writen(id, b->command, b->command_len) < 0)
+				ERR("failed to write loadcmd (%s)\n",
+				    strerror(errno));
+			free(b->command);
+			b->command = NULL;
+			b->command_len = 0;
+		}
 	}
-	if (p->slave != -1)
-		close(p->slave);
-	revoke(p->ptyname);
-	free(p->command);
-	free(p);
 }
 
 static void
 grub_load_cleanup(struct vm *vm, nvlist_t *pl_conf)
 {
 	const char *fn;
-	struct grub_pty *p;
+	struct loader_pty *p;
+	struct grub_pty_buf *b;
 
 	if (nvlist_exists_number(pl_conf, PTYKEY)) {
-		p = (struct grub_pty *)nvlist_get_number(pl_conf, PTYKEY);
-		free_grub_pty(p);
+		p = (struct loader_pty *)nvlist_take_number(pl_conf, PTYKEY);
+		free_loader_pty(p);
+	}
+
+	if (nvlist_exists_number(pl_conf, BUFKEY)) {
+		b = (struct grub_pty_buf *)nvlist_take_number(pl_conf, BUFKEY);
+		free_grub_pty_buf(b);
 	}
 
 	if ((fn = get_mapfile(vm)) != NULL) {
@@ -357,7 +220,8 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 	pid_t pid;
 	struct vm_conf *conf = vm_get_conf(vm);
 	char *mapfile = NULL;
-	struct grub_pty *p;
+	struct loader_pty *p;
+	struct grub_pty_buf *b;
 
 	if (pipe(ifd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
@@ -366,16 +230,16 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 
 	if (pipe(ofd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
-		goto err1;
+		goto err0;
 	}
 
 	if (pipe(efd) < 0) {
 		ERR("cannot create pipe (%s)\n", strerror(errno));
-		goto err2;
+		goto err1;
 	}
 
 	if (write_mapfile(conf, &mapfile) < 0)
-		goto err;
+		goto err2;
 
 	if (mapfile != NULL) {
 		if (get_mapfile(vm))
@@ -383,21 +247,22 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		rc = set_mapfile(vm, mapfile);
 		free(mapfile);
 		if (rc < 0)
-			goto err;
+			goto err2;
 	}
 
-	if ((p = create_grub_pty(vm)) == NULL) {
-		ERR("%s\n", "failed to create grub_pty");
-		goto err;
+	if ((b = create_grub_pty_buf(vm)) == NULL) {
+		ERR("%s\n", "failed to create grub_pty_buf");
+		goto err2;
 	}
 
-	if (nvlist_exists_number(pl_conf, PTYKEY))
-		nvlist_free_number(pl_conf, PTYKEY);
-	nvlist_add_number(pl_conf, PTYKEY, (intptr_t)p);
+	if ((p = create_loader_pty(vm, hook_read, b)) == NULL) {
+		ERR("%s\n", "failed to create loader_pty");
+		goto err3;
+	}
 
 	if ((pid = fork()) < 0) {
 		ERR("cannot fork (%s)\n", strerror(errno));
-		goto err;
+		goto err4;
 	}
 	if (pid == 0) {
 		struct arg_builder *a;
@@ -418,7 +283,7 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		ARG_PUT(a, strrchr(GRUB_PATH, '/') + 1);
 		if (is_wired_memory(conf))
 			ARG_PUT(a, "-S");
-		ARG_OPT(a, "-c", "%s", p->ptyname);
+		ARG_OPT(a, "-c", "%s", get_loader_ptyname(p));
 		if (is_install(conf)) {
 			ARG_OPT(a, "-r", "%s", "cd0");
 		} else if (get_grub_run_partition(conf)) {
@@ -439,6 +304,9 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 		exit(1);
 	}
 
+	nvlist_force_add_number(pl_conf, PTYKEY, (intptr_t)p);
+	nvlist_force_add_number(pl_conf, BUFKEY, (intptr_t)b);
+
 	set_pid(vm, pid);
 	set_state(vm, LOAD);
 	close(ifd[0]);
@@ -450,13 +318,17 @@ grub_load(struct vm *vm, nvlist_t *pl_conf)
 	/* The target kernel is loaded, Boot ROM isn't necessary. */
 	clear_bootrom(vm);
 	return 0;
-err:
+err4:
+	free_loader_pty(p);
+err3:
+	free_grub_pty_buf(b);
+err2:
 	close(efd[0]);
 	close(efd[1]);
-err2:
+err1:
 	close(ofd[0]);
 	close(ofd[1]);
-err1:
+err0:
 	close(ifd[0]);
 	close(ifd[1]);
 	return -1;

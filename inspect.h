@@ -30,6 +30,11 @@
 
 #include <sys/types.h>
 
+#ifndef LOCALBASE
+#define LOCALBASE "/usr/local"
+#endif
+
+#define GRUB_PATH              LOCALBASE"/sbin/grub-bhyve"
 #define NETBSD_KERNEL	       "netbsd"
 #define OPENBSD_KERNEL	       "bsd"
 #define OPENBSD_RAMDISK_KERNEL "bsd.rd"
@@ -52,6 +57,7 @@ struct inspection {
 	char *grub_run_partition; /* needs to be freed */
 };
 
+int write_mapfile(struct vm_conf *, char **);
 int inspect_with_grub(struct inspection *);
 char *inspect(struct vm_conf *);
 

@@ -59,6 +59,8 @@
 #define MAX_PCI_SLOT 32
 #define MAX_PCI_DEVICES (MAX_PCI_BUS * MAX_PCI_SLOT)
 
+#define PTYKEY "loaderpty"
+
 #define PCISLOT(a, fmt, s, ...)                                      \
 	{                                                             \
 		ARG_OPT(a, "-s", "%d:%d:0," fmt, (s) >> 5, (s) & 0x1f,	\
@@ -353,54 +355,55 @@ uefi_load(struct vm *vm, nvlist_t *pl_conf __unused)
 }
 
 static int
-bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
+bhyve_load(struct vm *vm, nvlist_t *pl_conf)
 {
 	pid_t pid;
-	int outfd[2], errfd[2];
+	int ifd[2], ofd[2], efd[2];
 	struct bhyveload_env *be;
 	struct vm_conf *conf = vm->conf;
-	char *com = vm->assigned_com[0];
-	bool dopipe = (com == NULL || strcasecmp(com, "stdio") != 0);
+	struct loader_pty *pty;
 
-	if (dopipe) {
-		if (pipe(outfd) < 0) {
-			ERR("cannot create pipe (%s)\n", strerror(errno));
-			return (-1);
-		}
+	if (pipe(ifd) < 0) {
+		ERR("cannot create pipe (%s)\n", strerror(errno));
+		return -1;
+	}
 
-		if (pipe(errfd) < 0) {
-			ERR("cannot create pipe (%s)\n", strerror(errno));
-			close(outfd[0]);
-			close(outfd[1]);
-			return (-1);
-		}
+	if (pipe(ofd) < 0) {
+		ERR("cannot create pipe (%s)\n", strerror(errno));
+		goto err0;
+	}
+
+	if (pipe(efd) < 0) {
+		ERR("cannot create pipe (%s)\n", strerror(errno));
+		goto err1;
+	}
+
+	if ((pty = create_loader_pty(vm, NULL, NULL)) == NULL) {
+		ERR("%s\n", "failed to create loader_pty");
+		goto err2;
 	}
 
 	if ((pid = fork()) < 0) {
 		ERR("cannot fork (%s)\n", strerror(errno));
-		if (dopipe) {
-			close(outfd[0]);
-			close(outfd[1]);
-			close(errfd[0]);
-			close(errfd[1]);
-		}
-		return (-1);
+		goto err3;
 	}
 
 	if (pid == 0) {
 		struct arg_builder *a;
 
-		if (dopipe) {
-			close(outfd[0]);
-			close(errfd[0]);
-			dup2(outfd[1], 1);
-			dup2(errfd[1], 2);
-		}
+		close(ifd[1]);
+		close(ofd[0]);
+		close(efd[0]);
+		dup2(ifd[0], 0);
+		dup2(ofd[1], 1);
+		dup2(efd[1], 2);
+
 		if ((a = arg_init()) == NULL) {
 			ERR("%s\n", "failed to alloc arg_builder");
 			exit(1);
 		}
 
+		setenv("TERM", "vt100", 1);
 		ARG_PUT(a, strrchr(BHYVELOAD_PATH, '/') + 1);
 		if (conf->wired_memory == true)
 			ARG_PUT(a, "-S");
@@ -410,15 +413,14 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 			ARG_OPT(a, "-e", "%s", &be->env[0]);
 		if (conf->bhyveload_loader)
 			ARG_OPT(a, "-l", "%s", conf->bhyveload_loader);
-		ARG_OPT(a, "-c", "%s", com != NULL ? com : "stdio");
+		ARG_OPT(a, "-c", "%s", get_loader_ptyname(pty));
 		ARG_OPT(a, "-m", "%s", conf->memory);
 		ARG_OPT(a, "-d", "%s",
 		    (conf->install) ? STAILQ_FIRST(&conf->isoes)->path :
 				      STAILQ_FIRST(&conf->disks)->path);
 		ARG_PUT(a, conf->name);
 
-		if (dopipe)
-			arg_print(stdout, a);
+		arg_print(stdout, a);
 		arg_execv(BHYVELOAD_PATH, a);
 		ERR("cannot exec %s (%s)\n", BHYVELOAD_PATH,
 		    strerror(errno));
@@ -428,17 +430,41 @@ bhyve_load(struct vm *vm, nvlist_t *pl_conf __unused)
 		exit(1);
 	}
 
-	if (dopipe) {
-		close(outfd[1]);
-		close(errfd[1]);
-		vm->outfd = outfd[0];
-		vm->errfd = errfd[0];
-	}
+	nvlist_force_add_number(pl_conf, PTYKEY, (intptr_t)pty);
+
 	vm->pid = pid;
 	vm->state = LOAD;
+	close(ifd[0]);
+	vm->infd = ifd[1];
+	close(ofd[1]);
+	vm->outfd = ofd[0];
+	close(efd[1]);
+	vm->errfd = efd[0];
 	/* The target kernel is loaded, Boot ROM isn't necessary. */
 	clear_bootrom(vm);
 	return 0;
+err3:
+	free_loader_pty(pty);
+err2:
+	close(efd[0]);
+	close(efd[1]);
+err1:
+	close(ofd[0]);
+	close(ofd[1]);
+err0:
+	close(ifd[0]);
+	close(ifd[1]);
+	return -1;
+}
+
+static void
+bhyve_load_cleanup(struct vm *vm __unused, nvlist_t *pl_conf)
+{
+	struct loader_pty *p;
+	if (nvlist_exists_number(pl_conf, PTYKEY)) {
+		p = (struct loader_pty *)nvlist_take_number(pl_conf, PTYKEY);
+		free_loader_pty(p);
+	}
 }
 
 int
@@ -853,7 +879,7 @@ writen(int fd, const void *buf, size_t size)
 
 PLUGIN_VM_METHOD(bhyve, exec_bhyve, reset_bhyve, poweroff_bhyve,
     acpi_poweroff_bhyve, cleanup_bhyve);
-PLUGIN_LOADER_METHOD(bhyveload, bhyve_load, NULL);
+PLUGIN_LOADER_METHOD(bhyveload, bhyve_load, bhyve_load_cleanup);
 PLUGIN_LOADER_METHOD(uefi, uefi_load, NULL);
 PLUGIN_LOADER_METHOD(csm, csm_load, NULL);
 
