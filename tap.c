@@ -135,7 +135,7 @@ destroy_tap(int s, const char *name)
 		return 0;
 
 	memset(&ifr, 0, sizeof(struct ifreq));
-	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
+	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name) - 1);
 
 	return (ioctl(s, SIOCIFDESTROY, &ifr));
 }
@@ -149,7 +149,7 @@ set_tap_description(int s, const char *tap, char *desc)
 		return 0;
 
 	memset(&ifr, 0, sizeof(struct ifreq));
-	strncpy(ifr.ifr_name, tap, sizeof(ifr.ifr_name));
+	strncpy(ifr.ifr_name, tap, sizeof(ifr.ifr_name) - 1);
 
 	ifr.ifr_buffer.length = strlen(desc) + 1;
 	if (ifr.ifr_buffer.length == 1) {

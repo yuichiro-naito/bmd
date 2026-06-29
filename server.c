@@ -927,6 +927,7 @@ on_exit_open_comport(struct event_listener *el __unused, int ident __unused,
 		    (us = VM_PTR(ent)->virt_console_users) != NULL) {
 			cu = &us[cc->index];
 			strncpy(cu->tty, cc->tty, sizeof(cu->tty));
+			cu->tty[sizeof(cu->tty) - 1] = '\0';
 			cu->client = cc->pid;
 			cu->user = cc->uid;
 			cu->used = true;
