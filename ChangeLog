@@ -1,4 +1,6 @@
 * 3.7
+	- Assign a dedicated pty for bhyveload results in the VM console speed up.
+	  (94902d94e1c5cc80ef69a8a2080176c42f0dd2af)
 	- Refactor event listener framework.
 	  (6c0af3251d4e90b53840f7b4d902e513d431cd00)
 	- Add support for reopening the log file.
