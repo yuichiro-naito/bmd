@@ -48,9 +48,7 @@
 static struct event_queue {
 	int kq;
 	uint nins;
-	uint nouts;
 	struct kevent in_events[NEVENTS];
-	struct kevent out_events[NEVENTS];
 } eventq;
 
 /*
@@ -88,7 +86,7 @@ create_eventq(void)
 		ERR("%s\n", "cannot open kqueue");
 		return -1;
 	}
-	eventq.nins = eventq.nouts = 0;
+	eventq.nins = 0;
 	return 0;
 }
 
@@ -103,16 +101,16 @@ destroy_eventq(void)
 
 	close(eventq.kq);
 	eventq.kq = -1;
-	eventq.nins = eventq.nouts = 0;
+	eventq.nins = 0;
 }
 
 static int
-wait_for_eventq(struct timespec *to)
+wait_for_eventq(struct timespec *to, struct kevent *kev)
 {
 	int rc;
 
 	while ((rc = kevent(eventq.kq, eventq.in_events, eventq.nins,
-		    eventq.out_events, nitems(eventq.out_events), to)) < 0)
+		    kev, 1, to)) < 0)
 		if (errno != EINTR)
 			break;
 	eventq.nins = 0;
@@ -120,7 +118,6 @@ wait_for_eventq(struct timespec *to)
 		ERR("kevent failure (%s)\n", strerror(errno));
 		return -1;
 	}
-	eventq.nouts = rc;
 	return rc;
 }
 
@@ -146,7 +143,6 @@ kevent_try_add(struct kevent *kev, int flags)
 		ERR("add kevent failure (%s)\n", strerror(errno));
 		return -1;
 	}
-	eventq.nouts = 0;
 	return rc;
 }
 
@@ -189,28 +185,25 @@ call_event_cb(int ident, struct event_listener *ev)
 int
 event_loop(int *quit)
 {
-	struct kevent *ev;
-	int i, n;
+	int n;
+	struct kevent kev;
 	struct timespec *to, timeout;
 
 	while (*quit == 0) {
 		to = calc_timeout(COMMAND_TIMEOUT_SEC, &timeout);
-		if ((n = wait_for_eventq(to)) < 0)
+		if ((n = wait_for_eventq(to, &kev)) < 0)
 			return -1;
 		if (n == 0) {
 			close_timeout_sock_buf(COMMAND_TIMEOUT_SEC);
 			continue;
 		}
-		for (i = 0; i < n; i++) {
-			ev = &eventq.out_events[i];
-			if (ev->udata == NULL) {
-				ERR("recieved unexpcted event! (%d)\n",
-				    ev->filter);
-				continue;
-			}
-			if (call_event_cb(ev->ident, ev->udata) < 0)
-				ERR("%s\n", "event callback failed");
+		if (kev.udata == NULL) {
+			ERR("recieved unexpcted event! (%d)\n",
+			    kev.filter);
+			continue;
 		}
+		if (call_event_cb(kev.ident, kev.udata) < 0)
+			ERR("%s\n", "event callback failed");
 	}
 
 	return 0;
@@ -344,24 +337,21 @@ count_plugin_process_events(void)
 int
 wait_for_all_vm_terminate(int nvms)
 {
-	int i, n;
-	struct kevent *ev;
+	int n;
+	struct kevent kev;
 	struct event_listener *el;
 
 	while (count_plugin_process_events() + nvms > 0) {
-		if ((n = wait_for_eventq(NULL)) < 0)
+		if ((n = wait_for_eventq(NULL, &kev)) < 0)
 			return -1;
-		for (i = 0; i < n; i++) {
-			ev = &eventq.out_events[i];
-			if (ev->udata == NULL)
-				continue;
-			el = ev->udata;
-			if (el->category == VMEVENT &&
-			    el->kev.filter == EVFILT_PROC)
-				nvms--;
-			if (call_event_cb(ev->ident, ev->udata) < 0)
-				ERR("%s\n", "event callback failed");
-		}
+		if (kev.udata == NULL)
+			continue;
+		el = kev.udata;
+		if (el->category == VMEVENT &&
+		    el->kev.filter == EVFILT_PROC)
+			nvms--;
+		if (call_event_cb(kev.ident, kev.udata) < 0)
+			ERR("%s\n", "event callback failed");
 	}
 #if __FreeBSD_version < 1400059
 	// waiting for vm memory is actually freed in the kernel.
