@@ -331,7 +331,7 @@ schedule_reopen(void)
 	struct vm_entry *vm_ent;
 
 	SLIST_FOREACH(vm_ent, &vm_list, next)
-		if (VM_REOPEN(vm_ent) && vm_ent->logwriter == 0 &&
+		if (VM_REOPEN(vm_ent) && VM_LOGWRITER(vm_ent) == 0 &&
 		    open_err_logfile(vm_ent) == 0)
 			return 1;
 	return 0;
@@ -357,7 +357,7 @@ on_exit_writeerrlog(struct event_listener *l __unused, int ident, void *data)
 			break;
 
 	if ((vm_ent = lookup_vm_by_id(el->vm_id)) != NULL) {
-		vm_ent->logwriter = 0;
+		VM_LOGWRITER(vm_ent) = 0;
 		if (vm_ent->lbuf_len > 0)
 			write_err_log(vm_ent);
 	}
@@ -465,7 +465,7 @@ open_err_logfile(struct vm_entry *vm_ent)
 	}
 
 	close(socks[1]);
-	vm_ent->logwriter = pid;
+	VM_LOGWRITER(vm_ent) = pid;
 	el->vm_id = VM_ID(vm_ent);
 
 	ln[0] = create_fd_read_listener(socks[0], on_read_openerrlog, el);
@@ -571,7 +571,7 @@ write_err_log(struct vm_entry *vm_ent)
 		exit((do_write_err_log(vm_ent) < 0) ? 1 : 0);
 	}
 
-	vm_ent->logwriter = pid;
+	VM_LOGWRITER(vm_ent) = pid;
 	el->vm_id = VM_ID(vm_ent);
 	if (create_proc_listener(pid, on_exit_writeerrlog, el) == NULL) {
 		ERR("%s: failed to wait for err_log opener.\n", name);
@@ -633,7 +633,7 @@ retry:
 	if (limited)
 		goto retry;
 
-	if (VM_LOGFD(vm_ent) == -1 || vm_ent->logwriter != 0)
+	if (VM_LOGFD(vm_ent) == -1 || VM_LOGWRITER(vm_ent) != 0)
 		return 0;
 
 	return write_err_log(vm_ent);
@@ -1810,7 +1810,7 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 		}
 
 	if (conf->err_logfile && VM_LOGFD(vm_ent) == -1 &&
-	    vm_ent->logwriter == 0)
+	    VM_LOGWRITER(vm_ent) == 0)
 		open_err_logfile(vm_ent);
 
 	if (VM_STATE(vm_ent) == TERMINATE) {
@@ -2147,8 +2147,8 @@ stop_virtual_machines(void)
 		if (VM_STATE(vm_ent) == LOAD || VM_STATE(vm_ent) == RUN) {
 			count++;
 			shutdown_virtual_machine(vm_ent);
-			if (vm_ent->logwriter != 0)
-				kill(vm_ent->logwriter, SIGTERM);
+			if (VM_LOGWRITER(vm_ent) != 0)
+				kill(VM_LOGWRITER(vm_ent), SIGTERM);
 		}
 	}
 

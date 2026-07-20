@@ -157,6 +157,7 @@ struct vm_conf_entry {
 			VM_##fd(v) = -1;   \
 		}                          \
 	} while (0)
+#define VM_LOGWRITER(v)  ((v)->logwriter)
 #define VM_REOPEN(v)     ((v)->reopen_errlogfile)
 
 STAILQ_HEAD(log_messages, log_message);
