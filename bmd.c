@@ -386,12 +386,16 @@ on_read_openerrlog(struct event_listener *l, int ident, void *data)
 	destroy_event_listener(l);
 	close(ident);
 
-	/* Store the returned fd, even if it's an error. */
 	if ((vm_ent = lookup_vm_by_id(el->vm_id)) != NULL) {
+		/* Store the returned fd, even if it's an error. */
 		if (VM_LOGFD(vm_ent) != -1)
 			close(VM_LOGFD(vm_ent));
 		VM_LOGFD(vm_ent) = fd;
 		VM_REOPEN(vm_ent) = false;
+	} else {
+		/* If the VM has been removed, close the error log file. */
+		if (fd != -1)
+			close(fd);
 	}
 
 	return 0;
