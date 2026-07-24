@@ -1403,12 +1403,15 @@ vm_down_command(struct sock_buf *s __unused, const nvlist_t *nv __unused,
 		goto ret;
 	}
 
-	if (VM_STATE(vm_ent) != LOAD && VM_STATE(vm_ent) != RUN)
+	if (VM_STATE(vm_ent) == TERMINATE || VM_STATE(vm_ent) == PRESTART ||
+	    VM_STATE(vm_ent) == POSTSTOP)
 		goto ret;
 
 	conf = VM_CONF(vm_ent);
 	switch (how) {
 	case 0:
+		if (VM_STATE(vm_ent) != LOAD && VM_STATE(vm_ent) != RUN)
+			goto ret;
 		INFO("stop vm %s\n", conf->name);
 		shutdown_virtual_machine(vm_ent);
 		VM_STATE(vm_ent) = STOP;
