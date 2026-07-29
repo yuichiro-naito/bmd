@@ -1,4 +1,6 @@
 .PATH: ..
+.PHONY: test
+
 PROG=	bmdtest
 CFLAGS+=-g -Wall -DLOCALBASE=\"$(LOCALBASE)\" -DTEST -I..
 LDADD=	-lnv -lutil
