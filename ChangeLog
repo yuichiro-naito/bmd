@@ -1,4 +1,6 @@
 * 3.7
+	- Allow resetting or powering off the VM while terminating.
+	  (7d62ef60ca36169d47a231bfa7943bf599441050)
 	- Assign a dedicated pty for bhyveload results in the VM console speed up.
 	  (94902d94e1c5cc80ef69a8a2080176c42f0dd2af)
 	- Refactor event listener framework.
