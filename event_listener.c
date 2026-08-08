@@ -477,15 +477,3 @@ del_listener(struct event_listener *e)
 {
 	LIST_REMOVE(e, next);
 }
-
-struct event_listener *
-get_first_listener(struct listener_list *l)
-{
-	return LIST_FIRST(l);
-}
-
-struct event_listener *
-get_next_listener(struct event_listener *el)
-{
-	return LIST_NEXT(el, next);
-}

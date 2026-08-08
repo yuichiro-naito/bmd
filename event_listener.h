@@ -49,14 +49,6 @@ void init_listener_list(struct listener_list *);
 void remove_all_listeners(struct listener_list *);
 void add_listener(struct listener_list *, struct event_listener *);
 void del_listener(struct event_listener *);
-struct event_listener *get_first_listener(struct listener_list *);
-struct event_listener *get_next_listener(struct event_listener *);
-#define LISTENER_FOREACH(l, lst)                           \
-	for ((l) = get_first_listener((lst)); (l) != NULL; \
-	    (l) = get_next_listener((l)))
-#define LISTENER_FOREACH_SAFE(l, lst, t)      \
-	for ((l) = get_first_listener((lst)); \
-	    (l) != NULL && (((t) = get_next_listener((l))), 1); (l) = (t))
 
 int create_eventq(void);
 void destroy_eventq(void);
