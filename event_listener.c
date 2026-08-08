@@ -241,12 +241,28 @@ register_event(EVENT_CATEGORY cate, struct kevent *kev, event_call_back ecb,
 	return el;
 }
 
+static int
+remove_buffered_event(struct event_listener *el)
+{
+	unsigned int i;
+	for (i = 0; i < eventq.nins; i++)
+		if (eventq.in_events[i].udata == el)
+			break;
+	if (i == eventq.nins)
+		return 0;
+	for (; i < eventq.nins - 1; i++)
+		eventq.in_events[i] = eventq.in_events[i + 1];
+	eventq.nins--;
+	return 1;
+}
+
 void
 destroy_event_listener(struct event_listener *el)
 {
 	if (el == NULL)
 		return;
-	kevent_del(&el->kev);
+	if (remove_buffered_event(el) == 0)
+		kevent_del(&el->kev);
 	LIST_REMOVE(el, all);
 	free(el);
 }
