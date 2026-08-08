@@ -1871,7 +1871,8 @@ force_kill:
 	 * we can't manage bhyve process at all.
 	 */
 	VM_POWEROFF(vm_ent);
-	waitpid(VM_PID(vm_ent), NULL, 0);
+	if (vm_ent->vm_listener == NULL)
+		waitpid(VM_PID(vm_ent), NULL, 0);
 	cleanup_virtual_machine(vm_ent);
 	return -1;
 }
