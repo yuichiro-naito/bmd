@@ -614,7 +614,8 @@ do_showconfig(const char *name)
 static int
 sub_boot_install(int argc, char *argv[])
 {
-	char c, *name;
+	int c;
+	char *name;
 	bool console = false;
 	int boot_style = strcmp(argv[0], "install") == 0 ? 2 : 1;
 
@@ -741,7 +742,8 @@ sub_inspect(int argc, char *argv[])
 static int
 sub_run(int argc, char *argv[])
 {
-	char c, *name;
+	int c;
+	char *name;
 	bool install, single;
 	install = single = false;
 	while ((c = getopt(argc, argv, "is")) != -1) {
@@ -764,7 +766,8 @@ sub_run(int argc, char *argv[])
 static int
 sub_list(int argc, char *argv[])
 {
-	char c, *key = NULL;
+	int c;
+	char *key = NULL;
 	unsigned int i;
 	bool r = false;
 	while ((c = getopt(argc, argv, "rs:")) != -1) {
