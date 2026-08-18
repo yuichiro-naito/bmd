@@ -316,9 +316,16 @@ static int
 parse_passthru(struct vm_conf *conf, char *val)
 {
 	char *p;
-	for (p = val; *p != '\0'; p++)
-		if (*p != '/' && (*p < '0' || *p > '9'))
-			return -1;
+
+	if (strncmp(val, "ppt", 3) == 0) {
+		for (p = &val[3]; *p != '\0'; p++)
+			if (*p < '0' || *p > '9')
+				return -1;
+	} else {
+		for (p = val; *p != '\0'; p++)
+			if (*p != '/' && (*p < '0' || *p > '9'))
+				return -1;
+	}
 
 	return add_passthru_conf(conf, val);
 }
