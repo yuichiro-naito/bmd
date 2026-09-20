@@ -1,3 +1,6 @@
+* 3.8
+	- Add support for 'iov_device'.
+	  (b67a046e5ae19d25a297581aa782edd749d5b28e)
 * 3.7
 	- Allow resetting or powering off the VM while terminating.
 	  (7d62ef60ca36169d47a231bfa7943bf599441050)
