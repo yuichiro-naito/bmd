@@ -574,6 +574,7 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 {
 	struct vm_conf *conf = vm->conf;
 	struct passthru_conf *pc;
+	struct vf_device *vd;
 	struct disk_conf *dc;
 	struct sharefs_conf *sc;
 	struct iso_conf *ic;
@@ -723,6 +724,8 @@ exec_bhyve(struct vm *vm, nvlist_t *pl_conf __unused)
 		}
 		STAILQ_FOREACH(pc, &conf->passthrues, next)
 			PCISLOT(a, "passthru,%s", pcid, pc->devid);
+		STAILQ_FOREACH(vd, &vm->vf_devices, next)
+			PCISLOT(a, "passthru,%s", pcid, vd->pptdev);
 		STAILQ_FOREACH(hc, &conf->hdas, next) {
 			PCIWRITE(a, "hda", pcid, NULL);
 			if (*hc->play_dev != '\0')

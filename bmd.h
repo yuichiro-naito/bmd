@@ -36,6 +36,7 @@
 #include "event_listener.h"
 #include "bmd_plugin.h"
 #include "conf.h"
+#include "iov_pool.h"
 
 #define BMD_VERSION "3.7"
 
@@ -159,6 +160,8 @@ struct vm_conf_entry {
 	} while (0)
 #define VM_LOGWRITER(v)  ((v)->logwriter)
 #define VM_REOPEN(v)     ((v)->reopen_errlogfile)
+#define VM_VF_DEVS(v)     (&(v)->vm.vf_devices)
+
 
 STAILQ_HEAD(log_messages, log_message);
 struct log_message {

@@ -67,6 +67,10 @@ struct hda_conf {
 struct passthru_conf {
 	STAILQ_ENTRY(passthru_conf) next;
 	char *devid;
+	int ppt;
+	int bus;
+	int slot;
+	int func;
 };
 
 struct disk_conf {
@@ -131,6 +135,11 @@ struct cpu_pin {
 	STAILQ_ENTRY(cpu_pin) next;
 	int vcpu;
 	int hostcpu;
+};
+
+struct iov_device {
+	STAILQ_ENTRY(iov_device) next;
+	char pf_name[0];
 };
 
 struct conf_var {
@@ -212,6 +221,8 @@ struct vm_conf {
 	int virt_console_nports;
 	char *virt_console_default_template;
 	char *virt_console_template;
+	STAILQ_HEAD(, iov_device) iov_devices;
+	int niov_devices;
 };
 
 struct virt_console_user {
@@ -219,6 +230,12 @@ struct virt_console_user {
 	uid_t user;
 	pid_t client;
 	char tty[16];
+};
+
+struct vf_device {
+	STAILQ_ENTRY(vf_device) next;
+	int ppt;
+	char pptdev[0];
 };
 
 struct vm {
@@ -238,6 +255,7 @@ struct vm {
 	int virt_console_npaths;
 	char **virt_console_paths;
 	struct virt_console_user *virt_console_users;
+	STAILQ_HEAD(, vf_device) vf_devices;
 };
 
 #define ARRAY_FOREACH(p, a)	for (p = &a[0]; p < &a[nitems(a)]; p++)
@@ -255,6 +273,8 @@ void free_vm_conf(struct vm_conf *);
 #define free_bhyveload_env(p) free(p)
 #define free_bhyve_env(p)     free(p)
 #define free_cpu_pin(p)	      free(p)
+#define free_iov_device(p)    free(p)
+#define free_vf_device(p)     free(p)
 void free_fbuf(struct fbuf *);
 void clear_passthru_conf(struct vm_conf *);
 void clear_disk_conf(struct vm_conf *);
@@ -265,8 +285,9 @@ void clear_hda_conf(struct vm_conf *);
 void clear_bhyveload_env(struct vm_conf *);
 void clear_bhyve_env(struct vm_conf *);
 void clear_cpu_pin(struct vm_conf *);
+void clear_iov_device(struct vm_conf *);
 
-int add_passthru_conf(struct vm_conf *, const char *);
+int add_passthru_conf(struct vm_conf *, const char *, int, int, int, int);
 int add_disk_conf(struct vm_conf *, const char *, const char *, bool, bool,
     bool, bool, bool);
 int add_iso_conf(struct vm_conf *, const char *, const char *, bool);
@@ -277,6 +298,7 @@ int add_hda_conf(struct vm_conf *, const char *, const char *);
 int add_bhyveload_env(struct vm_conf *, const char *);
 int add_bhyve_env(struct vm_conf *, const char *);
 int add_cpu_pin(struct vm_conf *, int, int);
+int add_iov_device(struct vm_conf *, const char *);
 struct net_conf *copy_net_conf(const struct net_conf *);
 int set_name(struct vm_conf *, const char *);
 int set_memory(struct vm_conf *, const char *);

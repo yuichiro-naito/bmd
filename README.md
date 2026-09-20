@@ -196,6 +196,7 @@ Following keys are available.
 | network | bridge or vale name(s)<br>e.g. bridge0 vale1 | no | (none) |
 | owner | owner of VM | no | same as the file owner in which the vm section is written |
 | passthru | PCI passthrough device id<br>e.g. 1/0/130| no | (none) |
+| iov_device | Assign a free VF from specified PF <br>e.g. ixl0, ix1 | no | (none) |
 | reboot_on_change | set "yes" to force ACPI reboot if VM config file is changed when bmd reloads it| no | no |
 | stop_timeout | VM exit timeout in seconds<br>if expired, force to kill VM | no | 300 |
 | tpm | TPM device name | no | (none) |

@@ -52,6 +52,7 @@
 #include "bmd.h"
 #include "bmd_plugin.h"
 #include "conf.h"
+#include "iov_pool.h"
 #include "log.h"
 #include "server.h"
 #include "vm.h"
@@ -88,6 +89,7 @@ static int boot_virtual_machine(struct vm_entry *);
 static void trigger_signal(struct vm_entry *);
 static int allocate_virt_console(struct vm *);
 static void clear_virt_console(struct vm *);
+static void clear_vf_devices(struct vm *);
 static void remove_vm_filedescs(struct vm_entry *);
 static int write_err_log(struct vm_entry *);
 static int open_err_logfile(struct vm_entry *);
@@ -1250,6 +1252,15 @@ call_plugin_parser(struct plugin_data_list *head, const char *key,
 }
 
 static void
+clear_vf_devices(struct vm *vm)
+{
+	struct vf_device *vd, *nvd;
+	STAILQ_FOREACH_SAFE(vd, &vm->vf_devices, next, nvd)
+		free_vf_device(vd);
+	STAILQ_INIT(&vm->vf_devices);
+}
+
+static void
 free_vm_entry(struct vm_entry *vm_ent)
 {
 	char **com;
@@ -1258,6 +1269,7 @@ free_vm_entry(struct vm_entry *vm_ent)
 
 	STAILQ_FOREACH_SAFE(nc, VM_TAPS(vm_ent), next, nnc)
 		free_net_conf(nc);
+	clear_vf_devices(VM_PTR(vm_ent));
 	/*
 	  Basically no events are left on this timing.
 	  Delete & free them for safty.
@@ -1423,11 +1435,12 @@ create_vm_entry(struct vm_conf_entry *conf_ent)
 	VM_ERRFD(vm_ent) = -1;
 	VM_LOGFD(vm_ent) = -1;
 	STAILQ_INIT(VM_TAPS(vm_ent));
+	STAILQ_INIT(VM_VF_DEVS(vm_ent));
 	STAILQ_INIT(&vm_ent->lbuf);
 	STAILQ_INIT(&vm_ent->lwrite);
-	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 	LIST_INIT(VM_SIGTARGETS(vm_ent));
 	init_listener_list(&vm_ent->alarm_listeners);
+	SLIST_INSERT_HEAD(&vm_list, vm_ent, next);
 
 	return vm_ent;
 }
@@ -1514,6 +1527,88 @@ assign_com(struct vm_entry *vm_ent, unsigned int cid)
 	return 0;
 }
 
+static int
+set_ppt_dev(struct vm_conf *c, bitmap_t *b)
+{
+	int ppt;
+	struct passthru_conf *pc;
+
+	STAILQ_FOREACH(pc, &c->passthrues, next) {
+		ppt = pc->ppt >= 0 ? pc->ppt : lookup_ppt_dev(pc);
+		if (ppt < 0)
+			continue;
+		bitmap_set(b, ppt);
+	}
+
+	return 0;
+}
+
+static int
+set_vm_ppt(struct vm_entry *vm_ent, bitmap_t *b)
+{
+	struct vf_device *vd;
+
+	STAILQ_FOREACH(vd, VM_VF_DEVS(vm_ent), next)
+		bitmap_set(b, vd->ppt);
+
+	return 0;
+}
+
+/*
+  Get a bitmap that indicates which PPT devices are used.
+  This function walks through all VM configurations and VM structures
+  and sets a bit of the PPT device number.
+ */
+static bitmap_t *
+get_ppt_map(void)
+{
+	bitmap_t *b;
+	struct vm_entry *vm_ent;
+
+	if ((b = create_bitmap()) == NULL)
+		return NULL;
+
+	SLIST_FOREACH(vm_ent, &vm_list, next) {
+		if (VM_STATE(vm_ent) == TERMINATE) {
+			/* The new config will used in the next boot.
+			   We don't add the old one if new config exists. */
+			set_ppt_dev(VM_NEWCONF(vm_ent) != NULL ?
+			    &VM_NEWCONF(vm_ent)->conf : VM_CONF(vm_ent), b);
+		} else {
+			if (VM_NEWCONF(vm_ent) != NULL)
+				set_ppt_dev(&VM_NEWCONF(vm_ent)->conf, b);
+			/* We always add the PPT in the running configuration. */
+			set_ppt_dev(VM_CONF(vm_ent), b);
+			/* Also set the already assigned PPT. */
+			set_vm_ppt(vm_ent, b);
+		}
+	}
+
+	return b;
+}
+
+static int
+assign_vf_devices(struct vm_entry *vm_ent)
+{
+	struct iov_device *iov;
+	struct vf_device *vd;
+	bitmap_t *b;
+
+	if ((b = get_ppt_map()) == NULL)
+		return -1;
+
+	STAILQ_FOREACH(iov, &VM_CONF(vm_ent)->iov_devices, next) {
+		if ((vd = assign_ppt_dev(iov->pf_name, b)) == NULL) {
+			ERR("failed to get a VF device of %s\n", iov->pf_name);
+			free_bitmap(b);
+			return -1;
+		}
+		STAILQ_INSERT_TAIL(VM_VF_DEVS(vm_ent), vd, next);
+	}
+	free_bitmap(b);
+	return 0;
+}
+
 static void
 remove_vm_filedescs(struct vm_entry *vm_ent)
 {
@@ -1547,6 +1642,7 @@ cleanup_virtual_machine(struct vm_entry *vm_ent)
 {
 	remove_all_listeners(&vm_ent->alarm_listeners);
 	remove_vm_filedescs(vm_ent);
+	clear_vf_devices(VM_PTR(vm_ent));
 	remove_taps(VM_PTR(vm_ent));
 	VM_CLEANUP(vm_ent);
 	VM_STATE(vm_ent) = TERMINATE;
@@ -1765,6 +1861,7 @@ start_virtual_machine(struct vm_entry *vm_ent)
 	if (VM_NEWCONF(vm_ent) != NULL) {
 		clear_assigned_com(VM_CONF(vm_ent)->com,
 		    VM_NEWCONF(vm_ent)->conf.com, VM_ASCOM(vm_ent));
+		clear_vf_devices(VM_PTR(vm_ent));
 		free_vm_conf_entry(VM_CONF_ENT(vm_ent));
 		VM_CONF(vm_ent) = &VM_NEWCONF(vm_ent)->conf;
 		VM_NEWCONF(vm_ent) = NULL;
@@ -1815,6 +1912,8 @@ boot_virtual_machine(struct vm_entry *vm_ent)
 
 	if (VM_STATE(vm_ent) == TERMINATE) {
 		init_plugin_results(vm_ent);
+		if (assign_vf_devices(vm_ent) < 0)
+			return -1;
 		if (assign_taps(VM_PTR(vm_ent)) < 0)
 			return -1;
 		if (activate_taps(VM_PTR(vm_ent)) < 0) {

@@ -43,6 +43,7 @@ struct net_conf;
 struct bhyveload_env;
 struct bhyve_env;
 struct cpu_pin;
+struct iov_device;
 struct sharefs_conf;
 struct hda_conf;
 struct vm_conf;
@@ -87,6 +88,10 @@ enum STATE {
 #define CPU_PINS_FOREACH(sc, conf)                      \
 	for ((sc) = get_cpu_pin((conf)); (sc) != NULL; \
 	     (sc) = next_cpu_pin((sc)))
+
+#define IOV_DEVICE_FOREACH(id, conf)                      \
+	for ((id) = get_iov_device((conf)); (id) != NULL; \
+	     (id) = next_iov_device((id)))
 
 #define HDA_CONF_FOREACH(hc, conf)                      \
 	for ((hc) = get_hda_conf((conf)); (hc) != NULL; \
@@ -188,6 +193,9 @@ struct cpu_pin *get_cpu_pin(struct vm_conf *);
 struct cpu_pin *next_cpu_pin(struct cpu_pin *);
 int get_cpu_pin_vcpu(struct cpu_pin *);
 int get_cpu_pin_hostcpu(struct cpu_pin *);
+struct iov_device *get_iov_device(struct vm_conf *);
+struct iov_device *next_iov_device(struct iov_device *);
+char *get_iov_device_pf_name(struct iov_device *);
 int get_virt_console_ncontrollers(struct vm_conf *);
 int get_virt_console_nports(struct vm_conf *);
 char *get_virt_console_default_template(struct vm_conf *);

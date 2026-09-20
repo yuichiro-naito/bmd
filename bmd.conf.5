@@ -404,6 +404,17 @@ to true. e.g.
 .Dq ppt0
 or
 .Dq 1/0/130 .
+.It Cm iov_device = (+=) Ar PF device;
+Allocate a free VF (Virtual Function) device from the specified PF (Primary
+Function) device. If another VM configuration already uses a VF as a passthrough
+or an iov_device, it won't be selected. SR-IOV passthrough devices must be
+configured by
+.Xr iovctl 8
+before the VM starts. This implicitly sets
+.Sq wired_memory
+to true. e.g.
+.Dq ixl0 ,
+.Dq ix1 .
 .It Cm reboot_on_change = Ar yes | no;
 Set
 .Qq yes

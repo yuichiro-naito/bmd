@@ -259,6 +259,7 @@ generate_clear_list(sharefs_conf, sharefss);
 generate_clear_list(bhyveload_env, bhyveload_envs);
 generate_clear_list(bhyve_env, bhyve_envs);
 generate_clear_list(cpu_pin, cpu_pins);
+generate_clear_list(iov_device, iov_devices);
 generate_clear_list(hda_conf, hdas);
 
 static void
@@ -315,6 +316,7 @@ free_vm_conf(struct vm_conf *vc)
 	clear_bhyveload_env(vc);
 	clear_bhyve_env(vc);
 	clear_cpu_pin(vc);
+	clear_iov_device(vc);
 	free(vc->tpm_dev);
 	free(vc->tpm_type);
 	free(vc->tpm_version);
@@ -325,7 +327,8 @@ free_vm_conf(struct vm_conf *vc)
 }
 
 int
-add_passthru_conf(struct vm_conf *conf, const char *devid)
+add_passthru_conf(struct vm_conf *conf, const char *devid, int ppt, int bus,
+    int slot, int func)
 {
 	struct passthru_conf *p;
 	char *d;
@@ -337,6 +340,10 @@ add_passthru_conf(struct vm_conf *conf, const char *devid)
 	if (p == NULL || d == NULL)
 		goto err;
 	p->devid = d;
+	p->ppt = ppt;
+	p->bus = bus;
+	p->slot = slot;
+	p->func = func;
 
 	STAILQ_INSERT_TAIL(&conf->passthrues, p, next);
 	conf->npassthrues++;
@@ -602,6 +609,26 @@ add_cpu_pin(struct vm_conf *conf, int vcpu, int hostcpu)
 generate_list_getter(cpu_pin, cpu_pins);
 generate_member_getter(int, cpu_pin, vcpu);
 generate_member_getter(int, cpu_pin, hostcpu);
+
+int
+add_iov_device(struct vm_conf *conf, const char *dev)
+{
+	struct iov_device *id;
+
+	if (conf == NULL)
+		return 0;
+
+	if (dev == NULL || (id = malloc(sizeof(*id) + strlen(dev) + 1)) == NULL)
+		return -1;
+	strcpy(id->pf_name, dev);
+
+	STAILQ_INSERT_TAIL(&conf->iov_devices, id, next);
+	conf->niov_devices++;
+	set_wired_memory(conf, true);
+	return 0;
+}
+generate_list_getter(iov_device, iov_devices);
+generate_member_getter(char *, iov_device, pf_name);
 
 struct net_conf *
 copy_net_conf(const struct net_conf *nc)
@@ -1122,6 +1149,7 @@ create_vm_conf(const char *vm_name)
 	STAILQ_INIT(&ret->bhyveload_envs);
 	STAILQ_INIT(&ret->bhyve_envs);
 	STAILQ_INIT(&ret->cpu_pins);
+	STAILQ_INIT(&ret->iov_devices);
 	STAILQ_INIT(&ret->hdas);
 
 	return ret;
@@ -1198,6 +1226,7 @@ vm_conf_export_env(struct vm_conf *conf)
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
 	struct cpu_pin *cp;
+	struct iov_device *id;
 	struct hda_conf *hc;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
@@ -1231,6 +1260,10 @@ vm_conf_export_env(struct vm_conf *conf)
 	STAILQ_FOREACH(cp, &conf->cpu_pins, next)
 		vputenv(ENV_PREFIX "CPU_PIN%d=%d:%d", i++, cp->vcpu,
 		    cp->hostcpu);
+	VPUTINT(niov_devices);
+	i = 1;
+	STAILQ_FOREACH(id, &conf->iov_devices, next)
+		vputenv(ENV_PREFIX "IOV_DEVICE%d=%s", i++, id->pf_name);
 	VPUTSTR(memory);
 	VPUTBOOL(wired_memory);
 	VPUTBOOL(utctime);
@@ -1370,6 +1403,7 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
 	struct cpu_pin *cp;
+	struct iov_device *id;
 	struct hda_conf *hc;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
@@ -1436,6 +1470,12 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 		fprintf(fp, "%18s =", "passthru");
 		STAILQ_FOREACH(pc, &conf->passthrues, next)
 			fprintf(fp, " %s", pc->devid);
+		fprintf(fp, "\n");
+	}
+	if (!STAILQ_EMPTY(&conf->iov_devices)) {
+		fprintf(fp, "%18s =", "iov_device");
+		STAILQ_FOREACH(id, &conf->iov_devices, next)
+			fprintf(fp, " %s", id->pf_name);
 		fprintf(fp, "\n");
 	}
 
@@ -1662,6 +1702,15 @@ compare_cpu_pin(const struct cpu_pin *a, const struct cpu_pin *b)
 	return 0;
 }
 
+static int
+compare_iov_device(const struct iov_device *a, const struct iov_device *b)
+{
+	int rc;
+
+	CMP_STR(pf_name);
+	return 0;
+}
+
 #define CMP_LIST(type, member)                                               \
 	do {                                                                 \
 		struct type *ea, *eb;                                        \
@@ -1731,6 +1780,7 @@ compare_vm_conf(const struct vm_conf *a, const struct vm_conf *b)
 	CMP_LIST(bhyveload_env, bhyveload_envs);
 	CMP_LIST(bhyve_env, bhyve_envs);
 	CMP_LIST(cpu_pin, cpu_pins);
+	CMP_LIST(iov_device, iov_devices);
 	CMP_LIST(hda_conf, hdas);
 	CMP_STR(tpm_dev);
 	CMP_STR(tpm_type);

@@ -52,6 +52,11 @@
 #include "log.h"
 #include "server.h"
 
+#define PPT_MAX 65535
+#define BUS_MAX 255
+#define SLOT_MAX 31
+#define IOV_FUNC_MAX 255
+
 struct conf_pattern {
 	const char *pattern;
 	bool created;
@@ -315,19 +320,50 @@ parse_memory(struct vm_conf *conf, char *val)
 static int
 parse_passthru(struct vm_conf *conf, char *val)
 {
-	char *p;
+	long ppt;
+	unsigned int i = 0;
+	int n[3], bus, slot, func;
+	char *p, *ep;
 
 	if (strncmp(val, "ppt", 3) == 0) {
-		for (p = &val[3]; *p != '\0'; p++)
-			if (*p < '0' || *p > '9')
-				return -1;
-	} else {
-		for (p = val; *p != '\0'; p++)
-			if (*p != '/' && (*p < '0' || *p > '9'))
-				return -1;
+		ppt = strtol(&val[3], &ep, 10);
+		if (*ep != '\0')
+			return -1;
+		if (ppt < 0 || ppt > PPT_MAX) {
+			ERR("invalid ppt device number: %ld\n", ppt);
+			return -1;
+		}
+		return add_passthru_conf(conf, val, ppt, -1, -1, -1);
 	}
 
-	return add_passthru_conf(conf, val);
+	i = 0;
+	p = val;
+	while (isdigit(*p) && i < nitems(n)) {
+		n[i++] = strtoul(p, &ep, 10);
+		p = ep;
+		if (*p == '/')
+			p++;
+	}
+
+	if (i > 0 && *ep == '\0') {
+		func = (i > 2) ? n[--i] : 0;
+		slot = (i > 0) ? n[--i] : 0;
+		bus = (i > 0) ? n[--i] : 0;
+		if (bus < 0 || bus > BUS_MAX) {
+			ERR("invalid bus number: %d\n", bus);
+			return -1;
+		}
+		if (slot < 0 || slot > SLOT_MAX) {
+			ERR("invalid slot number: %d\n", slot);
+			return -1;
+		}
+		if (func < 0 || func > IOV_FUNC_MAX) {
+			ERR("invalid func number: %d\n", func);
+			return -1;
+		}
+		return add_passthru_conf(conf, val, -1, bus, slot, func);
+	}
+	return -1;
 }
 
 struct type_flag {
@@ -595,6 +631,27 @@ parse_cpu_pin(struct vm_conf *conf, char *val)
 
 	return add_cpu_pin(conf, vcpu, hostcpu);
 }
+
+static int
+parse_iov_device(struct vm_conf *conf, char *val)
+{
+	char *p = val;
+
+	if (!isalpha(*p))
+		return -1;
+	for (p++; *p != '\0'; p++) {
+		if (isnumber(*p))
+			break;
+		if (!isalpha(*p))
+			return -1;
+	}
+	for (; *p != '\0'; p++)
+		if (!isnumber(*p))
+			return -1;
+
+	return add_iov_device(conf, val);
+}
+
 
 static int
 parse_loader_timeout(struct vm_conf *conf, char *val)
@@ -1040,6 +1097,7 @@ static struct parser_entry parser_list[] = {
 	{ "hostbridge", &parse_hostbridge, NULL },
 	{ "install", &parse_install, NULL },
 	{ "installcmd", &parse_installcmd, NULL },
+	{ "iov_device", &parse_iov_device, &clear_iov_device },
 	{ "iso", &parse_iso, &clear_iso_conf },
 	{ "keymap", &parse_keymap, NULL },
 	{ "loadcmd", &parse_loadcmd, NULL },

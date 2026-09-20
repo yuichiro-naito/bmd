@@ -11,7 +11,7 @@ LINKS=  	${BINDIR}/bmd ${BINDIR}/bmdctl
 SRCS=		bmd.c conf.c tap.c parser.c vm.c server.c control.c inspect.c \
 		global.c console.c inspect_grub.c wolmon.c log.c confparse.h \
 		confparse.y conflex.l y.tab.h grub_loader.c event_listener.c \
-		loader_pty.c
+		loader_pty.c iov_pool.c
 CFLAGS+=	-Wall -DLOCALBASE=\"$(LOCALBASE)\"
 LDADD=		-lnv -lutil
 LDFLAGS=	-Xlinker -dynamic-list=export.symbols
