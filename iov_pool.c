@@ -44,6 +44,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "iov_pool.h"
 #include "log.h"
@@ -145,6 +146,7 @@ bitmap_test(bitmap_t *b, size_t bit)
 	return bit_test(p->bits, bit);
 }
 
+#if __FreeBSD_version > 1600019
 static int
 get_ppt_num(const char *pd, long *r)
 {
@@ -507,3 +509,16 @@ lookup_ppt_dev(struct passthru_conf *pc)
  err:
 	return -1;
 }
+#else
+struct vf_device *
+assign_ppt_dev(const char *pfdev __unused, bitmap_t *b __unused)
+{
+	return NULL;
+}
+
+int
+lookup_ppt_dev(struct passthru_conf *pc __unused)
+{
+	return 0;
+}
+#endif

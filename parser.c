@@ -632,6 +632,7 @@ parse_cpu_pin(struct vm_conf *conf, char *val)
 	return add_cpu_pin(conf, vcpu, hostcpu);
 }
 
+#if __FreeBSD_version > 1600019
 static int
 parse_iov_device(struct vm_conf *conf, char *val)
 {
@@ -651,7 +652,7 @@ parse_iov_device(struct vm_conf *conf, char *val)
 
 	return add_iov_device(conf, val);
 }
-
+#endif
 
 static int
 parse_loader_timeout(struct vm_conf *conf, char *val)
@@ -1097,7 +1098,9 @@ static struct parser_entry parser_list[] = {
 	{ "hostbridge", &parse_hostbridge, NULL },
 	{ "install", &parse_install, NULL },
 	{ "installcmd", &parse_installcmd, NULL },
+#if __FreeBSD_version > 1600019
 	{ "iov_device", &parse_iov_device, &clear_iov_device },
+#endif
 	{ "iso", &parse_iso, &clear_iso_conf },
 	{ "keymap", &parse_keymap, NULL },
 	{ "loadcmd", &parse_loadcmd, NULL },

@@ -1,4 +1,4 @@
-.Dd Apl 19, 2026
+.Dd Sep 21, 2026
 .Dt BMD.CONF 5
 .Os
 .Sh NAME
@@ -415,6 +415,9 @@ before the VM starts. This implicitly sets
 to true. e.g.
 .Dq ixl0 ,
 .Dq ix1 .
+This parameter requires
+.Fx 16.0
+or later.
 .It Cm reboot_on_change = Ar yes | no;
 Set
 .Qq yes

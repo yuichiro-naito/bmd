@@ -458,3 +458,7 @@ devices, feel free to create an issue in this GitHub repository.
 ## 2. WoL password is ignored.
 
 The bmd doesn't support a password phrase for Wake on LAN.
+
+## 3. The "iov_device" parameter doesn't work.
+
+This parameter requires FreeBSD 16.0 or later.

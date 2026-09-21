@@ -1226,7 +1226,9 @@ vm_conf_export_env(struct vm_conf *conf)
 	struct bhyveload_env *be;
 	struct bhyve_env *ev;
 	struct cpu_pin *cp;
+#if __FreeBSD_version > 1600019
 	struct iov_device *id;
+#endif
 	struct hda_conf *hc;
 	struct fbuf *fb;
 	const static char *btype[] = { "no", "yes", "oneshot", "install",
@@ -1260,10 +1262,12 @@ vm_conf_export_env(struct vm_conf *conf)
 	STAILQ_FOREACH(cp, &conf->cpu_pins, next)
 		vputenv(ENV_PREFIX "CPU_PIN%d=%d:%d", i++, cp->vcpu,
 		    cp->hostcpu);
+#if __FreeBSD_version > 1600019
 	VPUTINT(niov_devices);
 	i = 1;
 	STAILQ_FOREACH(id, &conf->iov_devices, next)
 		vputenv(ENV_PREFIX "IOV_DEVICE%d=%s", i++, id->pf_name);
+#endif
 	VPUTSTR(memory);
 	VPUTBOOL(wired_memory);
 	VPUTBOOL(utctime);
@@ -1478,7 +1482,6 @@ dump_vm_conf(struct vm_conf *conf, FILE *fp)
 			fprintf(fp, " %s", id->pf_name);
 		fprintf(fp, "\n");
 	}
-
 	if (conf->tpm_dev) {
 		if (conf->tpm_version)
 			fprintf(fp, "%18s = %s:%s:%s\n", "tpm", conf->tpm_type,

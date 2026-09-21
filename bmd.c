@@ -1594,6 +1594,9 @@ assign_vf_devices(struct vm_entry *vm_ent)
 	struct vf_device *vd;
 	bitmap_t *b;
 
+	if (STAILQ_FIRST(&VM_CONF(vm_ent)->iov_devices) == NULL)
+		return 0;
+
 	if ((b = get_ppt_map()) == NULL)
 		return -1;
 
