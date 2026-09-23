@@ -362,6 +362,8 @@ on_exit_writeerrlog(struct event_listener *l __unused, int ident, void *data)
 		VM_LOGWRITER(vm_ent) = 0;
 		if (vm_ent->lbuf_len > 0)
 			write_err_log(vm_ent);
+		else if (vm_ent->waiting_logfd)
+			stop_virtual_machine(vm_ent);
 	}
 
 	free(el);
@@ -2054,6 +2056,12 @@ start_virtual_machines(void)
 static void
 stop_virtual_machine(struct vm_entry *vm_ent)
 {
+	if (VM_LOGWRITER(vm_ent) > 0) {
+		vm_ent->waiting_logfd = true;
+		return;
+	} else
+		vm_ent->waiting_logfd = false;
+
 	cleanup_virtual_machine(vm_ent);
 	call_plugins(vm_ent);
 	trigger_signal(vm_ent);

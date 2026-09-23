@@ -191,7 +191,7 @@ struct vm_entry {
 	struct log_messages lwrite;
 	int lbuf_len;
 	int lwrite_len;
-	bool reopen_errlogfile;
+	bool reopen_errlogfile, waiting_logfd;
 	struct event_listener *vm_listener, *outfd_listener, *errfd_listener;
 	struct listener_list alarm_listeners;
 };
