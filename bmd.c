@@ -1131,7 +1131,7 @@ add_plugin(int dirfd, const char *fname)
 	close(fd);
 	return 0;
 err2:
-	free(pl_ent);
+	free_plugin_entry(pl_ent);
 err1:
 	dlclose(hdl);
 err0:
@@ -1187,6 +1187,11 @@ load_plugins(const char *plugin_dir)
 	PLUGIN_FOREACH(p) {
 		if ((pl_ent = create_plugin_entry(p)) == NULL)
 			return -1;
+		if (p->initialize && (*(p->initialize))() < 0) {
+			ERR("failed to initialize internalplugin %s\n", p->name);
+			free_plugin_entry(pl_ent);
+			return -1;
+		}
 		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	}
 
