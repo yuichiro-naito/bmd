@@ -85,6 +85,7 @@ struct plugin_entry {
 	char *desc_name;
 	char *vm_name;
 	char *lm_name;
+	bool initialized;
 };
 
 /*

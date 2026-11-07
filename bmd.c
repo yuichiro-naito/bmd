@@ -1028,6 +1028,11 @@ create_plugin_entry(const struct plugin_desc *desc)
 	struct vm_method *vm;
 	struct loader_method *lm;
 
+	/* Get the plugin entry, if it's already loaded. */
+	SLIST_FOREACH(pe, &plugin_list, next)
+		if (strcmp(pe->desc.name, desc->name) == 0)
+			return pe;
+
 	dname = strdup(desc->name);
 	pe = calloc(1, sizeof(*pe));
 	if (dname == NULL || pe == NULL)
@@ -1078,6 +1083,7 @@ create_plugin_entry(const struct plugin_desc *desc)
 		pe->desc.loader_method = NULL;
 	}
 
+	SLIST_INSERT_HEAD(&plugin_list, pe, next);
 	return pe;
 
 err2:
@@ -1092,6 +1098,17 @@ err0:
 	return NULL;
 }
 #undef set_default
+
+static int
+initialize_plugin(struct plugin_entry *pl_ent)
+{
+	if (pl_ent->initialized == false && pl_ent->desc.initialize != NULL &&
+	    (*(pl_ent->desc.initialize))() < 0)
+		return -1;
+
+	pl_ent->initialized = true;
+	return 0;
+}
 
 static int
 add_plugin(int dirfd, const char *fname)
@@ -1119,13 +1136,19 @@ add_plugin(int dirfd, const char *fname)
 		goto err1;
 	}
 
-	if (desc->initialize && (*(desc->initialize))() < 0) {
+	/* If the plugin is already initialized, we read the same plugin again. */
+	if (pl_ent->initialized) {
+		dlclose(hdl);
+		close(fd);
+		return 0;
+	}
+
+	if (initialize_plugin(pl_ent) < 0) {
 		ERR("failed to initialize plugin %s %s\n", desc->name, fname);
 		goto err2;
 	}
 
 	pl_ent->handle = hdl;
-	SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	INFO("load plugin %s %s\n", desc->name, fname);
 
 	close(fd);
@@ -1151,7 +1174,6 @@ register_vm_method(struct vm_method *vm)
 	if ((pe = create_plugin_entry(&desc)) == NULL)
 		return -1;
 
-	SLIST_INSERT_HEAD(&plugin_list, pe, next);
 	return 0;
 }
 
@@ -1168,7 +1190,6 @@ register_loader_method(struct loader_method *lm)
 	if ((pe = create_plugin_entry(&desc)) == NULL)
 		return -1;
 
-	SLIST_INSERT_HEAD(&plugin_list, pe, next);
 	return 0;
 }
 
@@ -1178,21 +1199,16 @@ load_plugins(const char *plugin_dir)
 	DIR *d;
 	struct dirent *ent;
 	struct plugin_entry *pl_ent;
-	static int loaded = 0;
 	const PLUGIN_DESC *p;
-
-	if (loaded != 0)
-		return 0;
 
 	PLUGIN_FOREACH(p) {
 		if ((pl_ent = create_plugin_entry(p)) == NULL)
 			return -1;
-		if (p->initialize && (*(p->initialize))() < 0) {
-			ERR("failed to initialize internalplugin %s\n", p->name);
+		if (initialize_plugin(pl_ent) < 0) {
+			ERR("failed to initialize internal plugin %s\n", p->name);
 			free_plugin_entry(pl_ent);
 			return -1;
 		}
-		SLIST_INSERT_HEAD(&plugin_list, pl_ent, next);
 	}
 
 	if ((d = opendir(plugin_dir)) == NULL) {
@@ -1204,8 +1220,7 @@ load_plugins(const char *plugin_dir)
 		if (ent->d_namlen < 4 || ent->d_name[0] == '.' ||
 		    strcmp(&ent->d_name[ent->d_namlen - 3], ".so") != 0)
 			continue;
-		if (add_plugin(dirfd(d), ent->d_name) >= 0)
-			loaded++;
+		add_plugin(dirfd(d), ent->d_name);
 	}
 
 	closedir(d);
